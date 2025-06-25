@@ -1,0 +1,27 @@
+{
+    "name": "Kelly",
+    "timestamp": "1742152921",
+    "readable_time": "2025-03-16 19:22:01",
+    "description": "A girl named Kelly",
+    "entries": [
+        {
+            "time_period": {
+                "start": {
+                    "type": "time",
+                    "label": "life_decade",
+                    "value": "10",
+                    "confidence": 1.0,
+                    "relationship": "exact"
+                },
+                "end": {
+                    "type": "time",
+                    "label": "life_decade",
+                    "value": "60",
+                    "confidence": 1.0,
+                    "relationship": "exact"
+                }
+            },
+            "labels": []
+        }
+    ]
+}

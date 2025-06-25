@@ -1,0 +1,5425 @@
+import os
+import json
+import shutil  # For moving files and folders
+import time  # For unique timestamps
+
+from flask import Flask, Response, jsonify, request, url_for, redirect, render_template, flash, get_flashed_messages
+from urllib.parse import quote, unquote
+from datetime import datetime  # For readable timestamps
+
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'the_random_string')  # Use environment variable if available
+
+def load_json_as_dict(file_path):
+    """
+    Load the JSON file at file_path into a dictionary.
+    Returns an empty dictionary if the file does not exist or cannot be read.
+    """
+    if not os.path.exists(file_path):
+        return {}  # Return an empty dict instead of failing
+
+    try:
+        with open(file_path, "r", encoding="utf-8") as json_file:
+            return json.load(json_file)
+    except (json.JSONDecodeError, IOError) as e:
+        print(f"Error loading JSON file {file_path}: {e}")
+        return {}  # Return an empty dict if loading fails
+
+def save_dict_as_json(file_path, dictionary):
+    """
+    Save a dictionary as a formatted JSON file.
+    Handles potential errors in writing.
+    """
+    try:
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(dictionary, f, ensure_ascii=False, indent=4)
+    except IOError as e:
+        print(f"Error saving JSON file {file_path}: {e}")
+
+def get_readable_time(timestamp):
+    """
+    Convert a Unix timestamp to a human-readable date.
+    Returns 'Invalid Timestamp' if an error occurs.
+    """
+    try:
+        return datetime.fromtimestamp(int(timestamp)).strftime('%Y-%m-%d %H:%M:%S')
+    except (ValueError, TypeError):
+        return "Invalid Timestamp"
+
+
+def printButton(button_label,url):
+    return "<a href='"+url+"'><button>"+button_label+"</button></a>"
+
+
+# @app.route('/')
+# def index_page():
+#     """
+#     Revised index page:
+#       - Shows existing 'Featured Biography' logic,
+#       - Lists all normal types (people, organisations...),
+#       - Has a global search form to query sub-types (buildings, occupations, etc.),
+#       - Displays previously created aggregator life stories (if any),
+#       - A button 'Generate Multi-Type Life Biography' leading to a wizard route 
+#         that helps the user create brand-new building, person, org, etc., from scratch in one flow.
+#     """
+
+#     html_template = """
+#     <!DOCTYPE html>
+#     <html lang="en">
+#     <head>
+#         <meta charset="UTF-8" />
+#         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+#         <title>Welcome to the Biography System</title>
+#         <link rel="stylesheet" href="/static/styles.css" />
+#     </head>
+#     <body>
+#         <div class="container">
+#             <h1>Welcome to the Biography System</h1>
+#             <p>This tool allows you to create structured biographies from real data. 
+#                You can also generate a multi-type life story (buildings, people, organisations, etc.) in a single flow.</p>
+#     """
+
+#     # (1) "Featured Biography" code if it exists
+#     featured_path = "./types/people/biographies/AlanTuring_12345678.json"
+#     if os.path.exists(featured_path):
+#         featured_data = load_json_as_dict(featured_path)
+#         featured_name = featured_data.get("name", "Alan Turing")
+#         featured_desc = featured_data.get("description", "A pioneering computer scientist.")
+#         html_template += f"""
+#             <div class="featured-bio">
+#                 <h2>Featured Biography: {featured_name.capitalize()}</h2>
+#                 <p>{featured_desc}</p>
+#                 <a href="/biography/people/AlanTuring_12345678" class="btn">View Full Timeline</a>
+#             </div>
+#         """
+
+#     # (2) Global Search Form - queries across sub-types
+#     html_template += """
+#             <h2>Global Search</h2>
+#             <form action="/global_search" method="get">
+#                 <input type="text" name="q" placeholder="Search all sub-types..." />
+#                 <button type="submit">Search</button>
+#             </form>
+#     """
+
+#     # (3) List normal "types" from ./types/*.json
+#     html_template += """
+#             <h2>Explore Biographies by Type</h2>
+#             <div class="type-container">
+#     """
+#     for file in os.listdir("./types"):
+#         if file.endswith(".json"):
+#             type_name = os.path.splitext(file)[0]
+#             html_template += f"<a href='/type/{type_name}' class='type-button'>{type_name.capitalize()}</a>"
+#     html_template += "</div>"
+
+#     # (4) "Add a New Biography" Button (existing logic)
+#     html_template += """
+#             <div class="add-biography-container">
+#                 <a href="/biography_add/people" class="add-biography-button">+ Add Biography (People)</a>
+#             </div>
+#     """
+
+#     # (5) Display previously created aggregator "life stories" (if we store them in e.g. ./types/life/biographies/)
+#     life_dir = "./types/life/biographies"
+#     aggregator_exists = os.path.isdir(life_dir)
+#     if aggregator_exists:
+#         aggregator_list = [f[:-5] for f in os.listdir(life_dir) if f.endswith(".json")]
+#         if aggregator_list:
+#             html_template += """
+#                 <h2>Previously Created Multi-Type Lifes</h2>
+#                 <ul>
+#             """
+#             for aggregator_id in aggregator_list:
+#                 html_template += f"<li><a href='/life_view/{aggregator_id}'>{aggregator_id}</a></li>"
+#             html_template += "</ul>"
+#         else:
+#             html_template += """
+#                 <h2>No Multi-Type Life Biographies Yet</h2>
+#             """
+#     else:
+#         # no folder or no aggregator yet
+#         html_template += """
+#             <h2>Multi-Type 'Life' Biographies not found</h2>
+#             <p>No aggregator folder or 'life' type found. 
+#                Please create a /types/life/biographies folder if you'd like to store them here.</p>
+#         """
+
+#     # (6) Big button "Generate Multi-Type Life Biography"
+#     html_template += """
+#             <div class="generate-life-container">
+#                 <h2>Generate Multi-Type Life Biography</h2>
+#                 <p>Start a guided process to create new buildings, people, organisations, etc. in one flow.</p>
+#                 <a href="/multi_life_wizard" class="add-biography-button">Generate Life Biography</a>
+#             </div>
+#     """
+
+#     # (7) Close out HTML
+#     html_template += """
+#         </div> <!-- end .container -->
+#     </body>
+#     </html>
+#     """
+
+#     return html_template
+
+@app.route('/')
+def index_page():
+    """
+    Updated index page that:
+      1) Shows a featured biography (if Alan Turing file found),
+      2) Provides a global search form (action="/global_search"),
+      3) Lists each type except 'time',
+      4) 'Add Biography' button for default type=people,
+      5) Button to 'Generate Life Biography' => /life_wizard,
+      6) Optionally list aggregator 'life' records from ./types/life/biographies.
+    """
+
+    html_template = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Welcome to the Biography System</title>
+        <link rel="stylesheet" href="/static/styles.css" />
+    </head>
+    <body>
+        <div class="container">
+            <h1>Welcome to the Biography System</h1>
+            <p>This tool allows you to create and explore structured biographies using real data and labels.
+               You can also generate multi-type 'life' records from scratch, referencing buildings, people, orgs, etc.</p>
+    """
+
+    # --------------------------------------------------
+    # 1. Attempt to load "Featured Biography"
+    # --------------------------------------------------
+    featured_path = "./types/people/biographies/AlanTuring_12345678.json"
+    if os.path.exists(featured_path):
+        featured_data = load_json_as_dict(featured_path)
+        featured_name = featured_data.get("name", "Alan Turing")
+        featured_desc = featured_data.get("description", "A pioneering computer scientist.")
+        html_template += f"""
+            <div class="featured-bio">
+                <h2>Featured Biography: {featured_name.capitalize()}</h2>
+                <p>{featured_desc}</p>
+                <a href="/biography/people/AlanTuring_12345678" class="btn">View Full Timeline</a>
+            </div>
+        """
+
+    # --------------------------------------------------
+    # 2. Provide a global search form (pointing to /global_search)
+    # --------------------------------------------------
+    html_template += """
+            <h2>Global Search</h2>
+            <form action="/global_search" method="get">
+                <input type="text" name="q" placeholder="Search all types..." />
+                <button type="submit">Search</button>
+            </form>
+    """
+
+    # --------------------------------------------------
+    # 3. List Available Types (excluding 'time')
+    # --------------------------------------------------
+    html_template += """
+            <h2>Explore Biographies by Type </h2>
+            <div class="type-container">
+    """
+    for file in os.listdir("./types"):
+        # If it's e.g. "people.json", "organisations.json", etc.
+        if file.endswith(".json"):
+            type_name = os.path.splitext(file)[0]  # e.g. "people"
+            # Exclude 'time'
+            if type_name.lower() == "time":
+                continue
+
+            # Create a button/link to /type/<type_name>
+            html_template += f"<a href='/type/{type_name}' class='type-button'>{type_name.capitalize()}</a>"
+    html_template += "</div>"
+
+
+    # --------------------------------------------------
+    # 5. Provide a “Generate Life Biography” link
+    # --------------------------------------------------
+    # This button leads to your wizard route (e.g. /life_wizard) that creates multi-type aggregator records
+    html_template += """
+            <div class="generate-life-container">
+                <h2>Generate Multi-Type Life Biography</h2>
+                <p>This starts a wizard to create a new 'life', referencing new or existing data across people, buildings, orgs, etc.</p>
+                <a href="/life_wizard" class="add-biography-button">Generate Life Biography</a>
+            </div>
+    """
+
+    # --------------------------------------------------
+    # 6. Optionally, list existing aggregator 'life' records in ./types/life/biographies/
+    # --------------------------------------------------
+    life_dir = "./types/life/biographies"
+    if os.path.exists(life_dir) and os.path.isdir(life_dir):
+        aggregator_files = [f for f in os.listdir(life_dir) if f.endswith(".json")]
+        if aggregator_files:
+            html_template += """
+            <h2>Previously Created Life Records</h2>
+            <ul>
+            """
+            for af in aggregator_files:
+                agg_id = af[:-5]
+                html_template += f"<li><a href='/life_view/{agg_id}'>{agg_id}</a></li>"
+            html_template += "</ul>"
+        else:
+            html_template += """
+            <h2>No Multi-Type Life Records Found</h2>
+            """
+    else:
+        # no life folder at all
+        html_template += """
+        <h2>Multi-Type Life Folder Missing</h2>
+        <p>No ./types/life/biographies folder found to store aggregator records.</p>
+        """
+
+    # --------------------------------------------------
+    # Close out HTML
+    # --------------------------------------------------
+    html_template += """
+        </div> <!-- end .container -->
+    </body>
+    </html>
+    """
+
+    return html_template
+
+
+from flask import session, request, redirect, url_for, flash
+
+@app.route('/life_wizard', methods=['GET','POST'])
+def life_wizard():
+    """
+    A single route that:
+      - On GET => show a step allowing user to pick which type to add, plus name of aggregator
+      - On POST => if user is picking or creating a sub-biography, we do it inline, store result in session
+      - Eventually user can “finish” to save aggregator in ./types/life/biographies/<some_id>.json
+    For demonstration, we do everything in one route with 'mode' parameters to handle sub-steps.
+    In real usage, you'd have multiple routes or a wizard approach.
+    """
+
+    # 1) Ensure session is ready
+    if 'life_wizard' not in session:
+        # Initialize aggregator state
+        session['life_wizard'] = {
+            'aggregator_name': '',  # user sets the “life” name
+            'created_items': []     # each item: {'type': 'people','id':'some_id'} etc.
+        }
+
+    wizard_data = session['life_wizard']
+
+    # 2) Check if user wants to “finish” or if they are creating a sub-biography
+    # We'll use a hidden field “action” to differentiate
+    action = request.form.get("action","")
+
+    if request.method == 'POST':
+        if action == "set_aggregator_name":
+            # user typed aggregator_name in the main form
+            aggregator_name = request.form.get("aggregator_name","Unnamed Life").strip()
+            wizard_data['aggregator_name'] = aggregator_name
+            session['life_wizard'] = wizard_data
+            flash(f"Aggregator name set to '{aggregator_name}'", "info")
+            return redirect(url_for('life_wizard'))  # reload
+
+        elif action == "pick_type":
+            # user picks which type to create
+            chosen_type = request.form.get("chosen_type","people").strip()
+            # redirect to the same route but in “create_subbio” mode
+            return redirect(url_for('life_wizard', mode="create_subbio", sub_type=chosen_type))
+
+        elif action == "create_subbio":
+            # user just submitted the sub-biography form
+            sub_type = request.args.get("sub_type","people").strip()
+            #  do the logic to create the biography
+            #  e.g. read name, description from form, then save in ./types/<sub_type>/biographies/
+            new_bio_name = request.form.get("bio_name","").strip()
+            new_desc     = request.form.get("description","").strip()
+
+            # unique ID for that biography
+            import time
+            timestamp = str(int(time.time()))
+            bio_id = f"{new_bio_name.replace(' ','_')}_{timestamp}"
+
+            # build the JSON data
+            bio_data = {
+                "id": bio_id,
+                "name": new_bio_name,
+                "description": new_desc,
+                "entries": [],
+                "timestamp": timestamp
+            }
+            # save to e.g. ./types/people/biographies/bio_id.json
+            sub_bio_dir = f"./types/{sub_type}/biographies"
+            os.makedirs(sub_bio_dir, exist_ok=True)
+            bio_file = os.path.join(sub_bio_dir, f"{bio_id}.json")
+            save_dict_as_json(bio_file, bio_data)
+
+            # store a record in wizard_data['created_items']
+            wizard_data['created_items'].append({
+                'type': sub_type,
+                'id': bio_id,
+                'name': new_bio_name
+            })
+            session['life_wizard'] = wizard_data
+
+            flash(f"Created new {sub_type} biography '{new_bio_name}' with id={bio_id}", "success")
+            return redirect(url_for('life_wizard'))
+
+        elif action == "finish":
+            # user wants to finalize aggregator
+            aggregator_name = wizard_data['aggregator_name'] or "Unnamed Life"
+            created_items = wizard_data['created_items']
+
+            if not created_items:
+                flash("No sub-biographies added! Not saving aggregator.", "warning")
+                return redirect(url_for('life_wizard'))
+
+            # create aggregator in ./types/life/biographies
+            life_dir = "./types/life/biographies"
+            os.makedirs(life_dir, exist_ok=True)
+            import time
+            aggregator_id = f"Life_{int(time.time())}"
+            aggregator_json = {
+                "id": aggregator_id,
+                "name": aggregator_name,
+                "created_items": created_items,
+                "timestamp": str(int(time.time()))
+            }
+            life_path = os.path.join(life_dir, f"{aggregator_id}.json")
+            save_dict_as_json(life_path, aggregator_json)
+
+            flash(f"Multi-type Life '{aggregator_name}' saved as {aggregator_id}!", "success")
+
+            # clear session wizard
+            session.pop('life_wizard', None)
+            return redirect(f"/life_view/{aggregator_id}")
+
+        else:
+            # unknown action
+            flash("Unknown action", "error")
+            return redirect(url_for('life_wizard'))
+
+    # 3) If GET => or unhandled => show the main wizard page
+    mode = request.args.get("mode","")
+    sub_type = request.args.get("sub_type","")
+
+    aggregator_name = wizard_data.get('aggregator_name',"")
+    created_items   = wizard_data.get('created_items',[])
+
+    if mode == "create_subbio":
+        # display sub-biography creation form for e.g. sub_type="people"
+        # (like your /biography_add route, but embedded in the wizard)
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="UTF-8"><title>Create {sub_type} Sub-Biography</title></head>
+        <body>
+          <h1>Create a new {sub_type.capitalize()} Biography</h1>
+          <form method="post" action="{url_for('life_wizard', mode='create_subbio', sub_type=sub_type)}">
+            <input type="hidden" name="action" value="create_subbio">
+            <label for="bio_name">Name:</label>
+            <input type="text" name="bio_name" required><br><br>
+            <label for="description">Description:</label>
+            <input type="text" name="description"><br><br>
+            <button type="submit">Save {sub_type.capitalize()} Bio</button>
+          </form>
+          <p><a href="{url_for('life_wizard')}">Back to Wizard</a></p>
+        </body>
+        </html>
+        """
+
+    # otherwise main wizard screen
+    # show aggregator name if set, show any created items, allow pick new type, or finish
+    # build list of sub-biographies
+    items_html = "<ul>"
+    for it in created_items:
+        items_html += f"<li>{it['type'].capitalize()}: {it['name']} (id={it['id']})</li>"
+    items_html += "</ul>"
+
+    # list possible sub-types except "time"
+    # you can gather them from your dir if you want, or just hardcode:
+    sub_types = ["people","organisations","buildings","settlements"]
+    sub_type_opts = "".join(f'<option value="{st}">{st.capitalize()}</option>' for st in sub_types)
+
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="UTF-8"><title>Multi-Type Life Wizard</title></head>
+    <body>
+      <h1>Multi-Type Life Wizard</h1>
+      <p>Aggregator Name: <strong>{aggregator_name}</strong></p>
+      <form method="post">
+        <input type="hidden" name="action" value="set_aggregator_name">
+        <label for="aggregator_name">Set/Change Aggregator Name:</label>
+        <input type="text" name="aggregator_name" value="{aggregator_name}">
+        <button type="submit">Update Name</button>
+      </form>
+      <hr>
+      <h2>Currently Added Sub-Biographies</h2>
+      {items_html}
+      <hr>
+      <h2>Add a New Sub-Biography</h2>
+      <form method="post">
+        <input type="hidden" name="action" value="pick_type">
+        <label for="chosen_type">Which type to create?</label>
+        <select name="chosen_type">{sub_type_opts}</select>
+        <button type="submit">Next</button>
+      </form>
+      <hr>
+      <h2>Finish Wizard</h2>
+      <form method="post">
+        <input type="hidden" name="action" value="finish">
+        <button type="submit">Save & Finish</button>
+      </form>
+    </body>
+    </html>
+    """
+
+
+
+@app.route('/multi_life_wizard', methods=['GET','POST'])
+def multi_life_wizard():
+    """
+    A simplistic multi-step wizard:
+      Step 1 (GET) => ask user to create/pick a building
+      Step 2 => pick a person
+      Step 3 => pick an organisation
+      ...
+      Final => merges them into one aggregator 'life' record
+    For demonstration, we do a single form. In reality, you'd do multiple steps or store session data.
+    """
+
+    if request.method == 'POST':
+        # 1) We collect building_name, person_name, org_name from the single form
+        building_name = request.form.get("building_name","").strip()
+        person_name   = request.form.get("person_name","").strip()
+        org_name      = request.form.get("org_name","").strip()
+        life_title    = request.form.get("life_title","My Life")
+
+        # 2) Potentially create new building/person/org JSON in their respective folders:
+        # e.g. create building_id
+        import time
+        building_id = "B_"+str(int(time.time()))
+        # build building JSON in /types/buildings/biographies/<building_id>.json
+        # We'll skip the actual code for brevity. Then do similarly for person, org
+
+        # 3) Create aggregator life record
+        aggregator_dir = "./types/life/biographies"
+        os.makedirs(aggregator_dir, exist_ok=True)
+        aggregator_id = f"Life_{int(time.time())}"
+        aggregator_data = {
+            "id": aggregator_id,
+            "name": life_title,
+            "building_id": building_id,
+            "person_id": "P_...",  # whichever we assigned
+            "org_id": "O_...",
+            # plus partial/exact date or relationship info
+        }
+        aggregator_file = os.path.join(aggregator_dir, f"{aggregator_id}.json")
+        save_dict_as_json(aggregator_file, aggregator_data)
+
+        flash(f"Life biography '{life_title}' created with building, person, org!", "success")
+        return redirect(f"/life_view/{aggregator_id}")
+
+    # If GET => show a single form for all steps (for brevity)
+    # In real usage, you'd do multiple steps or advanced UI.
+    html = """
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="UTF-8"><title>Multi-Type Wizard</title></head>
+    <body>
+      <h1>Create a Multi-Type Life (Wizard)</h1>
+      <form method="post">
+        <label>Title for this Life:</label>
+        <input type="text" name="life_title" placeholder="e.g. 'John's Full Life'"><br><br>
+
+        <h2>Step 1: Create or name a Building</h2>
+        <input type="text" name="building_name" placeholder="Enter a building name..."><br><br>
+
+        <h2>Step 2: Create or name a Person</h2>
+        <input type="text" name="person_name" placeholder="Enter a person name..."><br><br>
+
+        <h2>Step 3: Create or name an Organisation</h2>
+        <input type="text" name="org_name" placeholder="Enter an org name..."><br><br>
+
+        <button type="submit">Finish & Save Life</button>
+      </form>
+    </body>
+    </html>
+    """
+    return html
+
+
+@app.route('/life_gen', methods=['GET','POST'])
+def life_gen():
+    """
+    Demonstration route that:
+     - On GET, shows a form letting user pick or create multiple people, orgs, buildings, etc.
+     - On POST, compiles them into a single aggregator (like "life biography") and saves.
+    """
+
+    # Path to aggregator or "events" folder
+    aggregator_path = "./types/events/biographies"
+    os.makedirs(aggregator_path, exist_ok=True)
+
+    if request.method == 'POST':
+        # 1) Collect user input
+        life_name = request.form.get("life_name","Unnamed_Life").strip()
+
+        # e.g. user picks from dropdown or enters new for each type
+        chosen_person = request.form.getlist("people_ids")       # user can pick multiple
+        chosen_buildings = request.form.getlist("building_ids")  # or "settlement_ids"
+        chosen_orgs = request.form.getlist("org_ids")
+
+        # 2) You might also let user set time intervals or partial vs. exact date
+        # For demonstration, we'll store them as-is
+        # 3) Build a single aggregator dictionary
+        import time
+        aggregator_id = f"Life_{int(time.time())}"
+        aggregator_data = {
+            "id": aggregator_id,
+            "name": life_name,
+            "people_ids": chosen_person,
+            "building_ids": chosen_buildings,
+            "org_ids": chosen_orgs,
+            "timestamp": str(int(time.time()))
+            # Add more fields if needed (time ranges, partial, etc.)
+        }
+
+        # 4) Save aggregator JSON
+        aggregator_file = os.path.join(aggregator_path, f"{aggregator_id}.json")
+        save_dict_as_json(aggregator_file, aggregator_data)
+
+        flash(f"Life Biography '{life_name}' created successfully!", "success")
+        return redirect(f"/life_view/{aggregator_id}")  # or some route to view the aggregator
+
+    # If GET => display the form
+    # We'll load each type's existing IDs for the user to pick from
+    # (people, org, building, etc.)
+
+    people_dir = "./types/people/biographies"
+    people_opts = []
+    if os.path.exists(people_dir):
+        for pf in os.listdir(people_dir):
+            if pf.endswith(".json"):
+                pd = load_json_as_dict(os.path.join(people_dir, pf))
+                pid = pd.get("id", pf[:-5])
+                pname = pd.get("name", pid)
+                people_opts.append((pid, pname))
+
+    org_dir = "./types/organisations/biographies"
+    org_opts = []
+    if os.path.exists(org_dir):
+        for of in os.listdir(org_dir):
+            if of.endswith(".json"):
+                od = load_json_as_dict(os.path.join(org_dir, of))
+                oid = od.get("id", of[:-5])
+                oname = od.get("name", oid)
+                org_opts.append((oid, oname))
+
+    # Similarly for buildings, settlements, etc. (not shown for brevity)
+    building_opts = []
+    building_dir = "./types/buildings/biographies"
+    if os.path.exists(building_dir):
+        for bf in os.listdir(building_dir):
+            if bf.endswith(".json"):
+                bd = load_json_as_dict(os.path.join(building_dir, bf))
+                bid = bd.get("id", bf[:-5])
+                bname = bd.get("name", bid)
+                building_opts.append((bid, bname))
+
+    # Build a minimal form
+    html_form = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Generate Life Biography</title>
+    </head>
+    <body>
+      <h1>Create a Multi-Type Life</h1>
+      <form method="post">
+        <label for="life_name">Name for this Life/Story:</label>
+        <input type="text" name="life_name" placeholder="e.g. 'Alan Turing Extended Life'" required>
+        <br><br>
+
+        <h3>Pick People:</h3>
+        <p>(Hold Ctrl or Shift to pick multiple if desired)</p>
+        <select name="people_ids" multiple size="5">PEOPLE_OPTIONS</select>
+
+        <h3>Pick Organisations:</h3>
+        <select name="org_ids" multiple size="5">ORG_OPTIONS</select>
+
+        <h3>Pick Buildings:</h3>
+        <select name="building_ids" multiple size="5">BUILDING_OPTIONS</select>
+
+        <!-- if you also want 'settlements', add similarly -->
+
+        <br><br>
+        <button type="submit">Save Multi-Type Life</button>
+      </form>
+    </body>
+    </html>
+    """
+
+    # Insert the <option> lists
+    people_html = "".join(f'<option value="{p[0]}">{p[1]}</option>' for p in people_opts)
+    orgs_html   = "".join(f'<option value="{o[0]}">{o[1]}</option>' for o in org_opts)
+    bldg_html   = "".join(f'<option value="{b[0]}">{b[1]}</option>' for b in building_opts)
+
+    final_html = html_form
+    final_html = final_html.replace("PEOPLE_OPTIONS", people_html)
+    final_html = final_html.replace("ORG_OPTIONS", orgs_html)
+    final_html = final_html.replace("BUILDING_OPTIONS", bldg_html)
+
+    return final_html
+
+@app.route('/life_view/<aggregator_id>')
+def life_view(aggregator_id):
+    """
+    Displays a single aggregator/multi-type 'life' record 
+    from ./types/events/biographies/<aggregator_id>.json,
+    showing references to people, orgs, buildings, etc.
+    """
+
+    import os, json
+
+    aggregator_file = f"./types/events/biographies/{aggregator_id}.json"
+    if not os.path.exists(aggregator_file):
+        return f"<h1>Life {aggregator_id} Not Found</h1>", 404
+
+    # Load aggregator JSON
+    aggregator_data = load_json_as_dict(aggregator_file)
+    life_name = aggregator_data.get("name", f"Life {aggregator_id}")
+
+    # We'll assume aggregator_data might look like:
+    # {
+    #   "id": "Life_1680151112",
+    #   "name": "Alan Turing Extended Life",
+    #   "people_ids": ["AlanTuring_12345", "AnotherPerson_6789"],
+    #   "building_ids": ["KingsCollege_77777"],
+    #   "org_ids": ["BletchleyPark_99999"],
+    #   "timestamp": "1680151112"
+    # }
+
+    # 1) Grab references
+    people_ids   = aggregator_data.get("people_ids", [])
+    building_ids = aggregator_data.get("building_ids", [])
+    org_ids      = aggregator_data.get("org_ids", [])
+    # If you also have settlement_ids, etc., do similarly
+
+    # 2) A helper to resolve a person's ID => (display_name, link)
+    def resolve_person(pid):
+        # e.g. read ./types/people/biographies/<pid>.json
+        path = f"./types/people/biographies/{pid}.json"
+        if os.path.exists(path):
+            pdata = load_json_as_dict(path)
+            display = pdata.get("name", pid)
+            link = f"/biography/people/{pid}"
+            return (pid, display, link)
+        else:
+            # fallback
+            return (pid, pid, None)
+
+    # 3) Similarly for org
+    def resolve_org(oid):
+        path = f"./types/organisations/biographies/{oid}.json"
+        if os.path.exists(path):
+            odata = load_json_as_dict(path)
+            display = odata.get("name", oid)
+            link = f"/biography/organisations/{oid}"
+            return (oid, display, link)
+        else:
+            return (oid, oid, None)
+
+    # 4) Similarly for building
+    def resolve_building(bid):
+        path = f"./types/buildings/biographies/{bid}.json"
+        if os.path.exists(path):
+            bdata = load_json_as_dict(path)
+            display = bdata.get("name", bid)
+            link = f"/biography/buildings/{bid}"
+            return (bid, display, link)
+        else:
+            return (bid, bid, None)
+
+    # Build lists for easy HTML
+    resolved_people = [resolve_person(pid) for pid in people_ids]
+    resolved_orgs   = [resolve_org(oid)   for oid in org_ids]
+    resolved_bldgs  = [resolve_building(bid) for bid in building_ids]
+
+    # 5) Construct HTML
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>View Life: {life_name}</title>
+    </head>
+    <body>
+      <h1>Viewing Life: {life_name}</h1>
+      <p><strong>ID:</strong> {aggregator_id}</p>
+    """
+
+    # List People
+    html += "<h2>People Involved</h2><ul>"
+    for pid, disp, link in resolved_people:
+        if link:
+            html += f"<li><a href='{link}'>{disp}</a> ({pid})</li>"
+        else:
+            html += f"<li>{disp} ({pid}) - Not Found</li>"
+    html += "</ul>"
+
+    # List Orgs
+    html += "<h2>Organisations Involved</h2><ul>"
+    for oid, disp, link in resolved_orgs:
+        if link:
+            html += f"<li><a href='{link}'>{disp}</a> ({oid})</li>"
+        else:
+            html += f"<li>{disp} ({oid}) - Not Found</li>"
+    html += "</ul>"
+
+    # List Buildings
+    html += "<h2>Buildings Involved</h2><ul>"
+    for bid, disp, link in resolved_bldgs:
+        if link:
+            html += f"<li><a href='{link}'>{disp}</a> ({bid})</li>"
+        else:
+            html += f"<li>{disp} ({bid}) - Not Found</li>"
+    html += "</ul>"
+
+    # If you stored times or partial years for the aggregator as well:
+    # you can display them here.
+
+    html += f"""
+      <p><a href="/">Back to Home</a></p>
+    </body>
+    </html>
+    """
+
+    return html
+
+
+def printLabel(label):
+    prefix = label['label']+"="  
+    if "value" in label:
+        return prefix+label["value"]
+    else:
+        return prefix+label["category"]
+
+#In case we want to print time in a special way
+def printTime(timeLabel):
+    if "value" in timeLabel:
+        return timeLabel["value"]
+    else:
+        return timeLabel["category"]
+
+
+# @app.route('/biography/<string:type_name>/<string:biography_name>')
+# def biography_page(type_name, biography_name):
+#     """
+#     Displays a specific biography along with its entries and labels.
+#     """
+#     biography_path = f"./types/{type_name}/biographies/{biography_name}.json"
+
+#     if not os.path.exists(biography_path):
+#         return f"""
+#         <h1>Error: Biography Not Found</h1>
+#         <p>The file <code>{biography_path}</code> does not exist.</p>
+#         <a href='/type/{type_name}' class='back-link'>Back</a>
+#         """, 404
+
+#     # Load biography data
+#     bio_data = load_json_as_dict(biography_path)
+#     display_name = bio_data.get("name", "Unknown Name")
+#     readable_time = bio_data.get("readable_time", "Unknown Time")
+#     description = bio_data.get("description", "No description available.")
+
+#     # HTML Template
+#     html_template = f"""
+#     <!DOCTYPE html>
+#     <html lang="en">
+#     <head>
+#         <meta charset="UTF-8">
+#         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+#         <title>{display_name.capitalize()}</title>
+#         <link rel="stylesheet" href="/static/styles.css">
+#         <script>
+#             function removeBiography(typeName, biographyName) {{
+#                 if (confirm("Are you sure you want to remove this biography? It will be archived.")) {{
+#                     fetch(`/biography_remove/${{typeName}}/${{biographyName}}`, {{ method: 'POST' }})
+#                         .then(response => response.ok && (alert("Biography archived successfully."), window.location.href = "/type/" + typeName));
+#                 }}
+#             }}
+
+#             function removeEntry(typeName, biographyName, entryIndex) {{
+#                 if (confirm("Are you sure you want to remove this entry?")) {{
+#                     fetch(`/biography_removeentry/${{typeName}}/${{biographyName}}/${{entryIndex}}`, {{ method: 'POST' }})
+#                         .then(response => response.ok && (alert("Entry removed successfully."), location.reload()));
+#                 }}
+#             }}
+
+#             function removeLabel(typeName, biographyName, entryIndex, labelIndex) {{
+#                 if (confirm("Are you sure you want to remove this label?")) {{
+#                     fetch(`/biography_removelabel/${{typeName}}/${{biographyName}}/${{entryIndex}}/${{labelIndex}}`, {{ method: 'POST' }})
+#                         .then(response => response.ok && (alert("Label removed successfully."), location.reload()));
+#                 }}
+#             }}
+#         </script>
+#     </head>
+#     <body>
+#         <div class="container">
+#             <a href="/type/{type_name}" class="back-link">Back</a>
+#             <h1>{display_name.capitalize()}</h1>
+#             <p class="timestamp">Created: {readable_time}</p>
+#             <p class="description">{description}</p>
+
+#             <!-- Edit Biography Button -->
+#             <button class="edit-biography-button" onclick="window.location.href='/biography_edit/{type_name}/{biography_name}'">
+#                 Edit Biography
+#             </button>
+#             <button class="delete-button" onclick="removeBiography('{type_name}', '{biography_name}')">Remove Biography</button>
+            
+#             <h2>Entries</h2>
+#             <a href="/biography_addentry/{type_name}/{biography_name}" class="button add-entry-button">Add New Entry</a>
+
+#             <div class="entries-container">
+#     """
+
+#     # Loop through entries
+#     for entry_index, entry in enumerate(bio_data.get("entries", [])):
+#         start_time = entry.get("time_period", {}).get("start", {})
+#         end_time = entry.get("time_period", {}).get("end", {})
+
+#         start_label = start_time.get("label", "Unknown")
+#         start_value = start_time.get("value", "Unknown")
+#         end_label = end_time.get("label", "Unknown")
+#         end_value = end_time.get("value", "Unknown")
+
+#         entry_html = f"""
+#         <div class="entry">
+#             <p><strong>From:</strong> {start_label} ({start_value})</p>
+#             <p><strong>To:</strong> {end_label} ({end_value})</p>
+
+#             <div class="entry-actions">
+#                 <a href="/biography_editentry/{type_name}/{biography_name}/{entry_index}" class="edit-entry-button">Edit Entry</a>
+#                 <button class="remove-entry-button" onclick="removeEntry('{type_name}', '{biography_name}', {entry_index})">Remove Entry</button>
+#                 <a href="/biography_addlabel/{type_name}/{biography_name}/{entry_index}" class="add-label-button">Add Label</a>
+#             </div>
+
+#             <h3>Labels:</h3>
+#             <div class="labels-container">
+#         """
+
+#         # ✅ **Updated Label Display in Boxes**
+#         labels = entry.get("labels", [])
+#         if labels:
+#             for label_index, label in enumerate(labels):
+#                 label_name = label.get("label", "Unknown Label")
+#                 label_value = label.get("value", "Unknown Value")
+
+#                 entry_html += f"""
+#                 <div class="label-box">
+#                     <span><strong>{label_name.capitalize()}:</strong> {label_value}</span>
+#                     <div class="label-actions">
+#                         <a href="/biography_editlabel/{type_name}/{biography_name}/{entry_index}/{label_index}" class="edit-label-button">Edit</a>
+#                         <button class="remove-label-button" onclick="removeLabel('{type_name}', '{biography_name}', {entry_index}, {label_index})">Remove</button>
+#                     </div>
+#                 </div>
+#                 """
+#         else:
+#             entry_html += "<p>No labels added yet.</p>"
+
+#         entry_html += "</div></div>"  # Close labels-container and entry div
+#         html_template += entry_html
+
+#     html_template += "</div></div></body></html>"
+
+#     return html_template
+
+@app.route('/biography/<string:type_name>/<string:biography_name>')
+def biography_page(type_name, biography_name):
+    """
+    Displays a single biography with entries, formatted times (date or subfolder), 
+    subfolder-based or date-based approach, plus label images and confidence if present.
+    """
+
+    # 1. Validate the path
+    biography_path = f"./types/{type_name}/biographies/{biography_name}.json"
+    if not os.path.exists(biography_path):
+        return f"""
+        <h1>Error: Biography Not Found</h1>
+        <p>The file <code>{biography_path}</code> does not exist.</p>
+        <a href='/type/{type_name}' class='back-link'>Back</a>
+        """, 404
+
+    # 2. Load the JSON data
+    bio_data = load_json_as_dict(biography_path)
+    display_name = bio_data.get("name", biography_name)
+    readable_time = bio_data.get("readable_time", "Unknown Time")
+    description = bio_data.get("description", "No description available.")
+    entries = bio_data.get("entries", [])
+
+    # 3. (Optional) Build an image dictionary for subfolder approaches & label images
+    #    If you have multiple subfolder-based approach names (like "life_decade", "celebea_face_hq"), 
+    #    gather them all. For brevity, we show a single scanning of `./types/<type_name>/labels/<some_subfolder>`.
+    #    This is similar to what we do in 'editlabel' or 'addlabel'.
+    image_dict = {}  # e.g. {"celebea_face_hq:1": "/serve_label_image/people/celebea_face_hq/1.jpg"}
+    
+    # Path for label definitions
+    labels_base_path = f"./types/{type_name}/labels"
+    if os.path.exists(labels_base_path) and os.path.isdir(labels_base_path):
+        for lbl_folder in os.listdir(labels_base_path):
+            # each lbl_folder might be "life_decade", "celebea_face_hq", etc.
+            possible_folder = os.path.join(labels_base_path, lbl_folder)
+            if os.path.isdir(possible_folder):
+                # gather images
+                image_files = [f for f in os.listdir(possible_folder) if f.endswith((".jpg",".png"))]
+                for img in image_files:
+                    base = os.path.splitext(img)[0]  # e.g. "1"
+                    # store "lbl_folder:base" => serve path
+                    image_key = f"{lbl_folder}:{base}"
+                    image_dict[image_key] = f"/serve_label_image/{type_name}/{lbl_folder}/{img}"
+            # (We ignore .json in these subfolders for this route, just images.)
+    
+    # A small helper to prettify approach names (split underscores, capitalize words)
+    def prettify_name(raw: str) -> str:
+        return " ".join(word.capitalize() for word in raw.split("_"))
+
+    # 4. Start building the HTML
+    html_template = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>{display_name.capitalize()}</title>
+        <link rel="stylesheet" href="/static/styles.css">
+        <script>
+            function removeBiography(typeName, biographyName) {{
+                if (confirm("Are you sure you want to remove this biography? It will be archived.")) {{
+                    fetch(`/biography_remove/${{typeName}}/${{biographyName}}`, {{ method: 'POST' }})
+                        .then(response => {{
+                            if (response.ok) {{
+                                alert("Biography archived successfully.");
+                                window.location.href = "/type/" + typeName;
+                            }} else {{
+                                alert("Error archiving biography.");
+                            }}
+                        }});
+                }}
+            }}
+
+            function removeEntry(typeName, biographyName, entryIndex) {{
+                if (confirm("Are you sure you want to remove this entry?")) {{
+                    fetch(`/biography_removeentry/${{typeName}}/${{biographyName}}/${{entryIndex}}`, {{ method: 'POST' }})
+                        .then(response => {{
+                            if (response.ok) {{
+                                alert("Entry removed successfully.");
+                                location.reload();
+                            }} else {{
+                                alert("Error removing entry.");
+                            }}
+                        }});
+                }}
+            }}
+
+            function removeLabel(typeName, biographyName, entryIndex, labelIndex) {{
+                if (confirm("Are you sure you want to remove this label?")) {{
+                    fetch(`/biography_removelabel/${{typeName}}/${{biographyName}}/${{entryIndex}}/${{labelIndex}}`, {{ method: 'POST' }})
+                        .then(response => {{
+                            if (response.ok) {{
+                                alert("Label removed successfully.");
+                                location.reload();
+                            }} else {{
+                                alert("Error removing label.");
+                            }}
+                        }});
+                }}
+            }}
+        </script>
+    </head>
+    <body>
+        <div class="container">
+            <a href="/type/{type_name}" class="back-link">Back</a>
+            <h1>{display_name.capitalize()}</h1>
+            <p class="timestamp">Created: {readable_time}</p>
+            <p class="description">{description}</p>
+
+            <!-- Edit or Remove biography -->
+            <button class="edit-biography-button" onclick="window.location.href='/biography_edit/{type_name}/{biography_name}'">
+                Edit Biography
+            </button>
+            <button class="delete-button" onclick="removeBiography('{type_name}', '{biography_name}')">Remove Biography</button>
+            
+            <h2>Entries</h2>
+            <a href="/biography_addentry/{type_name}/{biography_name}" class="button add-entry-button">Add New Entry</a>
+
+            <div class="entries-container">
+    """
+
+    # 5. Loop through each entry
+    for entry_index, entry in enumerate(entries):
+        time_period = entry.get("time_period", {})
+        start_info = time_period.get("start", {})
+        end_info   = time_period.get("end", {})
+
+        # Format the start
+        start_str, start_img_html = format_time_approach(start_info, image_dict, prettify_name)
+        end_str, end_img_html     = format_time_approach(end_info, image_dict, prettify_name)
+
+        # Now build the HTML for the entry
+        entry_html = f"""
+        <div class="entry">
+            <p><strong>From:</strong> {start_str}</p>
+            {start_img_html}
+            <p><strong>To:</strong> {end_str}</p>
+            {end_img_html}
+
+            <div class="entry-actions">
+                <a href="/biography_editentry/{type_name}/{biography_name}/{entry_index}" class="edit-entry-button">Edit Entry</a>
+                <button class="remove-entry-button" onclick="removeEntry('{type_name}', '{biography_name}', {entry_index})">Remove Entry</button>
+                <a href="/biography_addlabel/{type_name}/{biography_name}/{entry_index}" class="add-label-button">Add Label</a>
+            </div>
+            <h3>Labels:</h3>
+            <div class="labels-container">
+        """
+
+        # Display each label
+        labels_list = entry.get("labels", [])
+        if labels_list:
+            for label_index, label_item in enumerate(labels_list):
+                lbl_name = label_item.get("label","Unknown")
+                lbl_val  = label_item.get("value","Unknown")
+                lbl_conf = label_item.get("confidence", None)
+
+                # Prettify label name
+                pretty_label_name = prettify_name(lbl_name)  # e.g. "Celebea Face Hq"
+                # Build label text 
+                conf_str = f"(Confidence: {lbl_conf})" if lbl_conf is not None else ""
+                label_str = f"{pretty_label_name}: {lbl_val} {conf_str}"
+
+                # Check if there's an image for this label
+                # e.g. "celebea_face_hq:1"
+                image_key = f"{lbl_name}:{lbl_val}"
+                if image_key in image_dict and image_dict[image_key] is not None:
+                    label_img = f"<img src='{image_dict[image_key]}' alt='Label Image' style='max-width:100px;'>"
+                else:
+                    label_img = ""
+
+                entry_html += f"""
+                <div class="label-box">
+                    <span><strong>{label_str}</strong></span>
+                    {label_img}
+                    <div class="label-actions">
+                        <a href="/biography_editlabel/{type_name}/{biography_name}/{entry_index}/{label_index}" class="edit-label-button">Edit</a>
+                        <button class="remove-label-button" onclick="removeLabel('{type_name}', '{biography_name}', {entry_index}, {label_index})">Remove</button>
+                    </div>
+                </div>
+                """
+        else:
+            entry_html += "<p>No labels added yet.</p>"
+
+        entry_html += "</div></div>"  # close .labels-container, .entry
+        html_template += entry_html
+
+    html_template += """
+            </div> <!-- end .entries-container -->
+        </div> <!-- end .container -->
+    </body>
+    </html>
+    """
+
+    return html_template
+
+
+def format_time_approach(time_dict, image_dict, prettify_func):
+    """
+    Helper function to format a single 'start' or 'end' dictionary 
+    from new_entry["time_period"]["start"] or ["end"].
+    Returns (text, optional_image_html).
+    """
+    if not time_dict:
+        return ("<em>Unknown</em>", "")
+
+    approach = time_dict.get("approach", None)
+    if approach == "date":
+        # partial year vs. exact date
+        mode = time_dict.get("mode","exact")
+        val  = time_dict.get("value","")
+        is_partial = time_dict.get("is_partial", False)
+        if is_partial:
+            display_str = f"(Year Only) {val}"
+        else:
+            display_str = val if val else "<em>No date</em>"
+        # no subfolder image in date approach, presumably
+        return (display_str, "")
+    elif approach in (None, "time"): 
+        # Maybe you used the older logic or no approach?
+        # We can attempt to display subfolder_type + subfolder_value
+        sub_type = time_dict.get("subfolder_type","").lower()
+        sub_val  = time_dict.get("subfolder_value","")
+        if sub_type and sub_val:
+            # Prettify name
+            pretty_sub_type = prettify_func(sub_type)
+            # Possibly see if there's an image
+            image_key = f"{sub_type}:{sub_val}"
+            if image_key in image_dict and image_dict[image_key] is not None:
+                return (f"{pretty_sub_type} => {sub_val}", 
+                        f"<img src='{image_dict[image_key]}' style='max-width:100px;' alt='Time Image'>")
+            else:
+                return (f"{pretty_sub_type} => {sub_val}", "")
+        else:
+            return ("<em>Unknown</em>", "")
+    else:
+        # approach might be e.g. "life_decade", "celebea_face_hq", etc.
+        # or from your code: { 'approach': 'life_decade', 'label': 'life_decade', 'value': '1920s'}
+        # We'll try to show approach + value, plus image
+        approach_label = prettify_func(approach)
+        val = time_dict.get("value","")
+        image_key = f"{approach}:{val}"
+        if image_key in image_dict and image_dict[image_key] is not None:
+            return (f"{approach_label}: {val}", 
+                    f"<img src='{image_dict[image_key]}' style='max-width:100px;' alt='Time Image'>")
+        else:
+            return (f"{approach_label}: {val}", "")
+
+
+
+@app.route('/biography_removeentry/<string:type_name>/<string:biography_name>/<int:entry_index>', methods=['POST'])
+def biography_removeentry(type_name, biography_name, entry_index):
+    biography_path = f"./types/{type_name}/biographies/{biography_name}.json"
+    asDict = load_json_as_dict(biography_path)
+
+    # Remove entry
+    try:
+        del asDict["entries"][entry_index]
+    except IndexError:
+        return "Entry not found", 404
+
+    # Save updated JSON
+    save_dict_as_json(biography_path, asDict)
+
+    return "Success", 200
+
+@app.route('/biography_removelabel/<string:type_name>/<string:biography_name>/<int:entry_index>/<int:label_index>', methods=['POST'])
+def biography_removelabel(type_name, biography_name, entry_index, label_index):
+    biography_path = f"./types/{type_name}/biographies/{biography_name}.json"
+
+    # Load biography data
+    asDict = load_json_as_dict(biography_path)
+
+    # Ensure the entry exists
+    if entry_index >= len(asDict.get("entries", [])):
+        flash("Error: Entry not found.", "error")
+        return redirect(f"/biography/{type_name}/{biography_name}")
+
+    entry = asDict["entries"][entry_index]
+
+    # Ensure labels exist for this entry
+    if "labels" not in entry or not entry["labels"]:
+        flash("Error: No labels to remove.", "error")
+        return redirect(f"/biography/{type_name}/{biography_name}")
+
+    # Ensure the label index is within range
+    if label_index >= len(entry["labels"]):
+        flash("Error: Label not found.", "error")
+        return redirect(f"/biography/{type_name}/{biography_name}")
+
+    # Remove the label
+    removed_label = entry["labels"].pop(label_index)
+
+    # Save updated JSON
+    save_dict_as_json(biography_path, asDict)
+
+    flash(f"Label '{removed_label['label']}' removed successfully.", "success")
+    return redirect(f"/biography/{type_name}/{biography_name}")
+
+
+
+@app.route('/biography_addentry/<string:type_name>/<string:biography_name>', methods=['GET','POST'])
+def biography_addentry_page(type_name, biography_name):
+    """
+    Displays a combined approach for adding a new entry:
+      - If user chooses "date", we show exact/partial date fields for start & end.
+      - If user chooses a label folder with a subfolder (e.g. 'life_decade'),
+        we show subfolder-based dropdown for start & end (like 'twenties','thirties'),
+        with prettified names.
+
+    All folder names (e.g. 'life_decade') and subfolder values (e.g. 'thirties') 
+    are displayed in a prettified form ('Life Decade','Thirties'). 
+    However, we store the raw string in the JSON to keep consistency.
+
+    Under the hood, if approach == 'date', no subfolder. 
+    If approach == 'life_decade', we read the subfolder /types/time/labels/life_decade/*.json 
+    and build a dropdown (plus a custom option).
+    """
+
+    import os, json
+
+    # ----------- 1) Load the biography data -----------
+    json_file_path = f"./types/{type_name}/biographies/{biography_name}.json"
+    if not os.path.exists(json_file_path):
+        return f"<h1>Error: Biography Not Found</h1>", 404
+
+    bio_data = load_json_as_dict(json_file_path)
+    display_name = bio_data.get("name", biography_name)
+    if "entries" not in bio_data:
+        bio_data["entries"] = []
+
+    # A helper to load the subfolder-based approach
+    # We'll unify them in one dictionary: { "date": { "raw":"date","pretty":"Date","has_subfolder":False,"values":[] } ... }
+
+    # We'll define a function to prettify underscores, e.g. 'life_decade' => 'Life Decade'
+    def prettify_label(s: str) -> str:
+        return " ".join(part.capitalize() for part in s.split("_"))
+
+    # ----------- 2) Build the approach dictionary -----------
+    # By default, we have "date" approach => no subfolder => partial or exact date
+    approach_dict = {
+        "date": {
+            "raw": "date",
+            "pretty": "Date",
+            "has_subfolder": False,
+            "values": []  # no subfolder-based values
+        }
+    }
+
+    # We'll also parse the /types/time/labels/ directory to find subfolder-based approaches.
+    times_path = "./types/time/labels"
+    if os.path.exists(times_path) and os.path.isdir(times_path):
+        for file in os.listdir(times_path):
+            if not file.endswith(".json"):
+                continue
+            folder_name = os.path.splitext(file)[0]  # e.g. 'life_decade'
+            if folder_name == "date":
+                # skip if there's an actual date.json, because we handle 'date' above
+                continue
+
+            subfolder_path = os.path.join(times_path, folder_name)
+            if os.path.isdir(subfolder_path):
+                # gather .json => sub-values
+                sub_files = [f for f in os.listdir(subfolder_path) if f.endswith(".json")]
+                # We'll store them as { 'raw':'thirties','pretty':'Thirties' }
+                sub_values_list = []
+                for sf in sub_files:
+                    raw_val = os.path.splitext(sf)[0]  # e.g. 'thirties'
+                    sub_values_list.append({
+                        "raw": raw_val,
+                        "pretty": prettify_label(raw_val)
+                    })
+
+                approach_dict[folder_name] = {
+                    "raw": folder_name,  # e.g. 'life_decade'
+                    "pretty": prettify_label(folder_name),  # e.g. 'Life Decade'
+                    "has_subfolder": True,
+                    "values": sub_values_list
+                }
+            else:
+                # a .json with no subfolder => skip or handle differently
+                pass
+
+    # Example approach_dict might be:
+    # {
+    #   "date": { "raw":"date","pretty":"Date","has_subfolder":False,"values":[] },
+    #   "life_decade": {
+    #       "raw":"life_decade","pretty":"Life Decade","has_subfolder":True,
+    #       "values":[ {"raw":"twenties","pretty":"Twenties"}, ... ]
+    #   }
+    # }
+
+    # -------------- POST LOGIC --------------
+    from flask import request, redirect, flash
+    if request.method == 'POST':
+        chosen_approach = request.form.get("start_approach","date").strip()
+        if chosen_approach not in approach_dict:
+            chosen_approach = "date"  # fallback
+
+        # parse START time
+        if approach_dict[chosen_approach]["has_subfolder"]:
+            # subfolder approach
+            start_val_raw = request.form.get("start_sub_val","").strip()
+            if start_val_raw == "custom":
+                start_val_raw = request.form.get("start_custom_val","").strip() or "Custom"
+            start_time = {
+                "approach": chosen_approach,  # e.g. 'life_decade'
+                "value": start_val_raw  # store the raw string
+            }
+        else:
+            # 'date' approach
+            start_mode = request.form.get("start_date_mode","exact")
+            if start_mode == "exact":
+                s_date = request.form.get("start_full_date","").strip()
+                if not s_date: s_date = "No Date"
+                start_time = {
+                    "approach": "date",
+                    "mode": "exact",
+                    "value": s_date,
+                    "is_partial": False
+                }
+            else:
+                s_year = request.form.get("start_partial_year","").strip()
+                if not s_year: s_year = "Unknown Year"
+                start_time = {
+                    "approach": "date",
+                    "mode": "partial",
+                    "value": s_year,
+                    "is_partial": True
+                }
+
+        # parse END time (same approach)
+        if approach_dict[chosen_approach]["has_subfolder"]:
+            end_val_raw = request.form.get("end_sub_val","").strip()
+            if end_val_raw == "custom":
+                end_val_raw = request.form.get("end_custom_val","").strip() or "Custom"
+            end_time = {
+                "approach": chosen_approach,
+                "value": end_val_raw
+            }
+        else:
+            end_mode = request.form.get("end_date_mode","exact")
+            if end_mode == "exact":
+                e_date = request.form.get("end_full_date","").strip()
+                if not e_date: e_date = "No Date"
+                end_time = {
+                    "approach": "date",
+                    "mode": "exact",
+                    "value": e_date,
+                    "is_partial": False
+                }
+            else:
+                e_year = request.form.get("end_partial_year","").strip()
+                if not e_year: e_year = "Unknown Year"
+                end_time = {
+                    "approach": "date",
+                    "mode": "partial",
+                    "value": e_year,
+                    "is_partial": True
+                }
+
+        # build new entry
+        new_entry = {
+            "time_period": {
+                "start": start_time,
+                "end":   end_time
+            },
+            "labels": []
+        }
+        bio_data["entries"].append(new_entry)
+        save_dict_as_json(json_file_path, bio_data)
+        flash("Entry added successfully!", "success")
+        return redirect(f"/biography/{type_name}/{biography_name}")
+
+    # -------- GET => build the form -----------
+    # build an approach <option> list from approach_dict
+    approach_html = ""
+    for key, meta in approach_dict.items():
+        # e.g. key='life_decade', meta['pretty'] = 'Life Decade'
+        approach_html += f'<option value="{key}">{meta["pretty"]}</option>'
+
+    # We'll build a JS object: { "life_decade": [ {raw:"twenties",pretty:"Twenties"}, ... ], "date":[] }
+    # so we can populate start_sub_val, end_sub_val with prettified text
+    subfolder_obj = {}
+    for a_name, data in approach_dict.items():
+        if data["has_subfolder"]:
+            # data["values"] is a list of dicts like { raw:"thirties", pretty:"Thirties" }
+            subfolder_obj[a_name] = data["values"]
+        else:
+            subfolder_obj[a_name] = []  # no subfolder
+
+    subfolder_json = json.dumps(subfolder_obj)
+
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Add Entry - {display_name}</title>
+      <link rel="stylesheet" href="/static/styles.css">
+      <script>
+        let subfoldersMap = {subfolder_json};
+
+        function onApproachChange() {{
+          let approachSel = document.getElementById("start_approach").value;
+          document.getElementById("end_approach").value = approachSel;
+
+          // If this approach has subfolder => show subfolder approach
+          if (subfoldersMap[approachSel] && subfoldersMap[approachSel].length > 0) {{
+             document.getElementById("start_date_section").style.display = "none";
+             document.getElementById("end_date_section").style.display   = "none";
+
+             document.getElementById("start_subfolder_section").style.display = "block";
+             document.getElementById("end_subfolder_section").style.display   = "block";
+
+             // populate start_sub_val
+             let startSel = document.getElementById("start_sub_val");
+             startSel.innerHTML = "";
+             subfoldersMap[approachSel].forEach(obj => {{
+                let opt = document.createElement("option");
+                opt.value = obj.raw;           // store raw in 'value'
+                opt.textContent = obj.pretty;  // display prettified
+                startSel.appendChild(opt);
+             }});
+             // add 'custom'
+             let custOpt = document.createElement("option");
+             custOpt.value = "custom";
+             custOpt.textContent = "Enter Custom Value";
+             startSel.appendChild(custOpt);
+
+             // do same for end_sub_val
+             let endSel = document.getElementById("end_sub_val");
+             endSel.innerHTML = "";
+             subfoldersMap[approachSel].forEach(obj => {{
+                let opt = document.createElement("option");
+                opt.value = obj.raw;
+                opt.textContent = obj.pretty;
+                endSel.appendChild(opt);
+             }});
+             let cust2 = document.createElement("option");
+             cust2.value = "custom";
+             cust2.textContent = "Enter Custom Value";
+             endSel.appendChild(cust2);
+
+          }} else {{
+             // approachSel = 'date' or no subfolder => show date approach
+             document.getElementById("start_subfolder_section").style.display = "none";
+             document.getElementById("end_subfolder_section").style.display   = "none";
+
+             document.getElementById("start_date_section").style.display = "block";
+             document.getElementById("end_date_section").style.display   = "block";
+          }}
+        }}
+
+        function toggleDateMode(prefix) {{
+          let mode = document.querySelector('input[name="' + prefix + '_date_mode"]:checked').value;
+          let fullDate = document.getElementById(prefix + '_full_date');
+          let partialY = document.getElementById(prefix + '_partial_year');
+          if (mode === "exact") {{
+            fullDate.style.display = "inline-block";
+            partialY.style.display = "none";
+          }} else {{
+            fullDate.style.display = "none";
+            partialY.style.display = "inline-block";
+          }}
+        }}
+
+        function checkCustomSub(prefix) {{
+          let valSel = document.getElementById(prefix + '_sub_val');
+          let customInput = document.getElementById(prefix + '_custom_val');
+          if (valSel.value === 'custom') {{
+            valSel.style.display = 'none';
+            customInput.style.display = 'inline-block';
+          }} else {{
+            customInput.style.display = 'none';
+            valSel.style.display = 'inline-block';
+          }}
+        }}
+
+        window.onload = function() {{
+          onApproachChange();
+          toggleDateMode('start');
+          toggleDateMode('end');
+        }}
+      </script>
+    </head>
+
+    <body>
+      <div class="container">
+        <a href="/biography/{type_name}/{biography_name}" class="back-link">Back</a>
+        <h1>Add Entry to {display_name}</h1>
+
+        <form method="post">
+          <!-- Approach: e.g. "date" or "life_decade" -->
+          <label>Approach:</label>
+          <select id="start_approach" name="start_approach" onchange="onApproachChange()">
+            {approach_html}
+          </select>
+          <input type="hidden" id="end_approach" name="end_approach" value="date">
+
+          <hr>
+
+          <!-- START: date approach -->
+          <div id="start_date_section" style="display:none;">
+            <h3>Start Date Approach</h3>
+            <label>
+              <input type="radio" name="start_date_mode" value="exact" checked
+                     onclick="toggleDateMode('start')">
+              Exact
+            </label>
+            <label>
+              <input type="radio" name="start_date_mode" value="year"
+                     onclick="toggleDateMode('start')">
+              Year Only
+            </label>
+            <br>
+            <label>Exact Start Date:</label>
+            <input type="date" id="start_full_date" name="start_full_date" style="display:inline-block;">
+
+            <label>Partial Start Year:</label>
+            <input type="number" id="start_partial_year" name="start_partial_year"
+                   min="1" max="9999" style="display:none;" placeholder="1952">
+          </div>
+
+          <!-- START: subfolder approach -->
+          <div id="start_subfolder_section" style="display:none;">
+            <h3>Start Subfolder Approach</h3>
+            <label>Pick Value:</label>
+            <select id="start_sub_val" name="start_sub_val" onchange="checkCustomSub('start')">
+              <!-- JS populates with prettified items -->
+            </select>
+            <input type="text" id="start_custom_val" name="start_custom_val"
+                   placeholder="Custom" style="display:none;">
+          </div>
+
+          <hr>
+
+          <!-- END: date approach -->
+          <div id="end_date_section" style="display:none;">
+            <h3>End Date Approach</h3>
+            <label>
+              <input type="radio" name="end_date_mode" value="exact" checked
+                     onclick="toggleDateMode('end')">
+              Exact
+            </label>
+            <label>
+              <input type="radio" name="end_date_mode" value="year"
+                     onclick="toggleDateMode('end')">
+              Year Only
+            </label>
+            <br>
+            <label>Exact End Date:</label>
+            <input type="date" id="end_full_date" name="end_full_date" style="display:inline-block;">
+            <label>Partial End Year:</label>
+            <input type="number" id="end_partial_year" name="end_partial_year"
+                   min="1" max="9999" style="display:none;" placeholder="1980">
+          </div>
+
+          <!-- END: subfolder approach -->
+          <div id="end_subfolder_section" style="display:none;">
+            <h3>End Subfolder Approach</h3>
+            <label>Pick Value:</label>
+            <select id="end_sub_val" name="end_sub_val" onchange="checkCustomSub('end')">
+              <!-- JS populates -->
+            </select>
+            <input type="text" id="end_custom_val" name="end_custom_val"
+                   placeholder="Custom" style="display:none;">
+          </div>
+
+          <hr>
+          <button type="submit">Add Entry</button>
+        </form>
+      </div>
+    </body>
+    </html>
+    """
+
+
+
+# @app.route('/biography_addlabel/<string:type_name>/<string:biography_name>/<int:entry_index>', methods=['GET', 'POST'])
+# def biography_addlabel_page(type_name, biography_name, entry_index):
+#     """
+#     A single route that unifies:
+#       - Subfolder-based label selection (e.g. 'life_decade'),
+#       - 'date' label with no subfolder => custom date approach.
+
+#     If a label folder has a subfolder with .json files, we show a dropdown for those known values.
+#     Otherwise, we show a 'custom date' or partial-year approach.
+
+#     On POST, we store: label = chosen_folder, value = chosen_value, confidence, etc.
+#     """
+#     import json
+
+#     # -- 1. Load the biography & entry
+#     bio_path = f"./types/{type_name}/biographies/{biography_name}.json"
+#     if not os.path.exists(bio_path):
+#         return f"<h1>Error: Biography Not Found</h1>", 404
+
+#     bio_data = load_json_as_dict(bio_path)
+#     entries = bio_data.get("entries", [])
+#     if entry_index >= len(entries):
+#         return f"<h1>Error: Entry Index Out of Range</h1>", 404
+
+#     entry = entries[entry_index]
+#     display_name = bio_data.get("name", biography_name)
+
+#     # Ensure 'labels' array
+#     if "labels" not in entry:
+#         entry["labels"] = []
+
+#     # 1a. If POST => user submitted the form
+#     if request.method == 'POST':
+#         chosen_folder = request.form.get("label_folder","").strip()  # e.g. "date" or "life_decade"
+#         confidence_str = request.form.get("confidence_slider","1.0").strip()
+#         try:
+#             conf_val = float(confidence_str)
+#         except ValueError:
+#             conf_val = 1.0
+
+#         # Check if folder has a subfolder or not
+#         # We'll parse the data differently if subfolder exists
+#         subfolder_path = f"./types/{type_name}/labels/{chosen_folder}"
+#         has_subfolder = os.path.isdir(subfolder_path)
+
+#         if has_subfolder:
+#             # e.g. "life_decade" scenario => user picks a known or custom subfolder value
+#             sub_val = request.form.get("subfolder_value", "").strip()  # from the dropdown
+#             if sub_val == "custom":
+#                 sub_val = request.form.get("custom_sub_value","").strip()
+
+#             new_label = {
+#                 "label": chosen_folder,  # e.g. "life_decade"
+#                 "value": sub_val,
+#                 "confidence": conf_val
+#             }
+#         else:
+#             # e.g. "date" scenario => no subfolder => parse 'date approach'
+#             # Let user pick exact date or partial year, etc.
+#             date_mode = request.form.get("date_mode","exact")
+#             if date_mode == "exact":
+#                 chosen_date = request.form.get("exact_date","").strip()
+#                 final_val = chosen_date if chosen_date else "No Date"
+#             else:
+#                 chosen_year = request.form.get("partial_year","").strip()
+#                 final_val = chosen_year if chosen_year else "Unknown Year"
+
+#             new_label = {
+#                 "label": chosen_folder,  # e.g. "date"
+#                 "value": final_val,
+#                 "confidence": conf_val
+#             }
+
+#         # Append to the entry's labels
+#         entry["labels"].append(new_label)
+#         save_dict_as_json(bio_path, bio_data)
+#         flash("Label added successfully!", "success")
+#         return redirect(f"/biography/{type_name}/{biography_name}")
+
+#     # -- 2. GET => Show the form
+#     labels_path = f"./types/{type_name}/labels"
+#     label_files = [f for f in os.listdir(labels_path) if f.endswith(".json")]
+
+#     # Build a dictionary: { folder_name: { "has_subfolder": bool, "description": str } }
+#     folder_info = {}
+#     for lf in label_files:
+#         folder_name = os.path.splitext(lf)[0]  # e.g. "date", "life_decade"
+#         sub_path = os.path.join(labels_path, folder_name)
+#         has_sub = os.path.isdir(sub_path)
+
+#         data_json = load_json_as_dict(os.path.join(labels_path, lf))
+#         desc = data_json.get("description","No description.")
+
+#         folder_info[folder_name] = {
+#             "has_subfolder": has_sub,
+#             "description": desc
+#         }
+
+#     # Convert to JSON for JS
+#     folder_info_json = json.dumps(folder_info)
+
+#     # Build the <option> list for all folders
+#     folder_options_html = ""
+#     for folder_name, info in folder_info.items():
+#         folder_options_html += f'<option value="{folder_name}">{folder_name.capitalize()}</option>'
+
+#     # Next, for subfolder-based labels, build a dictionary of possible .json-based values
+#     # e.g. { "life_decade": ["twenties","thirties"], "date":[] }
+#     subfolder_values_dict = {}
+#     for folder_name, info in folder_info.items():
+#         if info["has_subfolder"]:
+#             # gather .json files in that subfolder
+#             subfolder_path = os.path.join(labels_path, folder_name)
+#             possible_subs = [os.path.splitext(sf)[0]
+#                              for sf in os.listdir(subfolder_path)
+#                              if sf.endswith(".json")]
+#             subfolder_values_dict[folder_name] = possible_subs
+#         else:
+#             subfolder_values_dict[folder_name] = []
+
+#     subfolder_json = json.dumps(subfolder_values_dict)
+
+#     # Return the HTML form:
+#     return f"""
+#     <!DOCTYPE html>
+#     <html>
+#     <head>
+#       <meta charset="UTF-8">
+#       <title>Add Label to {display_name}</title>
+#       <link rel="stylesheet" href="/static/styles.css">
+#       <script>
+#          let folderInfo = {folder_info_json};
+#          let subfolderValues = {subfolder_json};
+
+#          function onFolderChange() {{
+#             // If user picks e.g. "life_decade", we show subfolder approach
+#             // If "date", we show date approach
+#             let sel = document.getElementById("label_folder").value;
+#             let hasSub = folderInfo[sel].has_subfolder;
+
+#             if (hasSub) {{
+#                // show subfolder approach
+#                document.getElementById("subfolder_section").style.display = "block";
+#                document.getElementById("date_section").style.display = "none";
+
+#                // populate the dropdown
+#                let subs = subfolderValues[sel] || [];
+#                let valSelect = document.getElementById("subfolder_value");
+#                valSelect.innerHTML = "";
+#                subs.forEach(v => {{
+#                   let opt = document.createElement("option");
+#                   opt.value = v;
+#                   opt.textContent = v;
+#                   valSelect.appendChild(opt);
+#                }});
+
+#                // add 'custom' option
+#                let customOpt = document.createElement("option");
+#                customOpt.value = "custom";
+#                customOpt.textContent = "Enter Custom Value";
+#                valSelect.appendChild(customOpt);
+
+#             }} else {{
+#                // show date approach
+#                document.getElementById("subfolder_section").style.display = "none";
+#                document.getElementById("date_section").style.display = "block";
+#             }}
+#          }}
+
+#          function checkCustomSub() {{
+#             let sel = document.getElementById("subfolder_value");
+#             let customInput = document.getElementById("custom_sub_value");
+#             if (sel.value === "custom") {{
+#                sel.style.display = "none";
+#                customInput.style.display = "block";
+#             }} else {{
+#                customInput.style.display = "none";
+#                sel.style.display = "inline-block";
+#             }}
+#          }}
+
+#          function toggleDateMode() {{
+#             let mode = document.querySelector('input[name="date_mode"]:checked').value;
+#             let exactDateField = document.getElementById("exact_date");
+#             let partialYearField = document.getElementById("partial_year");
+
+#             if (mode === "exact") {{
+#                 exactDateField.style.display = "inline-block";
+#                 partialYearField.style.display = "none";
+#             }} else {{
+#                 exactDateField.style.display = "none";
+#                 partialYearField.style.display = "inline-block";
+#             }}
+#          }}
+
+#          window.onload = function() {{
+#             onFolderChange();
+#             toggleDateMode();
+#          }}
+#       </script>
+#     </head>
+#     <body>
+#       <div class="container">
+#         <a href='/biography/{type_name}/{biography_name}' class="back-link">Back</a>
+#         <h1>Add Label to {display_name}</h1>
+
+#         <form method="post">
+#            <label>Choose Label Folder:</label>
+#            <select name="label_folder" id="label_folder" onchange="onFolderChange()" required>
+#              <option value="">--Select Folder--</option>
+#              {folder_options_html}
+#            </select>
+
+#            <hr>
+
+#            <!-- SUBFOLDER SECTION (like 'life_decade') -->
+#            <div id="subfolder_section" style="display:none;">
+#               <h3>Subfolder-based Label</h3>
+#               <label for="subfolder_value">Pick Value:</label>
+#               <select id="subfolder_value" name="subfolder_value" onchange="checkCustomSub()">
+#                 <!-- we populate via JS -->
+#               </select>
+#               <input type="text" id="custom_sub_value" name="custom_sub_value"
+#                      placeholder="Custom" style="display:none;">
+#            </div>
+
+#            <!-- DATE SECTION (if no subfolder, e.g. 'date') -->
+#            <div id="date_section" style="display:none;">
+#               <h3>Date Approach</h3>
+#               <label>
+#                 <input type="radio" name="date_mode" value="exact" checked onclick="toggleDateMode()"> Exact Date
+#               </label>
+#               <label>
+#                 <input type="radio" name="date_mode" value="partial" onclick="toggleDateMode()"> Partial Year
+#               </label>
+#               <br>
+#               <label for="exact_date">Exact Date:</label>
+#               <input type="date" name="exact_date" id="exact_date" style="display:inline-block;">
+#               <label for="partial_year">Partial Year:</label>
+#               <input type="number" name="partial_year" id="partial_year"
+#                      min="1" max="9999" style="display:none;">
+#            </div>
+
+#            <hr>
+
+#            <label>Confidence (0.0 - 1.0):</label>
+#            <input type="range" name="confidence_slider" min="0" max="1" step="0.01" value="1.0"
+#                   oninput="sliderVal.value = confidence_slider.value">
+#            <output id="sliderVal">1.0</output>
+
+#            <br><br>
+#            <button type="submit">Add Label</button>
+#         </form>
+#       </div>
+#     </body>
+#     </html>
+#     """
+
+
+
+
+
+# @app.route('/biography_addentry_submit/<string:type_name>/<string:biography_name>', methods=['POST'])
+# def biography_addentry_submit(type_name, biography_name):
+#     """
+#     Handles submission of a new biography entry, including dynamic time selection.
+#     Supports custom time values.
+#     """
+#     json_file_path = f"./types/{type_name}/biographies/{biography_name}.json"
+
+#     # Ensure the biography JSON file exists
+#     if not os.path.exists(json_file_path):
+#         return f"""
+#         <h1>Error: Biography Not Found</h1>
+#         <p>The file <code>{json_file_path}</code> does not exist.</p>
+#         <a href='/type/{type_name}' class='back-link'>Back</a>
+#         """, 404
+
+#     bio_data = load_json_as_dict(json_file_path)
+
+#     # Ensure "entries" exists in JSON
+#     if "entries" not in bio_data:
+#         bio_data["entries"] = []
+
+#     try:
+#         # **Get time values from form submission**
+#         start_label = request.form.get("start_time_type", "").strip()
+#         start_value = request.form.get("start_time_value", "").strip()
+#         custom_start_value = request.form.get("start_custom_time_value", "").strip()
+
+#         end_label = request.form.get("end_time_type", "").strip()
+#         end_value = request.form.get("end_time_value", "").strip()
+#         custom_end_value = request.form.get("end_custom_time_value", "").strip()
+
+#         # ✅ If "custom" is selected, use the custom value instead
+#         start_value = custom_start_value if start_value == "custom" and custom_start_value else start_value
+#         end_value = custom_end_value if end_value == "custom" and custom_end_value else end_value
+
+#         # **Prevent Empty Values**
+#         if not start_label or not start_value or not end_label or not end_value:
+#             flash("Error: Start and end time must be provided.", "error")
+#             return redirect(f"/biography_addentry/{type_name}/{biography_name}")
+
+#         # **Create new entry with time period**
+#         new_entry = {
+#             "time_period": {
+#                 "start": {
+#                     "type": "time",
+#                     "label": start_label,
+#                     "value": start_value,
+#                     "confidence": 1.0,
+#                     "relationship": "exact"
+#                 },
+#                 "end": {
+#                     "type": "time",
+#                     "label": end_label,
+#                     "value": end_value,
+#                     "confidence": 1.0,
+#                     "relationship": "exact"
+#                 }
+#             },
+#             "labels": []  # Empty labels initially, can be edited later
+#         }
+
+#         # **Append new entry to the biography JSON**
+#         bio_data["entries"].append(new_entry)
+
+#         # **Save updated JSON**
+#         save_dict_as_json(json_file_path, bio_data)
+
+#         flash("Entry added successfully!", "success")
+
+#     except KeyError as e:
+#         return f"""
+#         <h1>Error: Missing Required Field</h1>
+#         <p>The form submission is missing the key: <code>{str(e)}</code></p>
+#         <a href='/biography/{type_name}/{biography_name}' class='back-link'>Back</a>
+#         """, 400  # Return Bad Request error
+
+#     return redirect(f"/biography/{type_name}/{biography_name}", code=302)
+
+# @app.route('/biography_addentry_submit/<string:type_name>/<string:biography_name>', methods=['POST'])
+# def biography_addentry_submit(type_name, biography_name):
+#     """
+#     Handles submission of a new entry, merging:
+#     - The old 'time label' approach (start_time_type, start_time_value)
+#     - The new partial / exact date approach
+#     """
+#     json_file_path = f"./types/{type_name}/biographies/{biography_name}.json"
+#     if not os.path.exists(json_file_path):
+#         return f"<h1>Error: Biography Not Found</h1>", 404
+
+#     bio_data = load_json_as_dict(json_file_path)
+#     if "entries" not in bio_data:
+#         bio_data["entries"] = []
+
+#     # -- OLD logic: parse subfolder-based start time
+#     start_time_type = request.form.get("start_time_type", "").strip()
+#     start_time_value = request.form.get("start_time_value", "").strip()
+#     start_custom_time = request.form.get("start_custom_time_value", "").strip()
+
+#     if start_time_value == "custom" and start_custom_time:
+#         start_time_value = start_custom_time
+
+#     # We'll store these in some structure, but also handle the new partial approach
+#     # Similarly for end
+#     end_time_type = request.form.get("end_time_type", "").strip()
+#     end_time_value = request.form.get("end_time_value", "").strip()
+#     end_custom_time = request.form.get("end_custom_time_value", "").strip()
+
+#     if end_time_value == "custom" and end_custom_time:
+#         end_time_value = end_custom_time
+
+#     # -- NEW logic: partial vs. exact
+#     # Start
+#     start_date_mode = request.form.get("start_date_mode", "exact")  # "exact" or "year"
+#     start_full_date = request.form.get("start_full_date", "").strip()
+#     start_partial_year = request.form.get("start_partial_year", "").strip()
+    
+#     if start_date_mode == "exact":
+#         # e.g. "2023-05-10"
+#         start_date_val = start_full_date
+#         start_is_partial = False
+#     else:
+#         # year only
+#         start_date_val = start_partial_year
+#         start_is_partial = True
+    
+#     # End
+#     end_date_mode = request.form.get("end_date_mode", "exact")
+#     end_full_date = request.form.get("end_full_date", "").strip()
+#     end_partial_year = request.form.get("end_partial_year", "").strip()
+
+#     if end_date_mode == "exact":
+#         end_date_val = end_full_date
+#         end_is_partial = False
+#     else:
+#         end_date_val = end_partial_year
+#         end_is_partial = True
+
+#     # Build new entry
+#     # We'll store both the old subfolder-based approach + the new partial/ exact approach
+#     # You can adapt how you actually want to unify them, but here's an example:
+#     new_entry = {
+#         "time_period": {
+#             "start": {
+#                 "subfolder_type": start_time_type,
+#                 "subfolder_value": start_time_value,
+#                 "date_mode": start_date_mode,  # "exact" or "year"
+#                 "date_value": start_date_val,
+#                 "is_partial": start_is_partial
+#             },
+#             "end": {
+#                 "subfolder_type": end_time_type,
+#                 "subfolder_value": end_time_value,
+#                 "date_mode": end_date_mode,
+#                 "date_value": end_date_val,
+#                 "is_partial": end_is_partial
+#             }
+#         },
+#         "labels": []
+#     }
+
+#     bio_data["entries"].append(new_entry)
+#     save_dict_as_json(json_file_path, bio_data)
+
+#     flash("Entry added successfully!", "success")
+#     return redirect(f"/biography/{type_name}/{biography_name}")
+
+@app.route('/biography_addentry_submit/<string:type_name>/<string:biography_name>', methods=['POST'])
+def biography_addentry_submit(type_name, biography_name):
+    """
+    POST to create a new entry. Checks if user picked 'date' or 'life_decade'.
+    If 'date', parse exact/partial date fields.
+    If 'life_decade', parse subfolder fields.
+    """
+    json_file_path = f"./types/{type_name}/biographies/{biography_name}.json"
+    if not os.path.exists(json_file_path):
+        return f"<h1>Error: Biography Not Found</h1>", 404
+
+    bio_data = load_json_as_dict(json_file_path)
+    if "entries" not in bio_data:
+        bio_data["entries"] = []
+
+    # 1. Grab approach for start & end
+    start_approach = request.form.get("start_approach", "date")   # e.g. 'date' or 'life_decade'
+    end_approach   = request.form.get("end_approach", "date")
+
+    # We'll build a dictionary for start_time, end_time
+
+    # -------- START --------
+    if start_approach == "date":
+        # parse radio => exact or year
+        start_date_mode = request.form.get("start_date_mode", "exact")
+        if start_date_mode == "exact":
+            start_date_val = request.form.get("start_full_date", "").strip()  # "2025-03-25"
+            start_is_partial = False
+        else:
+            start_date_val = request.form.get("start_partial_year", "").strip()  # e.g. "1952"
+            start_is_partial = True
+
+        start_data = {
+            "approach": "date",
+            "mode": start_date_mode,
+            "value": start_date_val,
+            "is_partial": start_is_partial
+        }
+
+    else:
+        # approach = 'life_decade' or any subfolder-based
+        start_label = request.form.get("start_time_label", "").strip()
+        start_value = request.form.get("start_time_value", "").strip()
+        if start_value == "custom":
+            start_custom = request.form.get("start_custom_time_value", "").strip()
+            if start_custom:
+                start_value = start_custom
+
+        start_data = {
+            "approach": "life_decade",  # or subfolder approach
+            "label": start_label,
+            "value": start_value
+        }
+
+    # -------- END --------
+    if end_approach == "date":
+        end_date_mode = request.form.get("end_date_mode", "exact")
+        if end_date_mode == "exact":
+            end_date_val = request.form.get("end_full_date", "").strip()
+            end_is_partial = False
+        else:
+            end_date_val = request.form.get("end_partial_year", "").strip()
+            end_is_partial = True
+
+        end_data = {
+            "approach": "date",
+            "mode": end_date_mode,
+            "value": end_date_val,
+            "is_partial": end_is_partial
+        }
+    else:
+        end_label = request.form.get("end_time_label", "").strip()
+        end_value = request.form.get("end_time_value", "").strip()
+        if end_value == "custom":
+            end_custom = request.form.get("end_custom_time_value", "").strip()
+            if end_custom:
+                end_value = end_custom
+
+        end_data = {
+            "approach": "life_decade",
+            "label": end_label,
+            "value": end_value
+        }
+
+    # 2. Build the new entry
+    new_entry = {
+        "time_period": {
+            "start": start_data,
+            "end": end_data
+        },
+        "labels": []
+    }
+
+    # 3. Save
+    bio_data["entries"].append(new_entry)
+    save_dict_as_json(json_file_path, bio_data)
+
+    flash("Entry added successfully!", "success")
+    return redirect(f"/biography/{type_name}/{biography_name}")
+
+
+
+@app.route('/biography_editentry/<string:type_name>/<string:biography_name>/<int:entry_index>')
+def biography_editentry_page(type_name, biography_name, entry_index):
+    """
+    A fully updated Edit Entry route that:
+      1) Lets the user pick 'date' approach or a subfolder approach (e.g. 'life_decade').
+      2) If 'date' is chosen, user must pick 'exact' or 'partial' for start/end.
+         - 'exact' => <input type="date">
+         - 'partial' => a <select> of years 1900..2100, with type-ahead logic.
+      3) Ensures End date/year >= Start date/year if both are 'date' approach.
+      4) Hides partial-year field when 'exact' is selected, hides exact-date field if 'partial' is selected.
+      5) Syncs approach: changing Start approach => End approach is forced to match.
+         Similarly, if user picks Start 'exact' => End is forced 'exact', etc.
+    """
+
+    import os, json
+
+    # 1) Load the biography & specific entry
+    biography_path = f"./types/{type_name}/biographies/{biography_name}.json"
+    if not os.path.exists(biography_path):
+        return f"<h1>Error: Biography Not Found</h1>", 404
+
+    # Helper to load JSON
+    def load_json_as_dict(path):
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            return {}
+
+    bio_data = load_json_as_dict(biography_path)
+    entries_list = bio_data.get("entries", [])
+    if entry_index >= len(entries_list):
+        return "<h1>Error: Entry Index Out of Range</h1>", 404
+
+    entry = entries_list[entry_index]
+    time_period = entry.setdefault("time_period", {})
+    start_block = time_period.setdefault("start", {})
+    end_block   = time_period.setdefault("end",   {})
+
+    # 2) We'll define a dictionary of possible approaches:
+    #    "date" => no subfolder, plus any subfolders in /types/time/labels/<folder_name>
+    times_path = f"./types/time/labels"
+    approach_dict = {
+        "date": {
+            "raw": "date",
+            "pretty": "Date",
+            "has_subfolder": False,
+            "values": []
+        }
+    }
+
+    def prettify_label(s):
+        return " ".join(part.capitalize() for part in s.split("_"))
+
+    # If there's a 'life_decade' or other subfolder, include it
+    if os.path.exists(times_path) and os.path.isdir(times_path):
+        for file in os.listdir(times_path):
+            if file.endswith(".json"):
+                folder_name = os.path.splitext(file)[0]
+                if folder_name == "date":
+                    continue  # skip if there's date.json
+                subfolder_dir = os.path.join(times_path, folder_name)
+                if os.path.isdir(subfolder_dir):
+                    # gather sub-values
+                    sub_vals_list = []
+                    for sf in os.listdir(subfolder_dir):
+                        if sf.endswith(".json"):
+                            raw_val = os.path.splitext(sf)[0]
+                            sub_vals_list.append({
+                                "raw": raw_val,
+                                "pretty": prettify_label(raw_val)
+                            })
+                    approach_dict[folder_name] = {
+                        "raw": folder_name,
+                        "pretty": prettify_label(folder_name),
+                        "has_subfolder": True,
+                        "values": sub_vals_list
+                    }
+
+    # 3) Extract the user's existing approach & data
+    start_approach = start_block.get("approach","date")  # e.g. 'date' or 'life_decade'
+    start_mode     = start_block.get("mode","exact") if start_approach=="date" else ""
+    start_value    = start_block.get("value","")
+
+    end_approach = end_block.get("approach","date")
+    end_mode     = end_block.get("mode","exact") if end_approach=="date" else ""
+    end_value    = end_block.get("value","")
+
+    # 4) Build a subfolder map for JS
+    approach_obj = {}
+    for a_key, meta in approach_dict.items():
+        if meta["has_subfolder"]:
+            approach_obj[a_key] = meta["values"]
+        else:
+            approach_obj[a_key] = []
+
+    approach_obj_json = json.dumps(approach_obj)
+
+    def build_approach_options(selected):
+        # e.g. <option value="date" selected>Date</option>
+        out = []
+        for key, data in approach_dict.items():
+            sel = "selected" if key == selected else ""
+            out.append(f'<option value="{key}" {sel}>{data["pretty"]}</option>')
+        return "".join(out)
+
+    start_approach_options = build_approach_options(start_approach)
+    end_approach_options   = build_approach_options(end_approach)
+
+    # 5) Return the HTML with all logic
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Edit Entry - {bio_data.get("name", biography_name)}</title>
+      <link rel="stylesheet" href="/static/styles.css">
+      <style>
+        .hidden {{ display: none; }}
+      </style>
+      <script>
+        let approachData = {approach_obj_json};
+
+        // build year list 1900..2100
+        function buildYearOptions(selectEl, minYear=1900) {{
+          selectEl.innerHTML = "";
+          for (let y = minYear; y <= 2100; y++) {{
+            let opt = document.createElement("option");
+            opt.value = ""+y;
+            opt.textContent = ""+y;
+            selectEl.appendChild(opt);
+          }}
+        }}
+
+        // attach a type-ahead so user can type e.g. 1 9 5 2 => jump to 1952
+        function attachTypeAhead(selectEl) {{
+          let typed = "";
+          let lastTime = 0;
+
+          selectEl.addEventListener("keydown", function(e) {{
+            let now = Date.now();
+            if (now - lastTime > 800) {{
+              typed = "";
+            }}
+            lastTime = now;
+
+            if (e.key === "Backspace") {{
+              typed = typed.slice(0,-1);
+              e.preventDefault();
+            }} else if (/\\d/.test(e.key)) {{
+              typed += e.key;
+              e.preventDefault();
+            }} else {{
+              return;
+            }}
+
+            for (let i=0; i<selectEl.options.length; i++) {{
+              if (selectEl.options[i].value.startsWith(typed)) {{
+                selectEl.selectedIndex = i;
+                break;
+              }}
+            }}
+          }});
+        }}
+
+        function onApproachChange(prefix) {{
+          // 1) first update the block for 'prefix'
+          let approachSel = document.getElementById(prefix + '_approach').value;
+          let dateSec = document.getElementById(prefix + '_date_section');
+          let subfSec = document.getElementById(prefix + '_subfolder_section');
+
+          if (approachData[approachSel] && approachData[approachSel].length > 0) {{
+            // subfolder approach
+            dateSec.classList.add("hidden");
+            subfSec.classList.remove("hidden");
+
+            let dd = document.getElementById(prefix + '_sub_val');
+            dd.innerHTML = "";
+            approachData[approachSel].forEach(obj => {{
+              let opt = document.createElement("option");
+              opt.value = obj.raw;
+              opt.textContent = obj.pretty;
+              dd.appendChild(opt);
+            }});
+            let customOpt = document.createElement("option");
+            customOpt.value = "custom";
+            customOpt.textContent = "Enter Custom Value";
+            dd.appendChild(customOpt);
+
+          }} else {{
+            // date approach
+            subfSec.classList.add("hidden");
+            dateSec.classList.remove("hidden");
+          }}
+
+          // 2) If prefix='start', force end approach to match
+          if (prefix === 'start') {{
+            document.getElementById('end_approach').value = approachSel;
+            onApproachChange('end');
+          }}
+
+          // enforce constraints after approach changes
+          enforceEndConstraints();
+        }}
+
+        function onToggleDateMode(prefix) {{
+          let exactRadio   = document.getElementById(prefix + '_date_mode_exact');
+          let partialRadio = document.getElementById(prefix + '_date_mode_partial');
+          let exactDiv     = document.getElementById(prefix + '_exactDiv');
+          let partialDiv   = document.getElementById(prefix + '_partialDiv');
+
+          if (exactRadio.checked) {{
+            exactDiv.classList.remove("hidden");
+            partialDiv.classList.add("hidden");
+          }} else if (partialRadio.checked) {{
+            exactDiv.classList.add("hidden");
+            partialDiv.classList.remove("hidden");
+            // build year list if empty
+            let sel = document.getElementById(prefix + '_partial_year_select');
+            if (sel.options.length < 1) {{
+              buildYearOptions(sel, 1900);
+              attachTypeAhead(sel);
+            }}
+          }}
+
+          // If user toggles start partial/exact => do same for end
+          if (prefix==='start') {{
+            if (exactRadio.checked) {{
+              document.getElementById('end_date_mode_exact').checked = true;
+            }} else {{
+              document.getElementById('end_date_mode_partial').checked = true;
+            }}
+            onToggleDateMode('end');
+          }}
+
+          enforceEndConstraints();
+        }}
+
+        // ensure end≥start if approach='date'
+        function enforceEndConstraints() {{
+          let sAp = document.getElementById('start_approach').value;
+          let eAp = document.getElementById('end_approach').value;
+
+          if (sAp !== 'date' || eAp !== 'date') {{
+            // subfolder => no constraints
+            return;
+          }}
+
+          let sExact = document.getElementById('start_date_mode_exact').checked;
+          let eExact = document.getElementById('end_date_mode_exact').checked;
+
+          if (sExact) {{
+            let sVal = document.getElementById('start_full_date').value;
+            if (!sVal) return; // can't do anything if no start date
+            if (eExact) {{
+              document.getElementById('end_full_date').min = sVal;
+            }} else {{
+              // end partial
+              let year = parseInt(sVal.split('-')[0])||1900;
+              let endSel = document.getElementById('end_partial_year_select');
+              rebuildYearDropdown(endSel, year);
+            }}
+          }} else {{
+            // start partial
+            let sYear = parseInt(document.getElementById('start_partial_year_select').value)||1900;
+            if (eExact) {{
+              document.getElementById('end_full_date').min = sYear + '-01-01';
+            }} else {{
+              // partial => partial
+              let eSel = document.getElementById('end_partial_year_select');
+              rebuildYearDropdown(eSel, sYear);
+            }}
+          }}
+        }}
+
+        function rebuildYearDropdown(selEl, startYear) {{
+          selEl.innerHTML = "";
+          for (let y = startYear; y<=2100; y++) {{
+            let opt = document.createElement('option');
+            opt.value = ""+y;
+            opt.textContent = ""+y;
+            selEl.appendChild(opt);
+          }}
+        }}
+
+        function checkCustom(prefix) {{
+          let dd = document.getElementById(prefix + '_sub_val');
+          let cust = document.getElementById(prefix + '_custom_val');
+          if (dd.value==='custom') {{
+            dd.style.display='none';
+            cust.style.display='inline-block';
+          }} else {{
+            cust.style.display='none';
+            dd.style.display='inline-block';
+          }}
+        }}
+
+        window.onload = function() {{
+          // 1) We run onApproachChange('start') => sets start approach, updates end approach => onApproachChange('end')
+          onApproachChange('start');
+          // 2) Then set the date mode toggles
+          onToggleDateMode('start');
+          onToggleDateMode('end');
+          // 3) Possibly fill partial year or date from old data in a DOMContentLoaded snippet
+          //    Then call enforceEndConstraints() again
+          enforceEndConstraints();
+        }};
+      </script>
+    </head>
+    <body>
+      <div class="container">
+        <a href="/biography/{type_name}/{biography_name}" class="back-link">Back</a>
+        <h1>Edit Entry for {bio_data.get("name", biography_name)}</h1>
+
+        <!-- We'll assume your POST route is /biography_editentry_submit/... -->
+        <form action="/biography_editentry_submit/{type_name}/{biography_name}/{entry_index}" method="post">
+
+          <!-- START BLOCK -->
+          <h2>Start Time</h2>
+          <label>Approach:</label>
+          <select id="start_approach" name="start_approach" onchange="onApproachChange('start')">
+            {start_approach_options}
+          </select>
+
+          <div id="start_date_section" class="">
+            <label>
+              <input type="radio" id="start_date_mode_exact" name="start_date_mode" value="exact"
+                     onclick="onToggleDateMode('start')"> Exact
+            </label>
+            <label>
+              <input type="radio" id="start_date_mode_partial" name="start_date_mode" value="partial"
+                     onclick="onToggleDateMode('start')"> Partial
+            </label>
+            <br><br>
+
+            <!-- EXACT sub-block -->
+            <div id="start_exactDiv">
+              <label>Exact Start Date:</label>
+              <input type="date" id="start_full_date" name="start_full_date">
+            </div>
+
+            <!-- PARTIAL sub-block -->
+            <div id="start_partialDiv" class="hidden">
+              <label>Partial Start Year:</label>
+              <select id="start_partial_year_select" name="start_partial_year_select"></select>
+            </div>
+          </div>
+
+          <div id="start_subfolder_section" class="hidden">
+            <label>Pick Value:</label>
+            <select id="start_sub_val" name="start_sub_val" onchange="checkCustom('start')"></select>
+            <input type="text" id="start_custom_val" name="start_custom_val" placeholder="Custom" class="hidden">
+          </div>
+
+          <hr>
+
+          <!-- END BLOCK -->
+          <h2>End Time</h2>
+          <label>Approach:</label>
+          <select id="end_approach" name="end_approach" onchange="onApproachChange('end')">
+            {end_approach_options}
+          </select>
+
+          <div id="end_date_section" class="hidden">
+            <label>
+              <input type="radio" id="end_date_mode_exact" name="end_date_mode" value="exact"
+                     onclick="onToggleDateMode('end')"> Exact
+            </label>
+            <label>
+              <input type="radio" id="end_date_mode_partial" name="end_date_mode" value="partial"
+                     onclick="onToggleDateMode('end')"> Partial
+            </label>
+            <br><br>
+
+            <div id="end_exactDiv">
+              <label>Exact End Date:</label>
+              <input type="date" id="end_full_date" name="end_full_date">
+            </div>
+
+            <div id="end_partialDiv" class="hidden">
+              <label>Partial End Year:</label>
+              <select id="end_partial_year_select" name="end_partial_year_select"></select>
+            </div>
+          </div>
+
+          <div id="end_subfolder_section" class="hidden">
+            <label>Pick Value:</label>
+            <select id="end_sub_val" name="end_sub_val" onchange="checkCustom('end')"></select>
+            <input type="text" id="end_custom_val" name="end_custom_val" placeholder="Custom" class="hidden">
+          </div>
+
+          <hr>
+          <button type="submit">Save Changes</button>
+        </form>
+
+        <!-- If you need to fill old data e.g. partial year or subfolder:
+             We'll do that after the DOM loads, then enforce constraints again. -->
+        <script>
+          document.addEventListener('DOMContentLoaded', function() {{
+            // e.g. if your stored 'start_mode' == 'partial', do:
+            //   document.getElementById('start_date_mode_partial').checked = true;
+            //   onToggleDateMode('start');
+            //   document.getElementById('start_partial_year_select').value = '{start_value}';
+            // same for end
+            // Then run enforceEndConstraints() again
+          }});
+        </script>
+      </div>
+    </body>
+    </html>
+    """
+
+    return html
+
+
+# @app.route('/biography_editentry/<string:type_name>/<string:bio_name>/<int:entry_index>')
+# def biography_editentry_page(type_name, bio_name, entry_index):
+#     """
+#     Inline JavaScript version of editentry that:
+#       - Forces end approach = start approach
+#       - Forces end partial/exact = start partial/exact
+#       - Prevents end < start if date approach
+#       - Uses a plain triple-quoted string for the HTML + JS (NOT an f-string),
+#         then calls .replace(...) to insert Python variables.
+#     """
+
+#     import json, os
+
+#     # 1) Load your biography JSON data
+#     bio_path = f"./types/{type_name}/biographies/{bio_name}.json"
+#     if not os.path.exists(bio_path):
+#         return f"<h1>Error: Biography '{bio_name}' Not Found</h1>", 404
+
+#     def load_json_as_dict(path):
+#         try:
+#             with open(path, "r", encoding="utf-8") as f:
+#                 return json.load(f)
+#         except:
+#             return {}
+
+#     data = load_json_as_dict(bio_path)
+#     entries = data.get("entries", [])
+#     if entry_index >= len(entries):
+#         return "<h1>Error: Entry Index Out of Range</h1>", 404
+
+#     # Suppose you have an approach dict for date or subfolder
+#     approach_dict = {
+#         "date": {
+#             "raw": "date",
+#             "pretty": "Date",
+#             "has_subfolder": False,
+#             "values": []
+#         },
+#         "life_decade": {
+#             "raw": "life_decade",
+#             "pretty": "Life Decade",
+#             "has_subfolder": True,
+#             "values": [
+#                 {"raw":"1920s","pretty":"1920s"},
+#                 {"raw":"1930s","pretty":"1930s"},
+#                 {"raw":"1940s","pretty":"1940s"}
+#             ]
+#         }
+#     }
+
+#     # Build a subfolder map for JS
+#     approach_obj = {}
+#     for key, info in approach_dict.items():
+#         if info.get("has_subfolder"):
+#             approach_obj[key] = info["values"]
+#         else:
+#             approach_obj[key] = []
+
+#     # Convert to JSON
+#     approach_obj_json = json.dumps(approach_obj)
+
+#     # If you want to show the biography name in the HTML, store it as a variable
+#     display_title = data.get("name", bio_name)
+
+#     # 2) Build the base HTML with placeholders for approach data and biography name
+#     #    Not using f-string => we keep all JS in single braces
+#     #    We'll do .replace(...) at the end
+#     base_html = r"""
+# <!DOCTYPE html>
+# <html>
+# <head>
+#   <meta charset="UTF-8">
+#   <title>Editing PLACEHOLDER_BIONAME</title>
+#   <style>
+#     .hidden {
+#       display: none;
+#     }
+#   </style>
+#   <script>
+#     // We'll replace PLACEHOLDER_APPROACH with the actual approachObj JSON
+#     var approachData = PLACEHOLDER_APPROACH;
+
+#     // Build a year list from start..2100
+#     function buildYearOptions(sel, startY) {
+#       sel.innerHTML="";
+#       for (let y=startY; y<=2100; y++){
+#         let opt = document.createElement("option");
+#         opt.value = ""+y;
+#         opt.textContent = ""+y;
+#         sel.appendChild(opt);
+#       }
+#     }
+
+#     // nextDay => sets the end date's .min to the day AFTER start
+#     function nextDay(yyyymmdd){
+#       if(!yyyymmdd) return "";
+#       var parts= yyyymmdd.split("-");
+#       if(parts.length<3) return "";
+#       var y= parseInt(parts[0]), m= parseInt(parts[1])-1, d= parseInt(parts[2]);
+#       var dt= new Date(y,m,d);
+#       dt.setDate(dt.getDate()+1);
+#       var ny= dt.getFullYear();
+#       var nm= dt.getMonth()+1;
+#       var nd= dt.getDate();
+#       var mm= (nm<10? "0":"")+nm;
+#       var dd= (nd<10? "0":"")+nd;
+#       return ny+"-"+mm+"-"+dd;
+#     }
+
+#     // If user picks start approach => end approach must match
+#     function onApproachChange(prefix){
+#       let approachSel= document.getElementById(prefix+"_approach").value;
+#       let dateSec= document.getElementById(prefix+"_date_section");
+#       let subSec= document.getElementById(prefix+"_subfolder_section");
+#       if(approachData[approachSel] && approachData[approachSel].length>0){
+#         // subfolder
+#         dateSec.classList.add("hidden");
+#         subSec.classList.remove("hidden");
+
+#         let selVal= document.getElementById(prefix+"_sub_val");
+#         selVal.innerHTML= "";
+#         approachData[approachSel].forEach(obj=>{
+#           let opt= document.createElement("option");
+#           opt.value= obj.raw;
+#           opt.textContent= obj.pretty;
+#           selVal.appendChild(opt);
+#         });
+#         let c= document.createElement("option");
+#         c.value="custom";
+#         c.textContent="Enter Custom Value";
+#         selVal.appendChild(c);
+#       } else {
+#         // date
+#         dateSec.classList.remove("hidden");
+#         subSec.classList.add("hidden");
+#       }
+#       // If prefix='start', force end approach
+#       if(prefix==="start"){
+#         document.getElementById("end_approach").value= approachSel;
+#         onApproachChange("end");
+#       }
+#       enforceNoEarlierEnd();
+#     }
+
+#     // If user picks partial/exact for start => same for end
+#     function onToggleDateMode(prefix){
+#       let exactRad= document.getElementById(prefix+"_date_mode_exact");
+#       let partialRad= document.getElementById(prefix+"_date_mode_partial");
+#       let exactDiv= document.getElementById(prefix+"_exactDiv");
+#       let partDiv= document.getElementById(prefix+"_partialDiv");
+#       if(exactRad.checked){
+#         exactDiv.classList.remove("hidden");
+#         partDiv.classList.add("hidden");
+#       } else if(partialRad.checked){
+#         exactDiv.classList.add("hidden");
+#         partDiv.classList.remove("hidden");
+#       }
+#       if(prefix==="start"){
+#         // force end
+#         if(exactRad.checked){
+#           document.getElementById("end_date_mode_exact").checked= true;
+#         } else {
+#           document.getElementById("end_date_mode_partial").checked= true;
+#         }
+#         onToggleDateMode("end");
+#       }
+#       enforceNoEarlierEnd();
+#     }
+
+#     function checkCustom(prefix){
+#       let selVal= document.getElementById(prefix+"_sub_val");
+#       let cust= document.getElementById(prefix+"_custom_val");
+#       if(selVal.value==="custom"){
+#         selVal.style.display="none";
+#         cust.style.display="inline-block";
+#       } else {
+#         cust.style.display="none";
+#         selVal.style.display="inline-block";
+#       }
+#     }
+
+#     // ensures end >= start if date approach
+#     function enforceNoEarlierEnd(){
+#       let sAp= document.getElementById("start_approach").value;
+#       let eAp= document.getElementById("end_approach").value;
+#       if(sAp!=="date"|| eAp!=="date"){
+#         // subfolder => no constraints
+#         return;
+#       }
+
+#       let sExact= document.getElementById("start_date_mode_exact").checked;
+#       let eExact= document.getElementById("end_date_mode_exact").checked;
+#       if(sExact){
+#         let sVal= document.getElementById("start_full_date").value;
+#         if(!sVal) return;
+#         let after= nextDay(sVal);  // must be strictly after => +1 day
+#         if(eExact){
+#           document.getElementById("end_full_date").min= after;
+#         } else {
+#           // partial => parse year from sVal
+#           let year= parseInt(sVal.split("-")[0])||1900;
+#           let eSel= document.getElementById("end_partial_year_select");
+#           eSel.innerHTML="";
+#           for(let y= year; y<=2100; y++){
+#             let opt= document.createElement("option");
+#             opt.value= ""+y;
+#             opt.textContent= ""+y;
+#             eSel.appendChild(opt);
+#           }
+#         }
+#       } else {
+#         // partial start
+#         let sYear= parseInt(document.getElementById("start_partial_year_select").value)||1900;
+#         if(eExact){
+#           document.getElementById("end_full_date").min= (sYear)+"-01-01";
+#         } else {
+#           // partial => partial => end year >= sYear
+#           let ep= document.getElementById("end_partial_year_select");
+#           ep.innerHTML="";
+#           for(let y=sYear; y<=2100; y++){
+#             let newO= document.createElement("option");
+#             newO.value=""+y;
+#             newO.textContent=""+y;
+#             ep.appendChild(newO);
+#           }
+#         }
+#       }
+#     }
+
+#     window.onload= function(){
+#       onApproachChange("start");
+#       onToggleDateMode("start");
+#       onToggleDateMode("end");
+#       enforceNoEarlierEnd();
+#     }
+#   </script>
+# </head>
+# <body>
+#   <h1>Editing: PLACEHOLDER_BIONAME</h1>
+#   <form method="post" action="/biography_editentry_submit/TYPE_NAME/PLACEHOLDER_BIONAME/ENTRY_INDEX">
+#     <!-- START BLOCK -->
+#     <h2>Start Time</h2>
+#     <label>Approach:</label>
+#     <select id="start_approach" name="start_approach" onchange="onApproachChange('start')">
+#       START_APPROACH_OPTIONS
+#     </select>
+
+#     <div id="start_date_section" class="">
+#       <label>
+#         <input type="radio" id="start_date_mode_exact" name="start_date_mode" value="exact"
+#                onclick="onToggleDateMode('start')"> Exact
+#       </label>
+#       <label>
+#         <input type="radio" id="start_date_mode_partial" name="start_date_mode" value="partial"
+#                onclick="onToggleDateMode('start')"> Partial
+#       </label>
+#       <div id="start_exactDiv">
+#         <label>Exact Start Date:</label>
+#         <input type="date" id="start_full_date" name="start_full_date">
+#       </div>
+#       <div id="start_partialDiv" class="hidden">
+#         <label>Partial Start Year:</label>
+#         <select id="start_partial_year_select" name="start_partial_year_select"></select>
+#       </div>
+#     </div>
+
+#     <div id="start_subfolder_section" class="hidden">
+#       <label>Pick Value:</label>
+#       <select id="start_sub_val" name="start_sub_val" onchange="checkCustom('start')"></select>
+#       <input type="text" id="start_custom_val" name="start_custom_val" class="hidden" placeholder="Custom Value">
+#     </div>
+
+#     <hr>
+#     <!-- END BLOCK -->
+#     <h2>End Time</h2>
+#     <label>Approach:</label>
+#     <select id="end_approach" name="end_approach" onchange="onApproachChange('end')">
+#       END_APPROACH_OPTIONS
+#     </select>
+
+#     <div id="end_date_section" class="hidden">
+#       <label>
+#         <input type="radio" id="end_date_mode_exact" name="end_date_mode" value="exact"
+#                onclick="onToggleDateMode('end')"> Exact
+#       </label>
+#       <label>
+#         <input type="radio" id="end_date_mode_partial" name="end_date_mode" value="partial"
+#                onclick="onToggleDateMode('end')"> Partial
+#       </label>
+#       <div id="end_exactDiv">
+#         <label>Exact End Date:</label>
+#         <input type="date" id="end_full_date" name="end_full_date">
+#       </div>
+#       <div id="end_partialDiv" class="hidden">
+#         <label>Partial End Year:</label>
+#         <select id="end_partial_year_select" name="end_partial_year_select"></select>
+#       </div>
+#     </div>
+
+#     <div id="end_subfolder_section" class="hidden">
+#       <label>Pick Value:</label>
+#       <select id="end_sub_val" name="end_sub_val" onchange="checkCustom('end')"></select>
+#       <input type="text" id="end_custom_val" name="end_custom_val" class="hidden" placeholder="Custom Value">
+#     </div>
+
+#     <hr>
+#     <button type="submit">Save Changes</button>
+#   </form>
+# </body>
+# </html>
+# """
+
+#     # We do normal str.replace(...) calls to fill placeholders:
+#     #  - "PLACEHOLDER_APPROACH" with approach_obj_json
+#     #  - "START_APPROACH_OPTIONS" with start_approach_options
+#     #  - "END_APPROACH_OPTIONS" with end_approach_options
+#     #  - "PLACEHOLDER_BIONAME" with the real biography name
+#     #  - "TYPE_NAME" with type_name
+#     #  - "ENTRY_INDEX" with entry_index
+#     # (You can do more .replace(...) if needed.)
+
+#     # Convert entry_index to string
+#     entry_index_str = str(entry_index)
+
+#     final_html = base_html.replace("PLACEHOLDER_APPROACH", approach_obj_json)
+#     final_html = final_html.replace("PLACEHOLDER_BIONAME", bio_name)
+#     final_html = final_html.replace("TYPE_NAME", type_name)
+#     final_html = final_html.replace("ENTRY_INDEX", entry_index_str)
+#     final_html = final_html.replace("START_APPROACH_OPTIONS", start_approach_options)
+#     final_html = final_html.replace("END_APPROACH_OPTIONS", end_approach_options)
+
+#     return final_html
+
+
+# @app.route('/biography_editentry/<string:type_name>/<string:biography_name>/<int:entry_index>')
+# def biography_editentry_page(type_name, biography_name, entry_index):
+#     """
+#     A fully updated Edit Entry route that:
+#       1) Lets the user pick 'date' approach or a subfolder approach (e.g. 'life_decade').
+#       2) If 'date' is chosen, the user must pick 'exact' or 'partial' for start/end.
+#          - 'exact' => <input type="date">
+#          - 'partial' => a <select> of years 1900..2100 (with optional type-ahead).
+#       3) Ensures End date/year >= Start date/year if both are 'date' approach (end cannot be before start).
+#       4) Hides partial-year fields when 'exact' is selected, and hides the date field if 'partial' is selected.
+#       5) Syncs approach: changing Start approach => End approach is forced to match (no user choice),
+#          and if user picks Start 'exact' => End is forced 'exact', etc.
+#     """
+
+#     import os, json
+
+#     biography_path = f"./types/{type_name}/biographies/{biography_name}.json"
+#     if not os.path.exists(biography_path):
+#         return f"<h1>Error: Biography Not Found</h1>", 404
+
+#     bio_data = load_json_as_dict(biography_path)
+#     entries_list = bio_data.get("entries", [])
+#     if entry_index >= len(entries_list):
+#         return "<h1>Error: Entry Index Out of Range</h1>", 404
+
+#     entry = entries_list[entry_index]
+#     time_period = entry.setdefault("time_period", {})
+#     start_block = time_period.setdefault("start", {})
+#     end_block   = time_period.setdefault("end", {})
+
+#     # You can adapt times_path logic to discover subfolders if desired:
+#     times_path = "./types/time/labels"
+#     approach_dict = {
+#         "date": {
+#             "raw": "date",
+#             "pretty": "Date",
+#             "has_subfolder": False,
+#             "values": []
+#         },
+#         "life_decade": {
+#             "raw": "life_decade",
+#             "pretty": "Life Decade",
+#             "has_subfolder": True,
+#             "values": [
+#                 {"raw": "1920s", "pretty": "1920s"},
+#                 {"raw": "1930s", "pretty": "1930s"},
+#                 {"raw": "1940s", "pretty": "1940s"}
+#             ]
+#         }
+#     }
+#     # If you want to dynamically load more subfolders, do so here
+
+#     def prettify_label(s):
+#         return " ".join(part.capitalize() for part in s.split("_"))
+
+#     # Existing approach & data
+#     start_approach = start_block.get("approach","date")
+#     start_mode     = start_block.get("mode","exact") if start_approach=="date" else ""
+#     start_value    = start_block.get("value","")
+
+#     end_approach   = end_block.get("approach","date")
+#     end_mode       = end_block.get("mode","exact")   if end_approach=="date" else ""
+#     end_value      = end_block.get("value","")
+
+#     # Build approach <option> sets
+#     def build_approach_options(selected):
+#         lines = []
+#         for key, info in approach_dict.items():
+#             sel = "selected" if key == selected else ""
+#             lines.append(f'<option value="{key}" {sel}>{info["pretty"]}</option>')
+#         return "".join(lines)
+
+#     start_approach_options = build_approach_options(start_approach)
+#     end_approach_options   = build_approach_options(end_approach)
+
+#     # Build a subfolder map for the JS:
+#     approach_obj = {}
+#     for k, info in approach_dict.items():
+#         if info["has_subfolder"]:
+#             approach_obj[k] = info["values"]
+#         else:
+#             approach_obj[k] = []
+#     import json
+#     approach_obj_json = json.dumps(approach_obj)
+
+#     # Return triple-quoted HTML with minimal interpolation for name & approach options
+#     # The JS remains a plain text snippet, so single braces in JS are fine
+#     html = f"""
+#     <!DOCTYPE html>
+#     <html>
+#     <head>
+#       <meta charset="UTF-8">
+#       <title>Edit Entry - {bio_data.get("name", biography_name)}</title>
+#       <link rel="stylesheet" href="/static/styles.css">
+#       <style>
+#         .hidden {{
+#           display: none;
+#         }}
+#       </style>
+#       <script>
+#         let approachData = {approach_obj_json};
+
+#         // Build partial year [1900..2100]
+#         function buildYearOptions(selectEl, startY=1900) {{
+#           selectEl.innerHTML = "";
+#           for (let y = startY; y <= 2100; y++) {{
+#             let opt = document.createElement("option");
+#             opt.value = ""+y;
+#             opt.textContent = ""+y;
+#             selectEl.appendChild(opt);
+#           }}
+#         }}
+
+#         // optional type-ahead logic
+#         function attachTypeAhead(selectEl) {{
+#           let typed = "";
+#           let lastKeyTime = 0;
+#           selectEl.addEventListener('keydown', function(e) {{
+#             let now = Date.now();
+#             if (now - lastKeyTime > 800) {{
+#               typed = "";
+#             }}
+#             lastKeyTime = now;
+
+#             if (e.key === "Backspace") {{
+#               typed = typed.slice(0,-1);
+#               e.preventDefault();
+#             }} else if (/\\d/.test(e.key)) {{
+#               typed += e.key;
+#               e.preventDefault();
+#             }} else {{
+#               return;
+#             }}
+#             for (let i=0; i<selectEl.options.length; i++) {{
+#               if (selectEl.options[i].value.startsWith(typed)) {{
+#                 selectEl.selectedIndex = i;
+#                 break;
+#               }}
+#             }}
+#           }});
+#         }}
+
+#         function onApproachChange(prefix) {{
+#           // Toggling approach
+#           let approachSel = document.getElementById(prefix + '_approach').value;
+#           let dateSec = document.getElementById(prefix + '_date_section');
+#           let subfSec = document.getElementById(prefix + '_subfolder_section');
+
+#           if (approachData[approachSel] && approachData[approachSel].length>0) {{
+#             // subfolder
+#             dateSec.classList.add("hidden");
+#             subfSec.classList.remove("hidden");
+#             let dd = document.getElementById(prefix + '_sub_val');
+#             dd.innerHTML="";
+#             approachData[approachSel].forEach(obj=>{
+#               let opt= document.createElement("option");
+#               opt.value= obj.raw;
+#               opt.textContent= obj.pretty;
+#               dd.appendChild(opt);
+#             });
+#             let c= document.createElement("option");
+#             c.value="custom";
+#             c.textContent="Enter Custom Value";
+#             dd.appendChild(c);
+#           }} else {{
+#             // date approach
+#             subfSec.classList.add("hidden");
+#             dateSec.classList.remove("hidden");
+#           }}
+
+#           // If user changes start approach => end approach forced
+#           if(prefix==='start'){{
+#             document.getElementById('end_approach').value= approachSel;
+#             onApproachChange('end');
+#           }}
+#           enforceConstraints();
+#         }}
+
+#         function onToggleDateMode(prefix) {{
+#           let exactRadio   = document.getElementById(prefix + '_date_mode_exact');
+#           let partialRadio = document.getElementById(prefix + '_date_mode_partial');
+#           let exactDiv     = document.getElementById(prefix + '_exactDiv');
+#           let partialDiv   = document.getElementById(prefix + '_partialDiv');
+
+#           if (exactRadio.checked) {{
+#             exactDiv.classList.remove("hidden");
+#             partialDiv.classList.add("hidden");
+#           }} else if (partialRadio.checked) {{
+#             exactDiv.classList.add("hidden");
+#             partialDiv.classList.remove("hidden");
+#             // build if not built
+#             let sel= document.getElementById(prefix + '_partial_year_select');
+#             if(sel.options.length<1){{
+#               buildYearOptions(sel,1900);
+#               attachTypeAhead(sel);
+#             }}
+#           }}
+
+#           // If user toggles start => end is forced
+#           if(prefix==='start'){{
+#             if(exactRadio.checked){{
+#               document.getElementById('end_date_mode_exact').checked= true;
+#             }} else {{
+#               document.getElementById('end_date_mode_partial').checked= true;
+#             }}
+#             onToggleDateMode('end');
+#           }}
+#           enforceConstraints();
+#         }}
+
+#         // ensure end≥start if approach= date
+#         function enforceConstraints() {{
+#           let sAp= document.getElementById('start_approach').value;
+#           let eAp= document.getElementById('end_approach').value;
+#           if(sAp!=='date' || eAp!=='date'){{
+#             // subfolder => no constraints
+#             return;
+#           }}
+
+#           let sExact= document.getElementById('start_date_mode_exact').checked;
+#           let eExact= document.getElementById('end_date_mode_exact').checked;
+
+#           if(sExact){{
+#             let sVal= document.getElementById('start_full_date').value;
+#             if(!sVal) return;
+#             // if both exact => end_full_date.min = sVal
+#             // or do strictly after => parse sVal => +1 day => then min
+#             // here let's allow end≥start
+#             document.getElementById('end_full_date').min= sVal;
+#             if(!eExact){{
+#               // partial end => year≥ parseInt(sVal)
+#               let year= parseInt(sVal.split("-")[0])||1900;
+#               let eSel= document.getElementById('end_partial_year_select');
+#               eSel.innerHTML= "";
+#               for(let y= year; y<=2100; y++){{
+#                 let o= document.createElement("option");
+#                 o.value=""+y; o.textContent=""+y;
+#                 eSel.appendChild(o);
+#               }}
+#             }}
+#           }} else {{
+#             // partial => read start_partial_year_select
+#             let sy= parseInt(document.getElementById('start_partial_year_select').value)||1900;
+#             if(eExact){{
+#               // end≥ sy => e.g. min= sy+"-01-01"
+#               document.getElementById('end_full_date').min= sy+"-01-01";
+#             }} else {{
+#               // partial => partial
+#               let ee= document.getElementById('end_partial_year_select');
+#               ee.innerHTML="";
+#               for(let y= sy; y<=2100; y++){{
+#                 let o= document.createElement('option');
+#                 o.value=""+y;
+#                 o.textContent=""+y;
+#                 ee.appendChild(o);
+#               }}
+#             }}
+#           }}
+#         }}
+
+#         function checkCustom(prefix) {{
+#           let dd = document.getElementById(prefix + '_sub_val');
+#           let cust = document.getElementById(prefix + '_custom_val');
+#           if(dd.value==='custom'){{
+#             dd.style.display='none';
+#             cust.style.display='inline-block';
+#           }} else {{
+#             cust.style.display='none';
+#             dd.style.display='inline-block';
+#           }}
+#         }}
+
+#         window.onload= function(){{
+#           onApproachChange('start');
+#           onToggleDateMode('start');
+#           onToggleDateMode('end');
+#         }};
+#       </script>
+#     </head>
+#     <body>
+#       <div class="container">
+#         <a href="/biography/{type_name}/{biography_name}" class="back-link">Back</a>
+#         <h1>Edit Entry for {bio_data.get("name", biography_name)}</h1>
+
+#         <form action="/biography_editentry_submit/{type_name}/{biography_name}/{entry_index}" method="post">
+
+#           <!-- START BLOCK -->
+#           <h2>Start Time</h2>
+#           <label>Approach:</label>
+#           <select id="start_approach" name="start_approach" onchange="onApproachChange('start')">
+#             {start_approach_options}
+#           </select>
+
+#           <!-- Start: date approach -->
+#           <div id="start_date_section" class="">
+#             <label>
+#               <input type="radio" id="start_date_mode_exact" name="start_date_mode" value="exact"
+#                      onclick="onToggleDateMode('start')"> Exact
+#             </label>
+#             <label>
+#               <input type="radio" id="start_date_mode_partial" name="start_date_mode" value="partial"
+#                      onclick="onToggleDateMode('start')"> Partial
+#             </label>
+#             <br>
+
+#             <div id="start_exactDiv" class="">
+#               <label>Exact Start Date:</label>
+#               <input type="date" id="start_full_date" name="start_full_date">
+#             </div>
+
+#             <div id="start_partialDiv" class="hidden">
+#               <label>Partial Start Year:</label>
+#               <select id="start_partial_year_select" name="start_partial_year_select"></select>
+#             </div>
+#           </div>
+
+#           <!-- Start: subfolder approach -->
+#           <div id="start_subfolder_section" class="hidden">
+#             <label>Pick Subfolder (Start):</label>
+#             <select id="start_sub_val" name="start_sub_val" onchange="checkCustom('start')"></select>
+#             <input type="text" id="start_custom_val" name="start_custom_val" placeholder="Custom" class="hidden">
+#           </div>
+
+#           <hr>
+
+#           <!-- END BLOCK -->
+#           <h2>End Time</h2>
+#           <label>Approach:</label>
+#           <select id="end_approach" name="end_approach" onchange="onApproachChange('end')">
+#             {end_approach_options}
+#           </select>
+
+#           <!-- End: date approach -->
+#           <div id="end_date_section" class="hidden">
+#             <label>
+#               <input type="radio" id="end_date_mode_exact" name="end_date_mode" value="exact"
+#                      onclick="onToggleDateMode('end')"> Exact
+#             </label>
+#             <label>
+#               <input type="radio" id="end_date_mode_partial" name="end_date_mode" value="partial"
+#                      onclick="onToggleDateMode('end')"> Partial
+#             </label>
+#             <br>
+
+#             <div id="end_exactDiv" class="">
+#               <label>Exact End Date:</label>
+#               <input type="date" id="end_full_date" name="end_full_date">
+#             </div>
+
+#             <div id="end_partialDiv" class="hidden">
+#               <label>Partial End Year:</label>
+#               <select id="end_partial_year_select" name="end_partial_year_select"></select>
+#             </div>
+#           </div>
+
+#           <!-- End: subfolder approach -->
+#           <div id="end_subfolder_section" class="hidden">
+#             <label>Pick Subfolder (End):</label>
+#             <select id="end_sub_val" name="end_sub_val" onchange="checkCustom('end')"></select>
+#             <input type="text" id="end_custom_val" name="end_custom_val" placeholder="Custom" class="hidden">
+#           </div>
+
+#           <hr>
+#           <button type="submit" class="save-entry-button">Save Changes</button>
+#         </form>
+#       </div>
+#     </body>
+#     </html>
+#     """
+
+#     return html
+
+
+@app.route('/biography_editentry_submit/<string:type_name>/<string:biography_name>/<int:entry_index>', methods=['POST'])
+def biography_editentry_submit(type_name, biography_name, entry_index):
+    """
+    POST route that saves user changes from the updated editentry page:
+      - If start_approach == 'date', parse start_date_mode = 'exact' or 'partial', plus the relevant field.
+      - If subfolder approach, parse start_sub_val or custom typed.
+      - Same logic for end_approach => end_date_mode or subfolder.
+    Then we store them in time_period["start"] and time_period["end"].
+    """
+
+    json_file_path = f"./types/{type_name}/biographies/{biography_name}.json"
+    if not os.path.exists(json_file_path):
+        return "<h1>Error: Biography Not Found</h1>", 404
+
+    bio_data = load_json_as_dict(json_file_path)
+    entries = bio_data.get("entries", [])
+    if entry_index >= len(entries):
+        return "<h1>Error: Entry Not Found</h1>", 404
+
+    entry = entries[entry_index]
+    if "time_period" not in entry:
+        entry["time_period"] = {}
+    time_period = entry["time_period"]
+    if "start" not in time_period:
+        time_period["start"] = {}
+    if "end" not in time_period:
+        time_period["end"] = {}
+
+    # ------------------ PARSE START BLOCK ------------------
+    start_approach = request.form.get("start_approach","date").strip()  # e.g. 'date' or 'life_decade'
+    if start_approach == "date":
+        start_date_mode = request.form.get("start_date_mode","exact").strip()  # 'exact' or 'partial'
+        if start_date_mode == "exact":
+            # read <input type="date" id="start_full_date">
+            s_val = request.form.get("start_full_date","").strip()
+            if not s_val:
+                s_val = "No Date"
+            time_period["start"] = {
+                "approach": "date",
+                "mode": "exact",
+                "value": s_val,
+                "is_partial": False
+            }
+        else:
+            # partial => read <select name="start_partial_year_select">
+            s_val = request.form.get("start_partial_year_select","").strip()
+            if not s_val:
+                s_val = "Unknown Year"
+            time_period["start"] = {
+                "approach": "date",
+                "mode": "partial",
+                "value": s_val,
+                "is_partial": True
+            }
+    else:
+        # subfolder approach
+        # e.g. start_sub_val = "thirties" or "custom"
+        s_sub_val = request.form.get("start_sub_val","").strip()
+        if s_sub_val == "custom":
+            s_sub_val = request.form.get("start_custom_val","").strip() or "Custom"
+        time_period["start"] = {
+            "approach": start_approach,
+            "value": s_sub_val
+        }
+
+    # ------------------ PARSE END BLOCK ------------------
+    end_approach = request.form.get("end_approach","date").strip()
+    if end_approach == "date":
+        end_date_mode = request.form.get("end_date_mode","exact").strip()
+        if end_date_mode == "exact":
+            e_val = request.form.get("end_full_date","").strip()
+            if not e_val:
+                e_val = "No Date"
+            time_period["end"] = {
+                "approach": "date",
+                "mode": "exact",
+                "value": e_val,
+                "is_partial": False
+            }
+        else:
+            # partial
+            e_val = request.form.get("end_partial_year_select","").strip()
+            if not e_val:
+                e_val = "Unknown Year"
+            time_period["end"] = {
+                "approach": "date",
+                "mode": "partial",
+                "value": e_val,
+                "is_partial": True
+            }
+    else:
+        # subfolder approach
+        e_sub_val = request.form.get("end_sub_val","").strip()
+        if e_sub_val == "custom":
+            e_sub_val = request.form.get("end_custom_val","").strip() or "Custom"
+        time_period["end"] = {
+            "approach": end_approach,
+            "value": e_sub_val
+        }
+
+    # ------------------ Save JSON & Redirect ------------------
+    entry["time_period"] = time_period
+    save_dict_as_json(json_file_path, bio_data)
+
+    return redirect(f"/biography/{type_name}/{biography_name}")
+
+
+
+@app.route('/type/<string:type_name>')
+def type_page(type_name):
+    """
+    Displays the type page for biographies:
+    - Search bar for partial matches by name or label values.
+    - Live checkboxes that filter by label name (e.g. 'onet_occupation', 'first_name').
+    - No 'Apply Filter' button—filters update on checkbox change.
+    """
+
+    # 1. Load the type's metadata
+    type_metadata_path = f"./types/{type_name}.json"
+    if not os.path.exists(type_metadata_path):
+        return f"""
+        <h1>Error: Type metadata not found</h1>
+        <p>The file <code>{type_metadata_path}</code> does not exist.</p>
+        """, 404
+    type_meta = load_json_as_dict(type_metadata_path)
+
+    # 2. Gather all biography files
+    biographies_path = f"./types/{type_name}/biographies"
+    biography_list = []
+    all_label_names = set()  # We'll store the label "names" (e.g. 'onet_occupation', 'first_name')
+
+    if os.path.exists(biographies_path):
+        for file in os.listdir(biographies_path):
+            if file.endswith(".json"):
+                file_path = os.path.join(biographies_path, file)
+                bio_data = load_json_as_dict(file_path)
+
+                # Basic biography info
+                name = bio_data.get("name", "Unknown")
+                readable_time = bio_data.get("readable_time", "Unknown Time")
+
+                # Collect label names
+                label_names_in_this_bio = set()
+
+                # We'll also collect label values (for partial name search)
+                label_values_in_this_bio = []
+
+                for entry in bio_data.get("entries", []):
+                    for lbl in entry.get("labels", []):
+                        # Skip time-based labels
+                        if lbl["label"].lower() in ["time", "start", "end"]:
+                            continue
+
+                        label_name = lbl["label"].strip().lower()
+                        label_value = lbl.get("value", "").strip().lower()
+
+                        label_names_in_this_bio.add(label_name)
+                        if label_value:
+                            label_values_in_this_bio.append(label_value)
+
+                # Merge into global label name set
+                all_label_names.update(label_names_in_this_bio)
+
+                # Convert label names for each biography into a comma-separated string
+                # We'll store *both* label names and label values in separate data attributes,
+                # so we can do partial text search against label values, but filter by label NAME.
+                bio_label_names_str = ",".join(sorted(label_names_in_this_bio))
+                bio_label_values_str = ",".join(label_values_in_this_bio)
+
+                biography_list.append({
+                    "file_basename": file[:-5],  # e.g. 'AlanTuring_12345678'
+                    "name": name.capitalize(),
+                    "timestamp": readable_time,
+                    "label_names_str": bio_label_names_str,
+                    "label_values_str": bio_label_values_str
+                })
+
+    # 3. Build checkboxes for label names
+    #    But we want them more user-friendly: "onet_occupation" → "Onet Occupation"
+    def prettify_label_name(raw_name):
+        # Replace underscores with spaces and capitalize each word
+        # e.g. "onet_occupation" -> "Onet Occupation"
+        # e.g. "first_name" -> "First Name"
+        return " ".join(word.capitalize() for word in raw_name.split("_"))
+
+    sorted_label_names = sorted(all_label_names)
+    label_options_html = ""
+    for lbl_name in sorted_label_names:
+        # Convert "onet_occupation" -> "Onet Occupation"
+        display_name = prettify_label_name(lbl_name)
+        label_options_html += f"""
+        <label class="filter-label">
+            <input type="checkbox" value="{lbl_name}" class="filter-checkbox"> {display_name}
+        </label>
+        """
+
+    # 4. Check for archived
+    archive_path = f"./types/{type_name}/archived_biographies"
+    has_archived = (os.path.exists(archive_path) and 
+                    any(f.endswith(".json") for f in os.listdir(archive_path)))
+    archived_section = f"""
+    <div class="view-archived-container">
+        <a href='/archived_biographies/{type_name}' class='view-archived-link'>
+            View Archived Biographies
+        </a>
+    </div>
+    """ if has_archived else ""
+
+    # 5. Build HTML for each biography item
+    biography_items_html = ""
+    for bio in biography_list:
+        biography_items_html += f"""
+        <div class='biography-item'
+             data-name='{bio["name"].lower()}'
+             data-labelnames='{bio["label_names_str"]}'
+             data-labelvalues='{bio["label_values_str"]}'>
+            <a href="/biography/{type_name}/{bio['file_basename']}" class='biography-button'>
+                <strong>{bio['name']}</strong>
+            </a>
+            <p class="timestamp">Created: {bio['timestamp']}</p>
+        </div>
+        """
+
+    # 6. Final HTML
+    html_template = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8" />
+        <title>{type_name.capitalize()}</title>
+        <link rel="stylesheet" href="/static/styles.css">
+    </head>
+    <body>
+        <div class="container">
+            <a href="/" class="back-link">← Back</a>
+            <h1>{type_name.capitalize()}</h1>
+            <p class="description">{type_meta.get("description", "No description available.")}</p>
+
+            <!-- SEARCH & FILTER BAR -->
+            <div class="search-container">
+                <input type="text" id="searchBar" class="search-input" placeholder="Search by name or label value...">
+                <button id="resetSearch" class="reset-button">Reset Search</button>
+            </div>
+
+            <div class="filter-container">
+                <label>Filter by Label Name:</label>
+                <div class="filter-labels">
+                    {label_options_html}
+                </div>
+                <!-- REMOVED "Apply Filter" button -->
+            </div>
+
+            <h2>Biographies</h2>
+            <div class="biography-container" id="biographyList">
+                {biography_items_html if biography_items_html else "<p class='no-data'>No biographies found.</p>"}
+            </div>
+
+            <!-- PAGINATION (optional) -->
+            <div class="pagination-container">
+                <label for="itemsPerPage">Items per page:</label>
+                <select id="itemsPerPage">
+                    <option value="5">5</option>
+                    <option value="10">10</option>
+                </select>
+                <button id="prevPage" class="pagination-button">← Prev</button>
+                <span id="pageNumber">1</span>
+                <button id="nextPage" class="pagination-button">Next →</button>
+            </div>
+
+            <div class="add-biography-container">
+                <a href='/biography_add/{type_name}' class="add-biography-button">+ Add Biography</a>
+            </div>
+
+            {archived_section}
+        </div>
+
+        <script>
+            const searchBar = document.getElementById('searchBar');
+            const resetButton = document.getElementById('resetSearch');
+            const checkboxes = document.querySelectorAll('.filter-checkbox');
+            const biographyItems = document.querySelectorAll('.biography-item');
+
+            // LIVE search & filter function
+            function applyFilters() {{
+                const query = searchBar.value.toLowerCase().trim();
+
+                // Which label names are selected?
+                const selectedLabelNames = Array.from(checkboxes)
+                    .filter(ch => ch.checked)
+                    .map(ch => ch.value.toLowerCase());
+
+                biographyItems.forEach(item => {{
+                    // data attributes
+                    const bioName = item.dataset.name;         // e.g. "alan turing"
+                    const labelNames = item.dataset.labelnames; // e.g. "onet_occupation,first_name"
+                    const labelValues = item.dataset.labelvalues; // e.g. "mathematician,coder"
+
+                    // PART A: Partial text search (in name or labelValues)
+                    let searchMatch = true;
+                    if (query) {{
+                        const nameMatch = bioName.includes(query);
+                        const valueMatch = labelValues.includes(query);
+                        searchMatch = (nameMatch || valueMatch);
+                    }}
+
+                    // PART B: Label name filter (AND logic)
+                    // labelNames might be something like "onet_occupation,first_name"
+                    // if user selected e.g. ["onet_occupation"], we check if 'onet_occupation' is in labelNames
+                    let labelNameMatch = true;
+                    if (selectedLabelNames.length > 0) {{
+                        const labelNamesArr = labelNames.split(",");
+                        labelNameMatch = selectedLabelNames.every(lbl => labelNamesArr.includes(lbl));
+                    }}
+
+                    const shouldShow = (searchMatch && labelNameMatch);
+                    item.style.display = shouldShow ? 'block' : 'none';
+                }});
+            }}
+
+            // Attach live event listeners
+            searchBar.addEventListener('input', applyFilters);
+            checkboxes.forEach(ch => ch.addEventListener('change', applyFilters));
+
+            // Reset
+            resetButton.addEventListener('click', () => {{
+                searchBar.value = "";
+                checkboxes.forEach(ch => (ch.checked = false));
+                biographyItems.forEach(item => item.style.display = 'block');
+            }});
+
+            // Basic pagination logic
+            const perPageSelect = document.getElementById('itemsPerPage');
+            let perPage = parseInt(perPageSelect.value);
+            let currentPage = 1;
+
+            function showPage(page) {{
+                const itemsArray = Array.from(biographyItems).filter(i => i.style.display !== 'none');
+                // Only paginate visible items
+                let start = (page - 1) * perPage;
+                let end = start + perPage;
+
+                itemsArray.forEach((bio, idx) => {{
+                    bio.style.display = (idx >= start && idx < end) ? 'block' : 'none';
+                }});
+
+                document.getElementById('pageNumber').innerText = page;
+            }}
+
+            document.getElementById('prevPage').addEventListener('click', () => {{
+                if (currentPage > 1) {{
+                    currentPage--;
+                    showPage(currentPage);
+                }}
+            }});
+            document.getElementById('nextPage').addEventListener('click', () => {{
+                const itemsArray = Array.from(biographyItems).filter(i => i.style.display !== 'none');
+                if ((currentPage * perPage) < itemsArray.length) {{
+                    currentPage++;
+                    showPage(currentPage);
+                }}
+            }});
+            perPageSelect.addEventListener('change', function() {{
+                perPage = parseInt(this.value);
+                currentPage = 1;
+                showPage(currentPage);
+            }});
+
+            // On load, show page 1
+            showPage(currentPage);
+        </script>
+    </body>
+    </html>
+    """
+
+    return html_template
+
+
+
+@app.route('/search/<string:type_name>')
+def search_biographies(type_name):
+    query = request.args.get("q", "").strip().lower()
+    if not query:
+        return jsonify([])
+
+    biographies_path = f"./types/{type_name}/biographies"
+    if not os.path.exists(biographies_path):
+        return jsonify([])
+
+    results = []
+    for file in os.listdir(biographies_path):
+        if file.endswith(".json"):
+            bio_data = load_json_as_dict(os.path.join(biographies_path, file))
+            biography_name = file[:-5]  # Remove ".json"
+            display_name = bio_data.get("name", biography_name)
+
+            # Search through labels
+            for entry in bio_data.get("entries", []):
+                for label in entry.get("labels", []):
+                    label_value = str(label.get("value", "")).lower()
+                    label_name = str(label.get("label", "")).lower()
+
+                    if query in label_value or query in label_name:
+                        results.append({
+                            "name": biography_name,
+                            "display_name": display_name,
+                            "matched_label": f"{label_name}: {label_value}"
+                        })
+                        break  # Stop searching further in this biography
+
+    return jsonify(results)
+
+
+from flask import send_from_directory
+
+@app.route('/serve_label_image/<string:type_name>/<string:label_name>/<string:image_name>')
+def serve_label_image(type_name, label_name, image_name):
+    """ Serve images from the `types` directory dynamically. """
+    image_path = f"./types/{type_name}/labels/{label_name}/"  # Adjust if the structure is different
+    return send_from_directory(image_path, image_name)
+
+
+
+# @app.route('/biography_addlabel/<string:type_name>/<string:biography_name>/<int:entry_index>', methods=['GET'])
+# def biography_addlabel_page(type_name, biography_name, entry_index):
+#     """
+#     Displays the Add Label form with dynamic label value selection from subfolders.
+#     Ensures all values can be selected, with or without an image, and provides a placeholder if necessary.
+#     """
+#     # Load JSON file for the biography
+#     json_file_path = f"./types/{type_name}/biographies/{biography_name}.json"
+#     bio_data = load_json_as_dict(json_file_path)
+#     entry = bio_data["entries"][entry_index]
+
+#     # Get original name
+#     display_name = bio_data.get("name", biography_name)  # Fallback if "name" is missing
+
+#     # Load available label JSON files
+#     labels_path = f"./types/{type_name}/labels"
+#     label_files = [f for f in os.listdir(labels_path) if f.endswith(".json")]
+
+#     # Store label values, images, types, and descriptions
+#     label_values_dict = {}
+#     label_images_dict = {}
+#     label_types = {}  
+#     label_descriptions = {}  
+
+#     for label_file in label_files:
+#         label_name = os.path.splitext(label_file)[0]  # Get name without `.json`
+#         label_folder_path = os.path.join(labels_path, label_name)
+
+#         # Load values from JSON
+#         label_json_path = os.path.join(labels_path, label_file)
+#         label_json = load_json_as_dict(label_json_path)
+#         label_values_dict[label_name] = label_json.get("values", [])
+#         label_types[label_name] = label_json.get("type", "").lower()  
+#         label_descriptions[label_name] = label_json.get("description", "No description available")  
+
+#         # Check for corresponding images
+#         if os.path.exists(label_folder_path) and os.path.isdir(label_folder_path):
+#             subfolder_files = [f for f in os.listdir(label_folder_path) if f.endswith(".json")]
+#             label_values_dict[label_name] = [os.path.splitext(f)[0] for f in subfolder_files]
+
+#             # Find an image that exactly matches the JSON filename
+#             image_files = [f for f in os.listdir(label_folder_path) if f.endswith((".jpg", ".png"))]
+#             for json_filename in label_values_dict[label_name]:
+#                 matched_image = next((img for img in image_files if os.path.splitext(img)[0] == json_filename), None)
+                
+#                 if matched_image:
+#                     label_images_dict[f"{label_name}:{json_filename}"] = f"/serve_label_image/{type_name}/{label_name}/{matched_image}"
+#                 else:
+#                     label_images_dict[f"{label_name}:{json_filename}"] = None  # No image found
+
+#     # Generate dropdown options for label selection
+#     label_options = "".join([f"<option value='{lbl}'>{lbl.capitalize()}</option>" for lbl in label_values_dict.keys()])
+
+#     # **✅ Updated JavaScript to Allow Selection Without Images**
+#     html_template = f"""
+#     <!DOCTYPE html>
+#     <html lang="en">
+#     <head>
+#         <meta charset="UTF-8">
+#         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+#         <title>Add Label to {display_name.capitalize()}</title>
+#         <link rel="stylesheet" href="/static/styles.css">
+#         <script>
+#             let labelValues = {json.dumps(label_values_dict)};
+#             let labelImages = {json.dumps(label_images_dict)};
+#             let labelTypes = {json.dumps(label_types)};
+#             let labelDescriptions = {json.dumps(label_descriptions)};
+
+#             function updateLabelDetails() {{
+#                 let selectedLabel = document.getElementById("label_type").value;
+#                 let valuesDropdown = document.getElementById("label_value");
+#                 let customInput = document.getElementById("custom_label_value");
+#                 let imageContainer = document.getElementById("label_image");
+#                 let descriptionContainer = document.getElementById("label_description");
+#                 let placeholderContainer = document.getElementById("image_placeholder");
+
+#                 valuesDropdown.innerHTML = "";
+#                 customInput.style.display = "none";
+#                 customInput.value = "";
+#                 customInput.required = false;
+
+#                 // ✅ Display Description
+#                 descriptionContainer.innerHTML = labelDescriptions[selectedLabel] 
+#                     ? "<strong>Description:</strong> " + labelDescriptions[selectedLabel] 
+#                     : "<strong>Description:</strong> No description available.";
+
+#                 // ✅ If label type is "string", show custom input (e.g., first_name)
+#                 if (labelTypes[selectedLabel] === "string") {{
+#                     valuesDropdown.style.display = "none";
+#                     customInput.style.display = "block";
+#                     customInput.required = true;
+#                     return;
+#                 }}
+
+#                 // ✅ Populate dropdown if values exist
+#                 if (labelValues[selectedLabel] && labelValues[selectedLabel].length > 0) {{
+#                     labelValues[selectedLabel].forEach(value => {{
+#                         let option = document.createElement("option");
+#                         option.value = value;
+#                         option.text = value;
+#                         valuesDropdown.appendChild(option);
+#                     }});
+
+#                     let customOption = document.createElement("option");
+#                     customOption.value = "custom";
+#                     customOption.text = "Enter Custom Value";
+#                     valuesDropdown.appendChild(customOption);
+
+#                     valuesDropdown.style.display = "block";
+#                 }} else {{
+#                     valuesDropdown.style.display = "none";
+#                     customInput.style.display = "block";
+#                     customInput.required = true;
+#                 }}
+
+#                 checkImageForValue();
+#             }}
+
+#             function checkImageForValue() {{
+#                 let selectedLabel = document.getElementById("label_type").value;
+#                 let selectedValue = document.getElementById("label_value").value || document.getElementById("custom_label_value").value;
+#                 let imageContainer = document.getElementById("label_image");
+#                 let placeholderContainer = document.getElementById("image_placeholder");
+
+#                 let imageKey = selectedLabel + ":" + selectedValue;
+
+#                 if (labelImages[imageKey]) {{
+#                     imageContainer.src = labelImages[imageKey];
+#                     imageContainer.style.display = "block";
+#                     placeholderContainer.style.display = "none";
+#                 }} else {{
+#                     placeholderContainer.innerHTML = "<strong>Expected Image:</strong> " + selectedValue + ".jpg or " + selectedValue + ".png";
+#                     placeholderContainer.style.display = "block";
+#                     imageContainer.style.display = "none";
+#                 }}
+#             }}
+
+#             function checkCustomValue() {{
+#                 let valuesDropdown = document.getElementById("label_value");
+#                 let customInput = document.getElementById("custom_label_value");
+
+#                 if (valuesDropdown.value === "custom") {{
+#                     valuesDropdown.style.display = "none";
+#                     customInput.style.display = "block";
+#                     customInput.value = "";
+#                     customInput.required = true;
+#                 }} else {{
+#                     customInput.style.display = "none";
+#                     customInput.required = false;
+#                 }}
+
+#                 checkImageForValue();
+#             }}
+
+#             window.onload = function() {{
+#                 updateLabelDetails();
+#             }};
+#         </script>
+#     </head>
+#     <body>
+#         <div class="container">
+#             <a href='/biography/{type_name}/{biography_name}' class="back-link">Back</a>
+#             <h1>Add Label to {display_name.capitalize()}</h1>
+
+#             <div class="label-container">
+#                 <p><strong>From:</strong> {printTime(entry["time_period"]["start"])}</p>
+#                 <p><strong>To:</strong> {printTime(entry["time_period"]["end"])}</p>
+
+#                 <form action='/biography_addlabel_submit/{type_name}/{biography_name}/{entry_index}' method='post'>
+                    
+#                     <label for='label_type'>Choose a type of label:</label>
+#                     <select name='label_type' id='label_type' class="dropdown" onchange="updateLabelDetails()" required>
+#                         <option value="">Select a label</option>
+#                         {label_options}
+#                     </select>
+
+#                     <p id="label_description"><strong>Description:</strong> Select a label to view details.</p>
+
+#                     <img id="label_image" style="display: none; max-width: 200px; margin-top: 10px;"><br>
+#                     <p id="image_placeholder" style="color: #888; font-style: italic; display: none;"></p>
+
+#                     <label for='label_value'>Select a value:</label>
+#                     <select id="label_value" name="label_value" class="dropdown" required onchange="checkCustomValue()">
+#                         <option value="custom">Enter Custom Value</option>
+#                     </select>
+
+#                     <input type="text" id="custom_label_value" name="custom_label_value" placeholder="Enter custom value" style="display: none;"><br>
+
+#                     <button type='submit' class="add-label-button">Add Label</button>
+#                 </form>
+#             </div>
+#         </div>
+#     </body>
+#     </html>
+#     """
+
+#     return html_template
+
+# @app.route('/biography_addlabel/<string:type_name>/<string:biography_name>/<int:entry_index>', methods=['GET'])
+# def biography_addlabel_page(type_name, biography_name, entry_index):
+#     """
+#     Displays the Add Label form with dynamic label value selection from subfolders.
+#     Ensures all values can be selected, with or without an image, 
+#     provides a placeholder if necessary,
+#     AND includes a confidence slider for the chosen label.
+#     """
+
+#     # Load JSON file for the biography
+#     json_file_path = f"./types/{type_name}/biographies/{biography_name}.json"
+#     bio_data = load_json_as_dict(json_file_path)
+#     entry = bio_data["entries"][entry_index]
+
+#     # Get original name
+#     display_name = bio_data.get("name", biography_name)  # Fallback if "name" is missing
+
+#     # Load available label JSON files
+#     labels_path = f"./types/{type_name}/labels"
+#     label_files = [f for f in os.listdir(labels_path) if f.endswith(".json")]
+
+#     # Store label values, images, types, and descriptions
+#     label_values_dict = {}
+#     label_images_dict = {}
+#     label_types = {}
+#     label_descriptions = {}
+
+#     for label_file in label_files:
+#         label_name = os.path.splitext(label_file)[0]  # Get name without `.json`
+#         label_folder_path = os.path.join(labels_path, label_name)
+
+#         # Load values from JSON
+#         label_json_path = os.path.join(labels_path, label_file)
+#         label_json = load_json_as_dict(label_json_path)
+
+#         # Collect possible values and meta info
+#         label_values_dict[label_name] = label_json.get("values", [])
+#         label_types[label_name] = label_json.get("type", "").lower()
+#         label_descriptions[label_name] = label_json.get("description", "No description available.")
+
+#         # Check for corresponding subfolder with .json or images
+#         if os.path.exists(label_folder_path) and os.path.isdir(label_folder_path):
+#             subfolder_files = [f for f in os.listdir(label_folder_path) if f.endswith(".json")]
+#             # Overwrite or extend the label_values_dict with the subfolder filenames
+#             label_values_dict[label_name] = [os.path.splitext(f)[0] for f in subfolder_files]
+
+#             # Match potential images
+#             image_files = [f for f in os.listdir(label_folder_path) if f.endswith((".jpg", ".png"))]
+#             for json_filename in label_values_dict[label_name]:
+#                 image_key = f"{label_name}:{json_filename}"
+#                 matched_image = next((img for img in image_files if os.path.splitext(img)[0] == json_filename), None)
+#                 label_images_dict[image_key] = (
+#                     f"/serve_label_image/{type_name}/{label_name}/{matched_image}" if matched_image else None
+#                 )
+
+#     # Generate dropdown options for label selection
+#     label_options = "".join(
+#         [f"<option value='{lbl}'>{lbl.capitalize()}</option>" for lbl in label_values_dict.keys()]
+#     )
+
+#     # Updated HTML with a confidence slider in the form
+#     html_template = f"""
+#     <!DOCTYPE html>
+#     <html lang="en">
+#     <head>
+#         <meta charset="UTF-8">
+#         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+#         <title>Add Label to {display_name.capitalize()}</title>
+#         <link rel="stylesheet" href="/static/styles.css">
+#         <script>
+#             let labelValues = {json.dumps(label_values_dict)};
+#             let labelImages = {json.dumps(label_images_dict)};
+#             let labelTypes = {json.dumps(label_types)};
+#             let labelDescriptions = {json.dumps(label_descriptions)};
+
+#             function updateLabelDetails() {{
+#                 let selectedLabel = document.getElementById("label_type").value;
+#                 let valuesDropdown = document.getElementById("label_value");
+#                 let customInput = document.getElementById("custom_label_value");
+#                 let imageContainer = document.getElementById("label_image");
+#                 let descriptionContainer = document.getElementById("label_description");
+#                 let placeholderContainer = document.getElementById("image_placeholder");
+
+#                 valuesDropdown.innerHTML = "";
+#                 customInput.style.display = "none";
+#                 customInput.value = "";
+#                 customInput.required = false;
+
+#                 // Display label description
+#                 descriptionContainer.innerHTML = labelDescriptions[selectedLabel]
+#                     ? "<strong>Description:</strong> " + labelDescriptions[selectedLabel]
+#                     : "<strong>Description:</strong> No description available.";
+
+#                 // If label type is 'string', we skip the dropdown and only show the custom text field
+#                 if (labelTypes[selectedLabel] === "string") {{
+#                     valuesDropdown.style.display = "none";
+#                     customInput.style.display = "block";
+#                     customInput.required = true;
+#                     return;
+#                 }}
+
+#                 // Populate dropdown if we have values
+#                 if (labelValues[selectedLabel] && labelValues[selectedLabel].length > 0) {{
+#                     labelValues[selectedLabel].forEach(value => {{
+#                         let option = document.createElement("option");
+#                         option.value = value;
+#                         option.text = value;
+#                         valuesDropdown.appendChild(option);
+#                     }});
+
+#                     let customOption = document.createElement("option");
+#                     customOption.value = "custom";
+#                     customOption.text = "Enter Custom Value";
+#                     valuesDropdown.appendChild(customOption);
+
+#                     valuesDropdown.style.display = "block";
+#                 }} else {{
+#                     valuesDropdown.style.display = "none";
+#                     customInput.style.display = "block";
+#                     customInput.required = true;
+#                 }}
+
+#                 checkImageForValue();
+#             }}
+
+#             function checkImageForValue() {{
+#                 let selectedLabel = document.getElementById("label_type").value;
+#                 let selectedValue = document.getElementById("label_value").value 
+#                     || document.getElementById("custom_label_value").value;
+#                 let imageContainer = document.getElementById("label_image");
+#                 let placeholderContainer = document.getElementById("image_placeholder");
+
+#                 let imageKey = selectedLabel + ":" + selectedValue;
+
+#                 if (labelImages[imageKey]) {{
+#                     imageContainer.src = labelImages[imageKey];
+#                     imageContainer.style.display = "block";
+#                     placeholderContainer.style.display = "none";
+#                 }} else {{
+#                     placeholderContainer.innerHTML = "<strong>Expected Image:</strong> " + selectedValue + ".jpg or " + selectedValue + ".png";
+#                     placeholderContainer.style.display = "block";
+#                     imageContainer.style.display = "none";
+#                 }}
+#             }}
+
+#             function checkCustomValue() {{
+#                 let valuesDropdown = document.getElementById("label_value");
+#                 let customInput = document.getElementById("custom_label_value");
+
+#                 if (valuesDropdown.value === "custom") {{
+#                     valuesDropdown.style.display = "none";
+#                     customInput.style.display = "block";
+#                     customInput.value = "";
+#                     customInput.required = true;
+#                 }} else {{
+#                     customInput.style.display = "none";
+#                     customInput.required = false;
+#                 }}
+
+#                 checkImageForValue();
+#             }}
+
+#             window.onload = function() {{
+#                 updateLabelDetails();
+#             }};
+#         </script>
+#     </head>
+#     <body>
+#         <div class="container">
+#             <a href='/biography/{type_name}/{biography_name}' class="back-link">Back</a>
+#             <h1>Add Label to {display_name.capitalize()}</h1>
+
+#             <div class="label-container">
+#                 <p><strong>From:</strong> {printTime(entry["time_period"]["start"])}</p>
+#                 <p><strong>To:</strong> {printTime(entry["time_period"]["end"])}</p>
+
+#                 <form action='/biography_addlabel_submit/{type_name}/{biography_name}/{entry_index}' method='post'>
+                    
+#                     <label for='label_type'>Choose a type of label:</label>
+#                     <select name='label_type' id='label_type' class="dropdown" onchange="updateLabelDetails()" required>
+#                         <option value="">Select a label</option>
+#                         {label_options}
+#                     </select>
+
+#                     <p id="label_description">
+#                         <strong>Description:</strong> Select a label to view details.
+#                     </p>
+
+#                     <img id="label_image" style="display: none; max-width: 200px; margin-top: 10px;"><br>
+#                     <p id="image_placeholder" style="color: #888; font-style: italic; display: none;"></p>
+
+#                     <label for='label_value'>Select a value:</label>
+#                     <select id="label_value" name="label_value" class="dropdown" required onchange="checkCustomValue()">
+#                         <option value="custom">Enter Custom Value</option>
+#                     </select>
+
+#                     <input type="text" id="custom_label_value" name="custom_label_value" 
+#                            placeholder="Enter custom value" style="display: none;"><br>
+
+#                     <!-- NEW: Confidence Slider -->
+#                     <label for="confidence_slider">Confidence (0.0 - 1.0):</label>
+#                     <input type="range" id="confidence_slider" name="confidence_slider"
+#                            min="0" max="1" step="0.01" value="1.0"
+#                            oninput="sliderValueDisplay.value = confidence_slider.value">
+#                     <output id="sliderValueDisplay">1.0</output><br><br>
+
+#                     <button type='submit' class="add-label-button">Add Label</button>
+#                 </form>
+#             </div>
+#         </div>
+#     </body>
+#     </html>
+#     """
+
+#     return html_template
+
+@app.route('/biography_addlabel/<string:type_name>/<string:biography_name>/<int:entry_index>', methods=['GET'])
+def biography_addlabel_page(type_name, biography_name, entry_index):
+    """
+    Displays the Add Label form with:
+      - A prettified label name dropdown (e.g. "celebea_face_hq" => "Celebea Face Hq").
+      - Subfolder-based values, plus custom typed value.
+      - Image preview if <folder>:<value>.jpg exists.
+    """
+
+    # 1. Load the biography & entry
+    json_file_path = f"./types/{type_name}/biographies/{biography_name}.json"
+    bio_data = load_json_as_dict(json_file_path)
+
+    if entry_index >= len(bio_data.get("entries", [])):
+        return f"<h1>Error: Entry Not Found</h1>", 404
+
+    entry = bio_data["entries"][entry_index]
+    display_name = bio_data.get("name", biography_name)
+
+    # 2. Gather all label folders in ./types/<type_name>/labels/
+    labels_path = f"./types/{type_name}/labels"
+    label_folders = [f for f in os.listdir(labels_path) if f.endswith(".json")]
+    # We'll store "folder_name => { 'values': [...], 'images': {...} }"
+    label_info_dict = {}
+
+    def prettify_label_name(raw: str) -> str:
+        return " ".join(word.capitalize() for word in raw.split("_"))
+
+    for label_file in label_folders:
+        lbl_name = os.path.splitext(label_file)[0]  # e.g. "celebea_face_hq"
+        label_folder_path = os.path.join(labels_path, lbl_name)
+        label_json_path   = os.path.join(labels_path, label_file)
+
+        # Load label data
+        label_json = load_json_as_dict(label_json_path)
+        values_list = label_json.get("values", [])
+        
+        images_map = {}  # e.g. {"1": "/serve_label_image/.../1.jpg"}
+
+        # If subfolder has .json or images
+        if os.path.exists(label_folder_path) and os.path.isdir(label_folder_path):
+            subfolder_files = [sf for sf in os.listdir(label_folder_path) if sf.endswith(".json")]
+            sub_values = [os.path.splitext(sf)[0] for sf in subfolder_files]
+            # unify the two sets
+            combined_values = list(set(values_list + sub_values))
+            # find images
+            image_files = [img for img in os.listdir(label_folder_path) if img.endswith((".jpg",".png"))]
+            for val in combined_values:
+                matched_img = next((img for img in image_files if os.path.splitext(img)[0] == val), None)
+                if matched_img:
+                    images_map[val] = f"/serve_label_image/{type_name}/{lbl_name}/{matched_img}"
+                else:
+                    images_map[val] = None
+        else:
+            combined_values = values_list
+
+        label_info_dict[lbl_name] = {
+            "pretty_name": prettify_label_name(lbl_name),
+            "values": combined_values,
+            "images": images_map
+        }
+
+    # 3. Convert to JSON for the front-end JS
+    label_info_json = json.dumps(label_info_dict)
+
+    # 4. Build HTML
+    html_template = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Add Label to {display_name.capitalize()}</title>
+        <link rel="stylesheet" href="/static/styles.css">
+
+        <script>
+            let labelInfo = {label_info_json};
+
+            function prettifyLabelName(raw) {{
+                // We can do the same in JS if needed, or rely on your Python logic
+                let parts = raw.split("_");
+                return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(" ");
+            }}
+
+            function updateLabelDetails() {{
+                let lblSelect = document.getElementById("label_type");
+                let selected = lblSelect.value; // e.g. "celebea_face_hq"
+
+                let descContainer = document.getElementById("label_description");
+                let valSelect     = document.getElementById("label_value");
+                let customInput   = document.getElementById("custom_label_value");
+                let imgContainer  = document.getElementById("label_image");
+                let placeholder   = document.getElementById("image_placeholder");
+
+                // Reset
+                valSelect.innerHTML = "";
+                customInput.style.display = "none";
+                customInput.value = "";
+                customInput.required = false;
+
+                // Fill value dropdown
+                if (labelInfo[selected]) {{
+                    let vals = labelInfo[selected].values;
+                    vals.forEach(v => {{
+                        let opt = document.createElement("option");
+                        opt.value = v;
+                        opt.textContent = v;
+                        valSelect.appendChild(opt);
+                    }});
+                    // add 'custom' option
+                    let customOpt = document.createElement("option");
+                    customOpt.value = "custom";
+                    customOpt.textContent = "Enter Custom Value";
+                    valSelect.appendChild(customOpt);
+                }}
+
+                // Clear images initially
+                imgContainer.style.display = "none";
+                placeholder.style.display  = "none";
+
+                // We'll call checkCustomValue afterwards 
+                // so the user can see if it's custom or not
+            }}
+
+            function checkCustomValue() {{
+                let valSelect = document.getElementById("label_value");
+                let customInput = document.getElementById("custom_label_value");
+                let selectedLbl = document.getElementById("label_type").value;
+
+                let imgContainer = document.getElementById("label_image");
+                let placeholder  = document.getElementById("image_placeholder");
+
+                if (valSelect.value === "custom") {{
+                    valSelect.style.display = "none";
+                    customInput.style.display = "block";
+                    customInput.required = true;
+                    // no specific image for custom unless we guess
+                    imgContainer.style.display = "none";
+                    placeholder.style.display  = "block";
+                    placeholder.innerHTML      = "No image for custom value";
+                }} else {{
+                    customInput.style.display = "none";
+                    customInput.required = false;
+                    valSelect.style.display = "inline-block";
+
+                    // Possibly show an image if labelInfo has images
+                    let chosenVal = valSelect.value;
+                    let imagesMap = labelInfo[selectedLbl].images || {{}};
+                    if (imagesMap[chosenVal]) {{
+                        imgContainer.src = imagesMap[chosenVal];
+                        imgContainer.style.display = "block";
+                        placeholder.style.display = "none";
+                    }} else {{
+                        placeholder.innerHTML = "Expected Image: " + chosenVal + ".jpg or .png";
+                        placeholder.style.display = "block";
+                        imgContainer.style.display = "none";
+                    }}
+                }}
+            }}
+
+            window.onload = function() {{
+                updateLabelDetails();
+            }}
+        </script>
+    </head>
+    <body>
+        <div class="container">
+            <a href='/biography/{type_name}/{biography_name}' class="back-link">Back</a>
+            <h1>Add Label to {display_name.capitalize()}</h1>
+
+            <div class="label-container">
+                <p><strong>From:</strong> {printTime(entry["time_period"]["start"])}</p>
+                <p><strong>To:</strong> {printTime(entry["time_period"]["end"])}</p>
+
+                <form action='/biography_addlabel_submit/{type_name}/{biography_name}/{entry_index}' method='post'>
+                    <label for='label_type'>Choose a label folder:</label>
+                    <select name='label_type' id='label_type' onchange="updateLabelDetails()" required>
+                        <option value="">Select a folder</option>
+    """
+
+    # 5. Build the <option> list for label_type, using prettified name
+    for folder_name, info in label_info_dict.items():
+        pretty_name = info["pretty_name"]
+        html_template += f"<option value='{folder_name}'>{pretty_name}</option>"
+
+    html_template += """
+                    </select>
+
+                    <p id="label_description" style="margin-top:5px; font-style:italic;">
+                        Select a label to view details (if any).
+                    </p>
+
+                    <img id="label_image" style="display:none; max-width:150px; margin-top:5px;">
+                    <p id="image_placeholder" style="color:#999; font-style:italic; display:none;"></p>
+
+                    <br>
+
+                    <label for='label_value'>Select a value:</label>
+                    <select id="label_value" name="label_value" class="dropdown" required onchange="checkCustomValue()">
+                        <option value="custom">Enter Custom Value</option>
+                    </select>
+
+                    <input type="text" id="custom_label_value" name="custom_label_value"
+                           placeholder="Enter custom value" style="display:none;"><br><br>
+
+                    <!-- Confidence slider if needed -->
+                    <label for="confidence_slider">Confidence (0.0 - 1.0):</label>
+                    <input type="range" id="confidence_slider" name="confidence_slider"
+                           min="0" max="1" step="0.01" value="1.0"
+                           oninput="sliderValueDisplay.value = confidence_slider.value">
+                    <output id="sliderValueDisplay">1.0</output><br><br>
+
+                    <button type='submit' class="add-label-button">Add Label</button>
+                </form>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+    return html_template
+
+
+@app.route('/fetch_subfolder_contents/<string:type_name>/<path:label_type>/<string:subfolder>')
+def fetch_subfolder_contents(type_name, label_type, subfolder):
+    """
+    Fetches the contents (JSON description and image) of a subfolder.
+    """
+    subfolder_path = f"./types/{type_name}/labels/{label_type}/{subfolder}"
+    description = None
+    image = None
+
+    if os.path.exists(subfolder_path) and os.path.isdir(subfolder_path):
+        for file in os.listdir(subfolder_path):
+            if file.endswith(".json"):
+                json_data = load_json_as_dict(os.path.join(subfolder_path, file))
+                description = json_data.get("description", "No description available.")
+            elif file.endswith((".jpg", ".png", ".jpeg")):
+                image = f"{type_name}/labels/{label_type}/{subfolder}/{file}"  # Updated path
+
+    return jsonify({"description": description, "image": image})
+
+
+@app.route('/get_subfolder_contents/<string:type_name>/<path:label_type>/<string:subfolder>')
+def get_subfolder_contents(type_name, label_type, subfolder):
+    """
+    Fetches the contents (JSON description and image) of a subfolder.
+    """
+    subfolder_path = f"./types/{type_name}/labels/{label_type}/{subfolder}"
+    description = None
+    image = None
+
+    if os.path.exists(subfolder_path) and os.path.isdir(subfolder_path):
+        for file in os.listdir(subfolder_path):
+            if file.endswith(".json"):
+                json_data = load_json_as_dict(os.path.join(subfolder_path, file))
+                description = json_data.get("description", "No description available.")
+            elif file.endswith((".jpg", ".png", ".jpeg")):
+                image = f"{type_name}/labels/{label_type}/{subfolder}/{file}"  # Corrected image path
+
+    return jsonify({"description": description, "image": image})
+
+
+@app.route('/get_label_options/<string:type_name>/<path:label_type>')
+def get_label_options(type_name, label_type):
+    """
+    Fetches options from a subfolder within the labels directory based on selection.
+    """
+    labels_path = f"./types/{type_name}/labels/{label_type}"
+    options = []
+
+    if os.path.exists(labels_path) and os.path.isdir(labels_path):
+        for file in os.listdir(labels_path):
+            if file.endswith(".json"):
+                name = os.path.splitext(file)[0]
+                options.append(name.capitalize())
+
+    return jsonify({"options": options})
+
+
+# @app.route('/biography_addlabel_submit/<string:type_name>/<string:biography_name>/<int:entry_index>', methods=['POST'])
+# def biography_addlabel_submit(type_name, biography_name, entry_index):
+#     """
+#     Handles the submission of a new label, including custom string values.
+#     Ensures proper validation and prevents duplicate entries.
+#     """
+#     json_file_path = f"./types/{type_name}/biographies/{biography_name}.json"
+#     bio_data = load_json_as_dict(json_file_path)
+
+#     # Ensure entry exists
+#     if entry_index >= len(bio_data["entries"]):
+#         flash("Error: Entry not found.", "error")
+#         return redirect(f"/biography/{type_name}/{biography_name}")
+
+#     entry = bio_data["entries"][entry_index]
+
+#     # Ensure labels list exists
+#     if "labels" not in entry:
+#         entry["labels"] = []
+
+#     # Get label details from form
+#     label_name = request.form.get("label_type", "").strip()
+#     label_value = request.form.get("label_value", "").strip()
+#     custom_value = request.form.get("custom_label_value", "").strip()
+
+#     # Prevent empty label names
+#     if not label_name:
+#         flash("Error: Label name cannot be empty.", "error")
+#         return redirect(f"/biography_addlabel/{type_name}/{biography_name}/{entry_index}")
+
+#     # Determine if label allows free-text input (e.g., first_name.json)
+#     label_json_path = f"./types/{type_name}/labels/{label_name}.json"
+#     label_type = ""
+
+#     if os.path.exists(label_json_path):
+#         label_data = load_json_as_dict(label_json_path)
+#         label_type = label_data.get("type", "").lower()  # Ensure lowercase comparison
+
+#     # If label type is "string" or user selected "custom", enforce using custom input
+#     if label_type == "string" or label_value == "custom":
+#         if not custom_value:
+#             flash("Error: Custom label value cannot be empty.", "error")
+#             return redirect(f"/biography_addlabel/{type_name}/{biography_name}/{entry_index}")
+#         label_value = custom_value  # Save the manually entered value
+
+#     # Prevent duplicate label entries (Optional: Ensures uniqueness)
+#     new_label = {
+#         "label": label_name,
+#         "value": label_value
+#     }
+
+#     if new_label not in entry["labels"]:
+#         entry["labels"].append(new_label)
+#         save_dict_as_json(json_file_path, bio_data)
+#         flash(f"Label '{label_name}' with value '{label_value}' added successfully!", "success")
+#     else:
+#         flash(f"The label '{label_name}' with value '{label_value}' already exists.", "warning")
+
+#     return redirect(f"/biography/{type_name}/{biography_name}")
+
+@app.route('/biography_addlabel_submit/<string:type_name>/<string:biography_name>/<int:entry_index>', methods=['POST'])
+def biography_addlabel_submit(type_name, biography_name, entry_index):
+    """
+    Handles the submission of a new label, including custom string values and confidence.
+    Ensures proper validation and prevents duplicate entries.
+    """
+    json_file_path = f"./types/{type_name}/biographies/{biography_name}.json"
+    bio_data = load_json_as_dict(json_file_path)
+
+    # Ensure entry exists
+    if entry_index >= len(bio_data["entries"]):
+        flash("Error: Entry not found.", "error")
+        return redirect(f"/biography/{type_name}/{biography_name}")
+
+    entry = bio_data["entries"][entry_index]
+
+    # Ensure labels list exists
+    if "labels" not in entry:
+        entry["labels"] = []
+
+    # Get label details from form
+    label_name = request.form.get("label_type", "").strip()
+    label_value = request.form.get("label_value", "").strip()
+    custom_value = request.form.get("custom_label_value", "").strip()
+
+    # Fetch the confidence from the slider (default to 1.0 if missing/invalid)
+    confidence_str = request.form.get("confidence_slider", "1.0").strip()
+    try:
+        confidence_val = float(confidence_str)
+    except ValueError:
+        confidence_val = 1.0
+
+    # Prevent empty label names
+    if not label_name:
+        flash("Error: Label name cannot be empty.", "error")
+        return redirect(f"/biography_addlabel/{type_name}/{biography_name}/{entry_index}")
+
+    # Determine if label allows free-text input (e.g., first_name.json)
+    label_json_path = f"./types/{type_name}/labels/{label_name}.json"
+    label_type = ""
+
+    if os.path.exists(label_json_path):
+        label_data = load_json_as_dict(label_json_path)
+        label_type = label_data.get("type", "").lower()  # Ensure lowercase comparison
+
+    # If label type is "string" or user selected "custom", enforce using custom input
+    if label_type == "string" or label_value == "custom":
+        if not custom_value:
+            flash("Error: Custom label value cannot be empty.", "error")
+            return redirect(f"/biography_addlabel/{type_name}/{biography_name}/{entry_index}")
+        label_value = custom_value  # Save the manually entered value
+
+    # Build the new label object (including confidence)
+    new_label = {
+        "label": label_name,
+        "value": label_value,
+        "confidence": confidence_val
+    }
+
+    # Prevent duplicate label entries (optional uniqueness check)
+    if new_label not in entry["labels"]:
+        entry["labels"].append(new_label)
+        save_dict_as_json(json_file_path, bio_data)
+        flash(f"Label '{label_name}' with value '{label_value}' added successfully!", "success")
+    else:
+        flash(f"The label '{label_name}' with value '{label_value}' already exists.", "warning")
+
+    return redirect(f"/biography/{type_name}/{biography_name}")
+
+
+@app.route('/archived_biographies/<string:type_name>')
+def archived_biographies(type_name):
+    archive_path = f"./types/{type_name}/archived_biographies"
+    
+    # Ensure the archive folder exists, but only if necessary
+    if not os.path.exists(archive_path) or not any(file.endswith(".json") for file in os.listdir(archive_path)):
+        return f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Archived Biographies - {type_name.capitalize()}</title>
+            <link rel="stylesheet" href="/static/styles.css">
+        </head>
+        <body>
+            <div class="container">
+                <a href="/type/{type_name}" class="button">Back</a>
+                <h1>Archived Biographies</h1>
+                <p>No archived biographies found.</p>
+            </div>
+        </body>
+        </html>
+        """
+
+    archived_list = ""
+    for file in os.listdir(archive_path):
+        if file.endswith(".json"):
+            file_path = os.path.join(archive_path, file)
+            bio_data = load_json_as_dict(file_path)
+
+            # Extract original name and archived timestamp
+            name = bio_data.get("name", file[:-5]).capitalize()  # Default to filename if name missing
+            archived_date = bio_data.get("archived_on", "Unknown Time")
+
+            archived_list += f"""
+                <div class="archived-item">
+                    <p><strong>{name}</strong></p>
+                    <p class="timestamp">Archived: {archived_date}</p>
+                    <button class="restore-button" onclick="restoreBiography('{type_name}', '{file[:-5]}')">Restore</button>
+                </div>
+            """
+
+    return f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Archived Biographies - {type_name.capitalize()}</title>
+        <link rel="stylesheet" href="/static/styles.css">
+        <script>
+            function restoreBiography(typeName, biographyName) {{
+                if (confirm("Are you sure you want to restore this biography?")) {{
+                    fetch(`/biography_restore/${{typeName}}/${{biographyName}}`, {{ method: 'POST' }})
+                        .then(response => {{
+                            if (response.ok) {{
+                                alert("Biography restored successfully.");
+                                location.reload();
+                            }} else {{
+                                alert("Failed to restore biography.");
+                            }}
+                        }});
+                }}
+            }}
+        </script>
+    </head>
+    <body>
+        <div class="container">
+            <a href="/type/{type_name}" class="button">Back</a>
+            <h1>Archived Biographies</h1>
+            <div class="archived-container">
+                {archived_list if archived_list else "<p>No archived biographies found.</p>"}
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+
+@app.route('/biography_restore/<string:type_name>/<string:biography_name>', methods=['POST'])
+def biography_restore(type_name, biography_name):
+    archive_path = f"./types/{type_name}/archived_biographies"
+    biographies_path = f"./types/{type_name}/biographies"
+
+    # Ensure active biography directory exists
+    os.makedirs(biographies_path, exist_ok=True)
+
+    # Paths to move
+    archived_json = os.path.join(archive_path, f"{biography_name}.json")
+    biography_json = os.path.join(biographies_path, f"{biography_name}.json")
+    archived_folder = os.path.join(archive_path, biography_name)
+    biography_folder = os.path.join(biographies_path, biography_name)
+
+    # Check if archive exists before proceeding
+    if not os.path.exists(archived_json):
+        return jsonify({"error": "Archived biography not found"}), 404
+
+    try:
+        # Restore JSON file (remove "archived_on" key)
+        restored_data = load_json_as_dict(archived_json)
+        restored_data.pop("archived_on", None)  # Remove archive timestamp
+
+        # Save updated JSON in biographies folder
+        save_dict_as_json(biography_json, restored_data)
+
+        # Remove from archive
+        os.remove(archived_json)
+
+        # Restore subfolder if it exists
+        if os.path.exists(archived_folder):
+            shutil.move(archived_folder, biography_folder)
+
+        return jsonify({"message": "Biography restored successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": f"Failed to restore biography: {str(e)}"}), 500
+
+@app.route('/archived_biography/<string:type_name>/<string:biography_name>')
+def archived_biography_page(type_name, biography_name):
+    archive_path = f"./types/{type_name}/archived_biographies/{biography_name}.json"
+
+    if not os.path.exists(archive_path):
+        return f"""
+        <h1>Error: Archived Biography Not Found</h1>
+        <p>The file <code>{archive_path}</code> does not exist.</p>
+        <a href='/archived_biographies/{type_name}' class='back-link'>Back</a>
+        """, 404
+
+    # Load biography data
+    asDict = load_json_as_dict(archive_path)
+
+    # Extract correct name and timestamp
+    display_name = asDict.get("name", biography_name)  # Show actual name if present
+    readable_time = asDict.get("archived_on", "Unknown Time")  # Show when archived
+    description = asDict.get("description", "No description available.")
+
+    return f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>{display_name.capitalize()}</title>
+        <link rel="stylesheet" href="/static/styles.css">
+        <script>
+            function restoreBiography(typeName, biographyName) {{
+                if (confirm("Are you sure you want to restore this biography?")) {{
+                    fetch(`/biography_restore/${{typeName}}/${{biographyName}}`, {{ method: 'POST' }})
+                        .then(response => {{
+                            if (response.ok) {{
+                                alert("Biography restored successfully.");
+                                window.location.href = "/type/" + typeName;
+                            }}
+                        }});
+                }}
+            }}
+        </script>
+    </head>
+    <body>
+        <div class="container">
+            <a href="/archived_biographies/{type_name}" class="button">Back</a>
+            <h1>{display_name.capitalize()}</h1>
+            <p class="timestamp">Archived: {readable_time}</p>
+            <p class="description">{description}</p>
+
+            <!-- Restore Biography Button -->
+            <button class="restore-button" onclick="restoreBiography('{type_name}', '{biography_name}')">Restore Biography</button>
+        </div>
+    </body>
+    </html>
+    """
+
+
+@app.route('/biography_edit/<string:type_name>/<string:biography_name>', methods=['GET', 'POST'])
+def biography_edit(type_name, biography_name):
+    biography_path = f"./types/{type_name}/biographies/{biography_name}.json"
+    biography_folder_path = f"./types/{type_name}/biographies/{biography_name}"
+
+    if not os.path.exists(biography_path):
+        return f"""
+        <h1>Error: Biography Not Found</h1>
+        <p>The file <code>{biography_path}</code> does not exist.</p>
+        <a href='/type/{type_name}' class='back-link'>Back</a>
+        """, 404
+
+    # Load biography data
+    bio_data = load_json_as_dict(biography_path)
+
+    # Ensure timestamp exists; if missing, create one
+    if "timestamp" not in bio_data:
+        new_timestamp = str(int(time.time()))  # Generate a new timestamp
+        bio_data["timestamp"] = new_timestamp
+        bio_data["readable_time"] = datetime.fromtimestamp(int(new_timestamp)).strftime('%Y-%m-%d %H:%M:%S')
+
+        # Save the updated JSON with the timestamp
+        save_dict_as_json(biography_path, bio_data)
+
+    if request.method == 'POST':
+        new_name = request.form['biography_name'].strip().replace(" ", "_")
+        new_description = request.form['description']
+
+        # Use the existing timestamp
+        timestamp = bio_data["timestamp"]
+        new_biography_name = f"{new_name}_{timestamp}"  # Keep same timestamp
+        new_biography_path = f"./types/{type_name}/biographies/{new_biography_name}.json"
+        new_folder_path = f"./types/{type_name}/biographies/{new_biography_name}"
+
+        # Update the JSON data
+        bio_data["name"] = new_name
+        bio_data["description"] = new_description
+
+        # Rename JSON file and folder if the name has changed
+        if new_biography_name != biography_name:
+            os.rename(biography_path, new_biography_path)  # Rename JSON file
+            if os.path.exists(biography_folder_path):
+                os.rename(biography_folder_path, new_folder_path)  # Rename folder
+
+        # Save updated JSON
+        save_dict_as_json(new_biography_path, bio_data)
+
+        flash(f"Biography '{new_name}' updated successfully!", "success")
+        return redirect(f"/biography/{type_name}/{new_biography_name}")  # Redirect to new page
+
+    # Get current values
+    display_name = bio_data.get("name", "Unknown Name")
+    description = bio_data.get("description", "No description available.")
+
+    return f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Edit Biography</title>
+        <link rel="stylesheet" href="/static/styles.css">
+    </head>
+    <body>
+        <div class="edit-biography-container">
+            <a href='/biography/{type_name}/{biography_name}' class="back-link">Back</a>
+            <h1>Edit Biography</h1>
+
+            <form method="post">
+                <label for="biography_name">Biography Name:</label>
+                <input type="text" name="biography_name" value="{display_name}" required>
+
+                <label for="description">Description:</label>
+                <textarea name="description" required>{description}</textarea>
+
+                <button type="submit">Save Changes</button>
+            </form>
+        </div>
+    </body>
+    </html>
+    """
+
+
+@app.route('/biography_editlabel/<string:type_name>/<string:biography_name>/<int:entry_index>/<int:label_index>', methods=['GET','POST'])
+def biography_editlabel(type_name, biography_name, entry_index, label_index):
+    """
+    Displays the Edit Label page, letting us pick from subfolder-based label folders,
+    show images, and preserve confidence & custom typed values.
+    """
+
+    biography_path = f"./types/{type_name}/biographies/{biography_name}.json"
+    if not os.path.exists(biography_path):
+        return f"<h1>Error: Biography Not Found</h1>", 404
+
+    bio_data = load_json_as_dict(biography_path)
+    entries = bio_data.get("entries", [])
+    if entry_index >= len(entries):
+        return f"<h1>Error: Entry Not Found</h1>", 404
+
+    labels_list = entries[entry_index].get("labels", [])
+    if label_index >= len(labels_list):
+        return f"<h1>Error: Label Not Found</h1>", 404
+
+    label_data = labels_list[label_index]
+    label_name   = label_data.get("label","")
+    label_value  = label_data.get("value","")
+    confidence   = label_data.get("confidence", 1.0)
+
+    display_name = bio_data.get("name", biography_name)
+
+    # ----------------- POST: Save Changes -----------------
+    if request.method == 'POST':
+        updated_label_name = request.form.get("label_name", "").strip()
+        updated_label_value = request.form.get("label_value", "").strip()
+        if updated_label_value == "custom":
+            updated_label_value = request.form.get("custom_label_value","").strip()
+        
+        conf_str = request.form.get("confidence_slider","1.0")
+        try:
+            updated_conf = float(conf_str)
+        except ValueError:
+            updated_conf = 1.0
+
+        # Update the JSON
+        labels_list[label_index] = {
+            "label": updated_label_name,
+            "value": updated_label_value,
+            "confidence": updated_conf
+        }
+        save_dict_as_json(biography_path, bio_data)
+        flash("Label updated successfully!", "success")
+        return redirect(f"/biography/{type_name}/{biography_name}")
+
+    # ----------------- GET: Show Form -----------------
+    labels_path = f"./types/{type_name}/labels"
+    label_folders = [f for f in os.listdir(labels_path) if f.endswith(".json")]
+
+    def prettify_label_name(raw: str) -> str:
+        return " ".join(w.capitalize() for w in raw.split("_"))
+
+    # Build a data structure: { "folder_name": { "pretty_name":..., "values": [...], "images": {...} } }
+    label_info_dict = {}
+    for label_file in label_folders:
+        folder_name = os.path.splitext(label_file)[0]
+        label_folder_path = os.path.join(labels_path, folder_name)
+        label_json_path   = os.path.join(labels_path, label_file)
+        data_json = load_json_as_dict(label_json_path)
+
+        base_values = data_json.get("values", [])
+        images_map  = {}
+
+        if os.path.exists(label_folder_path) and os.path.isdir(label_folder_path):
+            subfolder_files = [sf for sf in os.listdir(label_folder_path) if sf.endswith(".json")]
+            sub_vals = [os.path.splitext(sf)[0] for sf in subfolder_files]
+            combined = list(set(base_values + sub_vals))
+
+            # Gather matching images
+            image_files = [im for im in os.listdir(label_folder_path) if im.endswith((".jpg",".png"))]
+            for val in combined:
+                matched_img = next((im for im in image_files if os.path.splitext(im)[0] == val), None)
+                if matched_img:
+                    images_map[val] = f"/serve_label_image/{type_name}/{folder_name}/{matched_img}"
+                else:
+                    images_map[val] = None
+        else:
+            combined = base_values
+
+        label_info_dict[folder_name] = {
+            "pretty_name": prettify_label_name(folder_name),
+            "values": combined,
+            "images": images_map
+        }
+
+    # Convert to JSON for front-end
+    import json
+    label_info_json = json.dumps(label_info_dict)
+
+    # 1) The top portion of our HTML
+    html_top = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Edit Label</title>
+        <link rel="stylesheet" href="/static/styles.css">
+        <script>
+            let labelInfo = {label_info_json};
+
+            function updateLabelValues() {{
+                let selectedFolder = document.getElementById("label_name").value;
+                let valSelect      = document.getElementById("label_value");
+                let customInput    = document.getElementById("custom_label_value");
+                let imgContainer   = document.getElementById("label_image");
+                let placeholder    = document.getElementById("image_placeholder");
+
+                // Reset
+                valSelect.innerHTML = "";
+                customInput.style.display = "none";
+                customInput.value = "";
+
+                if (labelInfo[selectedFolder]) {{
+                    let vals = labelInfo[selectedFolder].values;
+                    vals.forEach(v => {{
+                        let opt = document.createElement("option");
+                        opt.value = v;
+                        opt.textContent = v;
+                        valSelect.appendChild(opt);
+                    }});
+
+                    // always add 'custom'
+                    let customOpt = document.createElement("option");
+                    customOpt.value = "custom";
+                    customOpt.textContent = "Enter Custom Value";
+                    valSelect.appendChild(customOpt);
+                }} else {{
+                    // no known folder => only 'custom'
+                    let onlyCust = document.createElement("option");
+                    onlyCust.value = "custom";
+                    onlyCust.textContent = "Enter Custom Value";
+                    valSelect.appendChild(onlyCust);
+                }}
+
+                // Hide or reset the image placeholder
+                imgContainer.style.display = "none";
+                placeholder.style.display  = "none";
+            }}
+
+            function checkCustomValue() {{
+                let folderSel   = document.getElementById("label_name").value;
+                let valSelect   = document.getElementById("label_value");
+                let customInput = document.getElementById("custom_label_value");
+
+                let imgContainer = document.getElementById("label_image");
+                let placeholder  = document.getElementById("image_placeholder");
+
+                if (valSelect.value === "custom") {{
+                    valSelect.style.display = "none";
+                    customInput.style.display = "block";
+                    customInput.required = true;
+
+                    imgContainer.style.display = "none";
+                    placeholder.style.display  = "block";
+                    placeholder.innerHTML = "No image for custom value";
+                }} else {{
+                    customInput.style.display = "none";
+                    customInput.required = false;
+                    valSelect.style.display = "inline-block";
+
+                    let chosenVal = valSelect.value;
+                    let imagesMap = labelInfo[folderSel].images;
+                    if (imagesMap[chosenVal]) {{
+                        imgContainer.src = imagesMap[chosenVal];
+                        imgContainer.style.display = "block";
+                        placeholder.style.display  = "none";
+                    }} else {{
+                        placeholder.style.display = "block";
+                        placeholder.innerHTML = "Expected Image: " + chosenVal + ".jpg or .png";
+                        imgContainer.style.display = "none";
+                    }}
+                }}
+            }}
+
+            window.onload = function() {{
+                updateLabelValues();
+
+                let existingVal = "{label_value}";
+                let valSelect   = document.getElementById("label_value");
+
+                let found = false;
+                for (let i = 0; i < valSelect.options.length; i++) {{
+                    if (valSelect.options[i].value === existingVal) {{
+                        valSelect.selectedIndex = i;
+                        found = true;
+                        break;
+                    }}
+                }}
+
+                if (!found) {{
+                    for (let i = 0; i < valSelect.options.length; i++) {{
+                        if (valSelect.options[i].value === "custom") {{
+                            valSelect.selectedIndex = i;
+                            break;
+                        }}
+                    }}
+                    document.getElementById("custom_label_value").value = existingVal;
+                }}
+
+                checkCustomValue();
+            }};
+        </script>
+    </head>
+    <body>
+        <div class="edit-label-container">
+            <a href='/biography/{type_name}/{biography_name}' class="back-link">Back</a>
+            <h1>Edit Label for {display_name}</h1>
+
+            <form method="post">
+                <!-- Label Folder -->
+                <label for="label_name">Label Folder:</label>
+                <select name="label_name" id="label_name"
+                        onchange="updateLabelValues(); checkCustomValue();" required>
+    """
+
+    # 2) We build the <option> list in Python
+    html_options = ""
+    for folder, info in label_info_dict.items():
+        selected = "selected" if folder == label_name else ""
+        html_options += f'<option value="{folder}" {selected}>{info["pretty_name"]}</option>'
+
+    # 3) The bottom portion of the HTML
+    html_bottom = f"""
+                </select>
+
+                <!-- Image or placeholder -->
+                <p id="image_placeholder" style="color: #888; font-style: italic; display: none;"></p>
+                <img id="label_image" style="display: none; max-width: 150px; margin-top: 5px;"><br><br>
+
+                <!-- Label Value -->
+                <label for="label_value">Label Value:</label>
+                <select name="label_value" id="label_value" onchange="checkCustomValue()" required>
+                    <!-- Populated dynamically -->
+                </select>
+                <input type="text" id="custom_label_value" name="custom_label_value"
+                       placeholder="Enter custom value" style="display:none;"><br><br>
+
+                <!-- Confidence Slider -->
+                <label for="confidence_slider">Confidence (0.0 - 1.0):</label>
+                <input type="range" id="confidence_slider" name="confidence_slider"
+                       min="0" max="1" step="0.01" value="{confidence}"
+                       oninput="sliderValueDisplay.value = confidence_slider.value">
+                <output id="sliderValueDisplay">{confidence}</output><br><br>
+
+                <button type="submit">Save Changes</button>
+            </form>
+        </div>
+    </body>
+    </html>
+    """
+
+    # Finally, combine all parts into one string
+    final_html = html_top + html_options + html_bottom
+    return final_html
+
+
+
+
+# @app.route('/biography_editlabel_submit/<string:type_name>/<string:biography_name>/<int:entry_index>/<int:label_index>', methods=['POST'])
+# def biography_editlabel_submit(type_name, biography_name, entry_index, label_index):
+#     biography_path = f"./types/{type_name}/biographies/{biography_name}.json"
+
+#     if not os.path.exists(biography_path):
+#         return "<h1>Error: Biography Not Found</h1>", 404
+
+#     bio_data = load_json_as_dict(biography_path)
+#     entries = bio_data.get("entries", [])
+
+#     if entry_index >= len(entries):
+#         return "<h1>Error: Entry Not Found</h1>", 404
+
+#     labels = entries[entry_index].get("labels", [])
+#     if label_index >= len(labels):
+#         return "<h1>Error: Label Not Found</h1>", 404
+
+#     # Get updated label name and value
+#     updated_label_name = request.form["label_name"]
+#     updated_label_value = request.form["label_value"]
+
+#     # Handle custom values
+#     if updated_label_value == "custom":
+#         updated_label_value = request.form.get("custom_label_value", "").strip()
+
+#     # Update label
+#     labels[label_index] = {
+#         "label": updated_label_name,
+#         "value": updated_label_value
+#     }
+
+#     # Save changes
+#     save_dict_as_json(biography_path, bio_data)
+
+#     return redirect(f"/biography/{type_name}/{biography_name}", code=302)
+
+@app.route('/biography_editlabel_submit/<string:type_name>/<string:biography_name>/<int:entry_index>/<int:label_index>', methods=['POST'])
+def biography_editlabel_submit(type_name, biography_name, entry_index, label_index):
+    """
+    POST route for saving changes to an existing label (name, value, confidence).
+    This is separate from the GET-based `biography_editlabel` route.
+    """
+
+    # 1. Load the biography JSON
+    biography_path = f"./types/{type_name}/biographies/{biography_name}.json"
+    if not os.path.exists(biography_path):
+        return "<h1>Error: Biography Not Found</h1>", 404
+
+    bio_data = load_json_as_dict(biography_path)
+    entries = bio_data.get("entries", [])
+
+    # Ensure the entry index is valid
+    if entry_index >= len(entries):
+        flash("Error: Entry index out of range.", "error")
+        return redirect(f"/biography/{type_name}/{biography_name}")
+
+    # Labels in that entry
+    labels_list = entries[entry_index].get("labels", [])
+    if label_index >= len(labels_list):
+        flash("Error: Label index out of range.", "error")
+        return redirect(f"/biography/{type_name}/{biography_name}")
+
+    # 2. Parse form fields
+    updated_label_name = request.form.get("label_name", "").strip()
+    updated_label_value = request.form.get("label_value", "").strip()
+
+    # If the user chose "custom", use the typed text
+    if updated_label_value == "custom":
+        custom_input = request.form.get("custom_label_value", "").strip()
+        if custom_input:
+            updated_label_value = custom_input
+        else:
+            flash("Error: Custom label value cannot be empty.", "error")
+            return redirect(f"/biography/{type_name}/{biography_name}")
+
+    # Parse confidence slider
+    confidence_str = request.form.get("confidence_slider", "1.0").strip()
+    try:
+        updated_confidence = float(confidence_str)
+    except ValueError:
+        updated_confidence = 1.0
+
+    # 3. Update the JSON
+    labels_list[label_index] = {
+        "label": updated_label_name,   # raw folder name or label name
+        "value": updated_label_value,  # chosen or typed value
+        "confidence": updated_confidence
+    }
+
+    # 4. Save
+    save_dict_as_json(biography_path, bio_data)
+
+    flash("Label updated successfully!", "success")
+    return redirect(f"/biography/{type_name}/{biography_name}")
+
+
+
+@app.route('/events_add', methods=['GET','POST'])
+def events_add():
+    """
+    Lets a user create a new event referencing multiple types (people, organisations, etc.),
+    with an optional date approach (exact/partial) or subfolder approach (like 'life_decade').
+    """
+
+    # 1) PATH to the events directory
+    events_biographies_path = "./types/events/biographies"
+
+    # Ensure the folder exists
+    os.makedirs(events_biographies_path, exist_ok=True)
+
+    # 2) If POST => process form submission
+    if request.method == 'POST':
+        # a) Basic fields
+        relationship = request.form.get("relationship","").strip()  # e.g. "EMPLOYED_BY"
+        person_id    = request.form.get("person_id","").strip()
+        org_id       = request.form.get("org_id","").strip()
+        notes        = request.form.get("notes","").strip()
+
+        # b) Approach => date or subfolder
+        chosen_approach = request.form.get("approach","date")
+        # if date => partial vs exact
+        date_mode = request.form.get("date_mode","exact")
+        start_value = ""
+        end_value   = ""
+
+        if chosen_approach == "date":
+            # user picking partial vs exact
+            if date_mode == "exact":
+                start_value = request.form.get("start_full_date","").strip()  # e.g. "1939-09-01"
+                end_value   = request.form.get("end_full_date","").strip()
+            else:
+                start_value = request.form.get("start_partial_year","").strip()  # e.g. "1939"
+                end_value   = request.form.get("end_partial_year","").strip()
+        else:
+            # subfolder approach => e.g. 'life_decade'
+            # user picks from subfolder for start, end
+            start_sub_val = request.form.get("start_sub_val","").strip()
+            if start_sub_val == "custom":
+                start_sub_val = request.form.get("start_custom_val","").strip() or "Custom"
+            end_sub_val = request.form.get("end_sub_val","").strip()
+            if end_sub_val == "custom":
+                end_sub_val = request.form.get("end_custom_val","").strip() or "Custom"
+
+            start_value = start_sub_val
+            end_value   = end_sub_val
+
+        # c) Build new event JSON structure
+        import time
+        timestamp = str(int(time.time()))  # unique-ish
+        new_event_id = f"E_{timestamp}"
+        new_event_data = {
+            "id": new_event_id,
+            "relationship": relationship,
+            "person_id": person_id,
+            "org_id": org_id,
+            "approach": chosen_approach,  # "date" or "life_decade" or something
+            "date_mode": date_mode,       # "exact" or "partial" if date
+            "start_value": start_value,
+            "end_value": end_value,
+            "notes": notes
+        }
+
+        # d) Save new event to e.g. /types/events/biographies/E_<timestamp>.json
+        new_event_path = os.path.join(events_biographies_path, f"{new_event_id}.json")
+        save_dict_as_json(new_event_path, new_event_data)
+
+        flash(f"Event {new_event_id} created successfully!", "success")
+        return redirect("/events_list")  # or wherever you want to go
+
+    # 3) If GET => show form
+    # We'll gather known people and org IDs from your existing directories to populate dropdowns
+
+    # known people
+    people_path = "./types/people/biographies"
+    people_files = [f for f in os.listdir(people_path) if f.endswith(".json")]
+    people_options = []
+    for pf in people_files:
+        # load each JSON, extract ID or name
+        p_data = load_json_as_dict(os.path.join(people_path, pf))
+        pid    = p_data.get("id", pf[:-5])  # fallback
+        pname  = p_data.get("name", pid)
+        people_options.append((pid, pname))
+
+    # known organisations
+    org_path = "./types/organisations/biographies"
+    org_files = [f for f in os.listdir(org_path) if f.endswith(".json")]
+    org_options = []
+    for of in org_files:
+        o_data = load_json_as_dict(os.path.join(org_path, of))
+        oid    = o_data.get("id", of[:-5])
+        oname  = o_data.get("name", oid)
+        org_options.append((oid, oname))
+
+    # We'll also define relationships
+    possible_relationships = ["EMPLOYED_BY","LIVED_IN","FOUNDED","COLLABORATED","VISITED"]
+
+    # We'll define a plain triple-quoted string for the form
+    html_form = r"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Add Event</title>
+      <style>
+        .hidden { display: none; }
+      </style>
+      <script>
+      function onApproachChange() {
+        let apSel = document.getElementById("approach").value;
+        let dateSec = document.getElementById("date_approach_section");
+        let subSec  = document.getElementById("subfolder_approach_section");
+        if(apSel==="date") {
+          dateSec.style.display="block";
+          subSec.style.display="none";
+        } else {
+          dateSec.style.display="none";
+          subSec.style.display="block";
+        }
+      }
+      function onDateModeChange(prefix) {
+        let exactRad = document.getElementById(prefix+"_date_mode_exact");
+        let partialRad= document.getElementById(prefix+"_date_mode_partial");
+        let exactDiv = document.getElementById(prefix+"_exactDiv");
+        let partDiv  = document.getElementById(prefix+"_partialDiv");
+        if(exactRad.checked) {
+          exactDiv.style.display="block";
+          partDiv.style.display="none";
+        } else {
+          exactDiv.style.display="none";
+          partDiv.style.display="block";
+        }
+      }
+      function checkCustom(prefix) {
+        let sel= document.getElementById(prefix+"_sub_val");
+        let cust= document.getElementById(prefix+"_custom_val");
+        if(sel.value==="custom"){
+          sel.style.display="none";
+          cust.style.display="inline-block";
+        } else {
+          cust.style.display="none";
+          sel.style.display="inline-block";
+        }
+      }
+      window.onload=function(){
+        onApproachChange();
+        onDateModeChange("start");
+        onDateModeChange("end");
+      }
+      </script>
+    </head>
+    <body>
+      <h1>Add Event</h1>
+      <form method="post">
+        <label>Relationship:</label>
+        <select name="relationship" id="relationship">
+          RELATIONSHIP_OPTIONS
+        </select>
+        <br><br>
+
+        <label>Person:</label>
+        <select name="person_id" id="person_id">
+          PEOPLE_OPTIONS
+        </select>
+        <br>
+
+        <label>Organisation:</label>
+        <select name="org_id" id="org_id">
+          ORG_OPTIONS
+        </select>
+        <br>
+
+        <label>Notes:</label>
+        <input type="text" name="notes" size="50"><br><br>
+
+        <h2>Approach:</h2>
+        <select id="approach" name="approach" onchange="onApproachChange()">
+          <option value="date">Date</option>
+          <option value="life_decade">Life Decade</option>
+        </select>
+
+        <div id="date_approach_section" style="display:none;">
+          <!-- Start date approach -->
+          <h3>Start (Date)</h3>
+          <label>
+            <input type="radio" id="start_date_mode_exact" name="date_mode" value="exact"
+                   onclick="onDateModeChange('start')" checked>Exact
+          </label>
+          <label>
+            <input type="radio" id="start_date_mode_partial" name="date_mode" value="partial"
+                   onclick="onDateModeChange('start')">Partial
+          </label>
+          <div id="start_exactDiv">
+            <label>Exact Start Date:</label>
+            <input type="date" name="start_full_date">
+          </div>
+          <div id="start_partialDiv" class="hidden">
+            <label>Partial Start Year:</label>
+            <input type="number" name="start_partial_year" min="1" max="9999">
+          </div>
+
+          <!-- End date approach -->
+          <h3>End (Date)</h3>
+          <label>
+            <input type="radio" id="end_date_mode_exact" name="end_date_mode" value="exact"
+                   onclick="onDateModeChange('end')" checked>Exact
+          </label>
+          <label>
+            <input type="radio" id="end_date_mode_partial" name="end_date_mode" value="partial"
+                   onclick="onDateModeChange('end')">Partial
+          </label>
+          <div id="end_exactDiv">
+            <label>Exact End Date:</label>
+            <input type="date" name="end_full_date">
+          </div>
+          <div id="end_partialDiv" class="hidden">
+            <label>Partial End Year:</label>
+            <input type="number" name="end_partial_year" min="1" max="9999">
+          </div>
+        </div>
+
+        <div id="subfolder_approach_section" style="display:none;">
+          <!-- e.g. life_decade approach -->
+          <h3>Start (Subfolder)</h3>
+          <select id="start_sub_val" name="start_sub_val" onchange="checkCustom('start')">
+            <option value="1920s">1920s</option>
+            <option value="1930s">1930s</option>
+            <option value="custom">Enter Custom Value</option>
+          </select>
+          <input type="text" id="start_custom_val" name="start_custom_val" style="display:none;">
+
+          <h3>End (Subfolder)</h3>
+          <select id="end_sub_val" name="end_sub_val" onchange="checkCustom('end')">
+            <option value="1920s">1920s</option>
+            <option value="1930s">1930s</option>
+            <option value="custom">Enter Custom Value</option>
+          </select>
+          <input type="text" id="end_custom_val" name="end_custom_val" style="display:none;">
+        </div>
+
+        <br><br>
+        <button type="submit">Add Event</button>
+      </form>
+    </body>
+    </html>
+    """
+
+    # 4) We'll dynamically build the <option> lists for relationships, people, orgs
+
+    # relationship
+    possible_relationships = ["EMPLOYED_BY","LIVED_IN","VISITED","FOUNDED","COLLABORATED"]
+    relationship_html = "".join(f'<option value="{r}">{r}</option>' for r in possible_relationships)
+
+    # People
+    people_dir = "./types/people/biographies"
+    people_opts = []
+    if os.path.exists(people_dir):
+        for pf in os.listdir(people_dir):
+            if pf.endswith(".json"):
+                p_data = load_json_as_dict(os.path.join(people_dir, pf))
+                pid    = p_data.get("id", pf[:-5])
+                pname  = p_data.get("name", pid)
+                people_opts.append(f'<option value="{pid}">{pname}</option>')
+    people_html = "".join(people_opts)
+
+    # Orgs
+    orgs_dir = "./types/organisations/biographies"
+    org_opts = []
+    if os.path.exists(orgs_dir):
+        for of in os.listdir(orgs_dir):
+            if of.endswith(".json"):
+                o_data = load_json_as_dict(os.path.join(orgs_dir, of))
+                oid    = o_data.get("id", of[:-5])
+                oname  = o_data.get("name", oid)
+                org_opts.append(f'<option value="{oid}">{oname}</option>')
+    orgs_html = "".join(org_opts)
+
+    # 5) Insert them into the HTML with .replace
+    final_form = html_form
+    final_form = final_form.replace("RELATIONSHIP_OPTIONS", relationship_html)
+    final_form = final_form.replace("PEOPLE_OPTIONS", people_html)
+    final_form = final_form.replace("ORG_OPTIONS", orgs_html)
+
+    return final_form
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5001, debug=True)
+

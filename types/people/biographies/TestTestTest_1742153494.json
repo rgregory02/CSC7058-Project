@@ -1,0 +1,44 @@
+{
+    "name": "TestTestTest",
+    "timestamp": "1742153494",
+    "readable_time": "2025-03-16 19:31:34",
+    "description": "Test case 123",
+    "entries": [
+        {
+            "time_period": {
+                "start": {
+                    "type": "time",
+                    "label": "life_decade",
+                    "value": "30",
+                    "confidence": 1.0,
+                    "relationship": "exact"
+                },
+                "end": {
+                    "type": "time",
+                    "label": "life_decade",
+                    "value": "60",
+                    "confidence": 1.0,
+                    "relationship": "exact"
+                }
+            },
+            "labels": [
+                {
+                    "label": "onet_occupation",
+                    "value": "plumber"
+                },
+                {
+                    "label": "onet_occupation",
+                    "value": "teacher"
+                },
+                {
+                    "label": "celebea_face_hq",
+                    "value": "0"
+                },
+                {
+                    "label": "celebea_face_hq",
+                    "value": "0"
+                }
+            ]
+        }
+    ]
+}

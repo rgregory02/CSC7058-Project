@@ -1,0 +1,25 @@
+{
+    "description": "Tall building",
+    "entries": [
+        {
+            "time_period": {
+                "start": {
+                    "type": "time",
+                    "label": "date",
+                    "value": "gd",
+                    "confidence": 1.0,
+                    "relationship": "exact"
+                },
+                "end": {
+                    "type": "time",
+                    "label": "life_decade",
+                    "value": "27",
+                    "confidence": 1.0,
+                    "relationship": "exact"
+                }
+            },
+            "labels": []
+        }
+    ],
+    "archived_on": "2025-03-16 00:32:16"
+}

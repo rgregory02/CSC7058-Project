@@ -1,0 +1,17 @@
+{
+    "description":"A face of a celebrity",
+    "properties":{
+        "hair_colour":{
+            "meaning":"Hair() colour()",
+            "value":"Blonde",
+            "confidence":1.0,
+            "relationship":"exact"
+        },
+        "eye_colour":{
+            "meaning":"Eye() colour()",
+            "value":"Blue",
+            "confidence":1.0,
+            "relationship":"exact"
+        }
+    }
+}

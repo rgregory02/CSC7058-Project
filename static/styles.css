@@ -1,0 +1,807 @@
+/* 🌟 GENERAL STYLES */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    background-color: #f4f4f4;
+    margin: 0;
+    padding: 20px;
+    text-align: center;
+    color: #333;
+}
+
+.container {
+    max-width: 850px;
+    margin: auto;
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease-in-out;
+}
+
+/* 📝 HEADINGS & TEXT */
+h1 {
+    font-size: 28px;
+    color: #222;
+    margin-bottom: 20px;
+    font-weight: 600;
+}
+
+h2 {
+    font-size: 22px;
+    color: #444;
+    margin-bottom: 15px;
+    font-weight: 500;
+}
+
+p {
+    font-size: 16px;
+    color: #555;
+    line-height: 1.6;
+}
+
+/* 🔙 BACK LINK */
+.back-link {
+    display: inline-block;
+    margin-bottom: 15px;
+    text-decoration: none;
+    color: #007BFF;
+    font-weight: bold;
+    padding: 12px 18px;
+    border-radius: 8px;
+    background-color: white;
+    border: 2px solid #007BFF;
+    transition: background 0.3s ease, color 0.3s ease;
+}
+
+.back-link:hover {
+    background-color: #007BFF;
+    color: white;
+}
+
+/* 📂 TYPE BUTTONS */
+.type-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.type-button {
+    display: inline-block;
+    width: 260px;
+    padding: 14px;
+    font-size: 17px;
+    font-weight: bold;
+    text-align: center;
+    text-decoration: none;
+    background-color: #007BFF;
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease-in-out;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+}
+
+.type-button:hover {
+    background-color: #0056b3;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 10px rgba(0, 0, 0, 0.2);
+}
+
+/* 📖 BIOGRAPHY BUTTONS */
+.biography-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.biography-button {
+    display: inline-block;
+    width: 230px;
+    padding: 14px;
+    font-size: 17px;
+    font-weight: bold;
+    text-align: center;
+    text-decoration: none;
+    background-color: #007BFF;
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease-in-out;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+}
+
+.biography-button:hover {
+    background-color: #0056b3;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 10px rgba(0, 0, 0, 0.2);
+}
+
+/* 🚀 BUTTON STYLING */
+button, .button, .add-entry-button, .add-label-button, .delete-button {
+    display: inline-block;
+    padding: 14px 20px;
+    margin: 10px;
+    font-size: 16px;
+    font-weight: bold;
+    text-align: center;
+    text-decoration: none;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: background 0.3s ease, transform 0.1s ease;
+}
+
+button:hover, .button:hover, .add-entry-button:hover, .add-label-button:hover {
+    transform: translateY(-2px);
+}
+
+/* 🎨 SPECIAL BUTTON COLORS */
+.delete-button { background: #dc3545; }
+.delete-button:hover { background: #c82333; }
+
+.delete-entry-button { background: orange; }
+.delete-entry-button:hover { background: darkorange; }
+
+.add-entry-button { background: #28a745; }
+.add-entry-button:hover { background: #218838; }
+
+.add-label-button { background: #ffc107; color: black; }
+.add-label-button:hover { background: #e0a800; }
+
+/* 📋 ENTRIES */
+.entries-container {
+    margin-top: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 15px;
+}
+
+.entry {
+    background: #f9f9f9;
+    padding: 18px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease-in-out;
+}
+
+.entry:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* 🏷 LABELS */
+.labels {
+    margin-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+}
+
+.label {
+    background: #e3e3e3;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 14px;
+    display: inline-block;
+    margin: 5px;
+    font-weight: bold;
+}
+
+/* 🔹 ENTRY FORM STYLING */
+.entry-container {
+    margin-top: 20px;
+    text-align: left;
+}
+
+/* 🔹 INPUT FIELD STYLING */
+.input-field {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    margin: 10px 0;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+}
+
+/* 🔹 DROPDOWN STYLING */
+.dropdown {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    margin: 10px 0;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+}
+
+/* 📂 ADD BIOGRAPHY BUTTON */
+.add-biography {
+    margin-top: 20px;
+    text-align: center;
+}
+
+.add-biography-button {
+    background-color: #4CAF50;
+    color: white;
+    padding: 12px 18px;
+    font-size: 16px;
+    border-radius: 8px;
+    transition: 0.3s ease-in-out;
+    border: none;
+    cursor: pointer;
+}
+
+.add-biography-button:hover {
+    background-color: #45a049;
+    transform: translateY(-2px);
+}
+
+/* 📖 TIMESTAMP */
+.timestamp {
+    font-size: 14px;
+    color: #666;
+    margin-top: 5px;
+}
+
+/* 🎯 SMOOTH UI EXPERIENCE */
+* {
+    box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+    .container {
+        max-width: 95%;
+        padding: 15px;
+    }
+}
+
+/* 🎯 EDIT ENTRY PAGE */
+.edit-entry-container {
+    max-width: 700px;
+    margin: auto;
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease-in-out;
+}
+
+.edit-entry-container h1 {
+    font-size: 26px;
+    color: #222;
+    margin-bottom: 15px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.edit-entry-container label {
+    font-weight: bold;
+    display: block;
+    text-align: left;
+    margin-top: 10px;
+}
+
+.edit-entry-container input,
+.edit-entry-container select {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    margin-top: 8px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+}
+
+.edit-entry-container button {
+    background-color: #007BFF;
+    color: white;
+    padding: 12px 18px;
+    font-size: 16px;
+    border-radius: 8px;
+    transition: 0.3s ease-in-out;
+    border: none;
+    cursor: pointer;
+    margin-top: 15px;
+    width: 100%;
+}
+
+.edit-entry-container button:hover {
+    background-color: #0056b3;
+    transform: translateY(-2px);
+}
+
+/* 🔄 VIEW ARCHIVED BIOGRAPHIES */
+
+.archived-biographies-container {
+    max-width: 800px;
+    margin: auto;
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease-in-out;
+}
+
+.archived-biographies-container:hover {
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+}
+
+.archived-biographies-container h1 {
+    font-size: 26px;
+    color: #222;
+    margin-bottom: 15px;
+    font-weight: 600;
+    text-align: center;
+}
+
+/* 🔹 ARCHIVED BIOGRAPHY ITEM */
+.archived-biography-item {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
+    margin-bottom: 10px;
+    transition: all 0.3s ease-in-out;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.archived-biography-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 12px rgba(0, 0, 0, 0.15);
+}
+
+.archived-biography-item strong {
+    font-size: 18px;
+    color: #007BFF;
+}
+
+/* 🔄 RESTORE BUTTON */
+.restore-button {
+    background-color: #28a745;
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.3s ease-in-out, transform 0.1s ease-in-out;
+    margin-top: 10px;
+    display: inline-block;
+}
+
+.restore-button:hover {
+    background-color: #218838;
+    transform: scale(1.05);
+}
+
+/* 🔹 ADD BIOGRAPHY BUTTON - REFINED */
+.add-biography-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 20px;
+}
+
+.add-biography-button {
+    display: inline-block;
+    background: linear-gradient(135deg, #28a745, #218838); /* Smooth gradient */
+    color: white;
+    font-size: 18px;
+    font-weight: bold;
+    text-align: center;
+    padding: 12px 20px;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: all 0.3s ease-in-out;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.add-biography-button:hover {
+    background: linear-gradient(135deg, #218838, #1e7e34);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* 🔄 VIEW ARCHIVED BIOGRAPHIES LINK */
+.view-archived-container {
+    text-align: center;
+    margin-top: 15px;
+}
+
+.view-archived-link {
+    display: inline-block;
+    font-size: 16px;
+    color: #4A4A4A;
+    text-decoration: none;
+    font-weight: bold;
+    padding: 10px 15px;
+    border-radius: 6px;
+    transition: color 0.3s ease-in-out, transform 0.2s ease-in-out;
+}
+
+.view-archived-link:hover {
+    color: #007BFF;
+    transform: scale(1.05);
+}
+
+
+/* 🏷 EDIT LABEL PAGE */
+.edit-label-container {
+    max-width: 700px;
+    margin: auto;
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease-in-out;
+}
+
+.edit-label-container h1 {
+    font-size: 26px;
+    color: #222;
+    margin-bottom: 15px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.edit-label-container label {
+    font-weight: bold;
+    display: block;
+    text-align: left;
+    margin-top: 10px;
+}
+
+.edit-label-container select,
+.edit-label-container input {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    margin-top: 8px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+}
+
+.edit-label-container button {
+    background-color: #ffc107;
+    color: black;
+    padding: 12px 18px;
+    font-size: 16px;
+    border-radius: 8px;
+    transition: 0.3s ease-in-out;
+    border: none;
+    cursor: pointer;
+    margin-top: 15px;
+    width: 100%;
+}
+
+.edit-label-container button:hover {
+    background-color: #e0a800;
+    transform: translateY(-2px);
+}
+
+.cancel-button {
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    padding: 12px 18px;
+    cursor: pointer;
+    border-radius: 8px;
+    font-weight: bold;
+    transition: background 0.3s ease-in-out;
+    width: 100%;
+    margin-top: 10px;
+}
+
+.cancel-button:hover {
+    background-color: #c82333;
+}
+
+.label-description {
+    font-size: 14px;
+    color: #555;
+    margin-top: 10px;
+    font-style: italic;
+}
+
+/* 🎯 SMOOTH UI EXPERIENCE */
+* {
+    box-sizing: border-box;
+}
+/* 📌 EDIT ENTRY SECTION */
+.edit-entry-container {
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+    text-align: center;
+    max-width: 600px;
+    margin: auto;
+}
+
+/* 🔹 ENTRY INFO (FROM/TO DETAILS) */
+.entry-info {
+    font-size: 16px;
+    color: #333;
+    margin-bottom: 15px;
+    font-weight: bold;
+}
+
+/* 🔹 ENTRY BUTTONS */
+.entry-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.edit-entry-button {
+    display: inline-block;
+    background-color: #007BFF;
+    color: white;
+    text-decoration: none;
+    font-weight: bold;
+    padding: 10px 15px;
+    border-radius: 6px;
+    font-size: 16px;
+    transition: all 0.3s ease-in-out;
+    border: none;
+    cursor: pointer;
+    text-align: center;
+}
+
+.edit-entry-button:hover {
+    background-color: #0056b3;
+    transform: scale(1.05);
+}
+
+/* 🔹 Remove Entry Button */
+.remove-entry-button {
+    background: #e0e0e0;
+    color: #000;
+    font-size: 16px;
+    font-weight: bold;
+    padding: 10px 18px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.3s ease-in-out, transform 0.1s ease-in-out;
+}
+
+.remove-entry-button:hover {
+    background: #d6d6d6;
+    transform: scale(1.05);
+}
+
+/* 🔹 Add Label Button */
+.add-label-button {
+    background: #ffc107;
+    color: black;
+    font-size: 16px;
+    font-weight: bold;
+    padding: 10px 18px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.3s ease-in-out, transform 0.1s ease-in-out;
+}
+
+.add-label-button:hover {
+    background: #e0a800;
+    transform: scale(1.05);
+}
+
+@media (max-width: 768px) {
+    .edit-entry-container,
+    .archived-biographies-container,
+    .edit-label-container {
+        max-width: 95%;
+        padding: 20px;
+    }
+}
+/* 🏷 Label Box Styling */
+.label-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.label-box {
+    background: #f9f9f9;
+    padding: 12px 18px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid #ddd;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease-in-out;
+    text-align: center;
+    min-width: 150px;
+}
+
+.label-box:hover {
+    background: #e9ecef;
+    border-color: #bbb;
+}
+
+/* 🎨 Edit Label Button */
+.edit-label-button {
+    background-color: #007BFF;
+    color: white;
+    text-decoration: none;
+    font-weight: bold;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: all 0.3s ease-in-out;
+    border: none;
+    cursor: pointer;
+    text-align: center;
+}
+
+.edit-label-button:hover {
+    background-color: #0056b3;
+    transform: scale(1.05);
+}
+
+/* ❌ Remove Label Button */
+.remove-label-button {
+    background-color: #dc3545;
+    color: white;
+    font-weight: bold;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease-in-out;
+}
+
+.remove-label-button:hover {
+    background-color: #c82333;
+    transform: scale(1.05);
+}
+
+.search-container {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+#search-bar {
+    width: 100%;
+    max-width: 400px;
+    padding: 10px;
+    font-size: 16px;
+    border: 2px solid #ccc;
+    border-radius: 8px;
+    outline: none;
+    transition: 0.3s ease-in-out;
+}
+
+#search-bar:focus {
+    border-color: #007BFF;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+}
+
+/* 🔍 SEARCH INPUT */
+.search-container {
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+.search-input {
+    width: 80%;
+    padding: 12px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+}
+
+/* 🔄 PAGINATION BUTTONS */
+.pagination-container {
+    text-align: center;
+    margin-top: 15px;
+}
+
+.pagination-button {
+    padding: 10px 15px;
+    font-size: 16px;
+    background-color: #021c37;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.3s ease-in-out;
+}
+
+.pagination-button:hover {
+    background-color: #7c60c8;
+}
+
+/* 📌 LABEL INFO */
+.label-info {
+    font-size: 14px;
+    color: #666;
+    margin-top: 5px;
+}
+
+/* 🔍 SEARCH & FILTER CONTAINER */
+.search-container, .filter-container {
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+.search-input {
+    width: 70%;
+    padding: 12px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    transition: 0.3s ease-in-out;
+}
+
+.search-input:focus {
+    border-color: #007BFF;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+}
+
+/* 🔄 RESET BUTTON */
+.reset-button {
+    padding: 10px 15px;
+    font-size: 16px;
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.3s ease-in-out;
+}
+
+.reset-button:hover {
+    background-color: #c82333;
+}
+
+/* 📌 FILTER OPTIONS (CHECKBOXES) */
+.filter-container {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+
+.filter-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 10px;
+}
+
+.filter-options label {
+    font-size: 14px;
+    background: white;
+    padding: 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease-in-out;
+    border: 1px solid #ccc;
+}
+
+.filter-options label:hover {
+    background: #e9ecef;
+}

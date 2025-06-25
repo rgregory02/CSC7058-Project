@@ -1,0 +1,25 @@
+{
+    "description": "N/A",
+    "entries": [
+        {
+            "time_period": {
+                "start": {
+                    "type": "time",
+                    "label": "life_decade",
+                    "value": "10",
+                    "confidence": 1.0,
+                    "relationship": "exact"
+                },
+                "end": {
+                    "type": "time",
+                    "label": "life_decade",
+                    "value": "40",
+                    "confidence": 1.0,
+                    "relationship": "exact"
+                }
+            },
+            "labels": []
+        }
+    ],
+    "archived_on": "2025-02-26 15:04:22"
+}
