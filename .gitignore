@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# VS Code settings
+.vscode/
+
+# Environment / config files
+.env
+*.log
+
+# System files
+*.sqlite
+
+# Node or package folders (if ever used)
+node_modules/
