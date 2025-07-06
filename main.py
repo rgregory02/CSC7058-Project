@@ -3,13 +3,21 @@ import json
 import shutil  # For moving files and folders
 import time  # For unique timestamps
 
-from flask import Flask, Response, jsonify, request, url_for, redirect, render_template, flash, get_flashed_messages
+from flask import Flask, Response, jsonify, request, url_for, redirect, render_template, flash, get_flashed_messages, send_from_directory
 from urllib.parse import quote, unquote
 from datetime import datetime  # For readable timestamps
 
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'the_random_string')  # Use environment variable if available
+
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(
+        os.path.join(app.root_path, 'static'),
+        'favicon.ico',
+        mimetype='image/vnd.microsoft.icon'
+    )
 
 def load_json_as_dict(file_path):
     """
@@ -52,117 +60,6 @@ def printButton(button_label,url):
     return "<a href='"+url+"'><button>"+button_label+"</button></a>"
 
 
-# @app.route('/')
-# def index_page():
-#     """
-#     Revised index page:
-#       - Shows existing 'Featured Biography' logic,
-#       - Lists all normal types (people, organisations...),
-#       - Has a global search form to query sub-types (buildings, occupations, etc.),
-#       - Displays previously created aggregator life stories (if any),
-#       - A button 'Generate Multi-Type Life Biography' leading to a wizard route 
-#         that helps the user create brand-new building, person, org, etc., from scratch in one flow.
-#     """
-
-#     html_template = """
-#     <!DOCTYPE html>
-#     <html lang="en">
-#     <head>
-#         <meta charset="UTF-8" />
-#         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-#         <title>Welcome to the Biography System</title>
-#         <link rel="stylesheet" href="/static/styles.css" />
-#     </head>
-#     <body>
-#         <div class="container">
-#             <h1>Welcome to the Biography System</h1>
-#             <p>This tool allows you to create structured biographies from real data. 
-#                You can also generate a multi-type life story (buildings, people, organisations, etc.) in a single flow.</p>
-#     """
-
-#     # (1) "Featured Biography" code if it exists
-#     featured_path = "./types/people/biographies/AlanTuring_12345678.json"
-#     if os.path.exists(featured_path):
-#         featured_data = load_json_as_dict(featured_path)
-#         featured_name = featured_data.get("name", "Alan Turing")
-#         featured_desc = featured_data.get("description", "A pioneering computer scientist.")
-#         html_template += f"""
-#             <div class="featured-bio">
-#                 <h2>Featured Biography: {featured_name.capitalize()}</h2>
-#                 <p>{featured_desc}</p>
-#                 <a href="/biography/people/AlanTuring_12345678" class="btn">View Full Timeline</a>
-#             </div>
-#         """
-
-#     # (2) Global Search Form - queries across sub-types
-#     html_template += """
-#             <h2>Global Search</h2>
-#             <form action="/global_search" method="get">
-#                 <input type="text" name="q" placeholder="Search all sub-types..." />
-#                 <button type="submit">Search</button>
-#             </form>
-#     """
-
-#     # (3) List normal "types" from ./types/*.json
-#     html_template += """
-#             <h2>Explore Biographies by Type</h2>
-#             <div class="type-container">
-#     """
-#     for file in os.listdir("./types"):
-#         if file.endswith(".json"):
-#             type_name = os.path.splitext(file)[0]
-#             html_template += f"<a href='/type/{type_name}' class='type-button'>{type_name.capitalize()}</a>"
-#     html_template += "</div>"
-
-#     # (4) "Add a New Biography" Button (existing logic)
-#     html_template += """
-#             <div class="add-biography-container">
-#                 <a href="/biography_add/people" class="add-biography-button">+ Add Biography (People)</a>
-#             </div>
-#     """
-
-#     # (5) Display previously created aggregator "life stories" (if we store them in e.g. ./types/life/biographies/)
-#     life_dir = "./types/life/biographies"
-#     aggregator_exists = os.path.isdir(life_dir)
-#     if aggregator_exists:
-#         aggregator_list = [f[:-5] for f in os.listdir(life_dir) if f.endswith(".json")]
-#         if aggregator_list:
-#             html_template += """
-#                 <h2>Previously Created Multi-Type Lifes</h2>
-#                 <ul>
-#             """
-#             for aggregator_id in aggregator_list:
-#                 html_template += f"<li><a href='/life_view/{aggregator_id}'>{aggregator_id}</a></li>"
-#             html_template += "</ul>"
-#         else:
-#             html_template += """
-#                 <h2>No Multi-Type Life Biographies Yet</h2>
-#             """
-#     else:
-#         # no folder or no aggregator yet
-#         html_template += """
-#             <h2>Multi-Type 'Life' Biographies not found</h2>
-#             <p>No aggregator folder or 'life' type found. 
-#                Please create a /types/life/biographies folder if you'd like to store them here.</p>
-#         """
-
-#     # (6) Big button "Generate Multi-Type Life Biography"
-#     html_template += """
-#             <div class="generate-life-container">
-#                 <h2>Generate Multi-Type Life Biography</h2>
-#                 <p>Start a guided process to create new buildings, people, organisations, etc. in one flow.</p>
-#                 <a href="/multi_life_wizard" class="add-biography-button">Generate Life Biography</a>
-#             </div>
-#     """
-
-#     # (7) Close out HTML
-#     html_template += """
-#         </div> <!-- end .container -->
-#     </body>
-#     </html>
-#     """
-
-#     return html_template
 
 @app.route('/')
 def index_page():
@@ -180,11 +77,12 @@ def index_page():
     <!DOCTYPE html>
     <html lang="en">
     <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Welcome to the Biography System</title>
-        <link rel="stylesheet" href="/static/styles.css" />
-    </head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Welcome to the Biography System</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+</head>
     <body>
         <div class="container">
             <h1>Welcome to the Biography System</h1>
