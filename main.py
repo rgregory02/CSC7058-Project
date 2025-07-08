@@ -89,34 +89,63 @@ def serve_type_images(filename):
 def index_page():
     """
     Updated index page that:
-      1) Shows a featured biography (if Alan Turing file found),
-      2) Provides a global search form (action="/global_search"),
-      3) Lists each type except 'time',
-      4) 'Add Biography' button for default type=people,
-      5) Button to 'Generate Life Biography' => /life_wizard,
-      6) Optionally list aggregator 'life' records from ./types/life/biographies.
+      - Shows a featured biography (Alan Turing, if exists),
+      - Provides a global search form,
+      - Lists each type (except 'time') with links,
+      - Adds entry point to generate a life biography (via /life_gen),
+      - Lists existing life biographies if present.
     """
 
     html_template = """
     <!DOCTYPE html>
     <html lang="en">
     <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Welcome to the Biography System</title>
-    <link rel="stylesheet" href="/static/styles.css" />
-    <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
-</head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Welcome to the Biography System</title>
+        <link rel="stylesheet" href="/static/styles.css" />
+        <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+        <style>
+            .btn, .add-biography-button {
+                display: inline-block;
+                padding: 10px 16px;
+                background-color: #007bff;
+                color: white;
+                text-decoration: none;
+                border-radius: 6px;
+                font-size: 1em;
+                margin: 10px 0;
+            }
+            .btn:hover, .add-biography-button:hover {
+                background-color: #0056b3;
+            }
+            .type-container {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px;
+                margin-bottom: 20px;
+            }
+            .type-button {
+                padding: 8px 12px;
+                background-color: #eaeaea;
+                text-decoration: none;
+                border-radius: 5px;
+                font-weight: bold;
+                color: #333;
+            }
+            .generate-life-container, .featured-bio {
+                margin-top: 40px;
+            }
+        </style>
+    </head>
     <body>
         <div class="container">
             <h1>Welcome to the Biography System</h1>
-            <p>This tool allows you to create and explore structured biographies using real data and labels.
-               You can also generate multi-type 'life' records from scratch, referencing buildings, people, orgs, etc.</p>
+            <p>This tool lets you explore structured biographies using real data and labels.
+               You can also generate multi-type “Life Biographies” that span people, organisations, and places.</p>
     """
 
-    # --------------------------------------------------
-    # 1. Attempt to load "Featured Biography"
-    # --------------------------------------------------
+    # 1. Featured biography (Alan Turing)
     featured_path = "./types/people/biographies/AlanTuring_12345678.json"
     if os.path.exists(featured_path):
         featured_data = load_json_as_dict(featured_path)
@@ -124,91 +153,66 @@ def index_page():
         featured_desc = featured_data.get("description", "A pioneering computer scientist.")
         html_template += f"""
             <div class="featured-bio">
-                <h2>Featured Biography: {featured_name.capitalize()}</h2>
+                <h2>Featured Biography: {featured_name}</h2>
                 <p>{featured_desc}</p>
                 <a href="/biography/people/AlanTuring_12345678" class="btn">View Full Timeline</a>
             </div>
         """
 
-    # --------------------------------------------------
-    # 2. Provide a global search form (pointing to /global_search)
-    # --------------------------------------------------
+    # 2. Global search
     html_template += """
-            <h2>Global Search</h2>
+            <h2>🔍 Global Search</h2>
             <form action="/global_search" method="get">
                 <input type="text" name="q" placeholder="Search all types..." />
                 <button type="submit">Search</button>
             </form>
     """
 
-    # --------------------------------------------------
-    # 3. List Available Types (excluding 'time')
-    # --------------------------------------------------
+    # 3. Browse types (excluding 'time')
     html_template += """
-            <h2>Explore Biographies by Type </h2>
+            <h2>📚 Browse Biographies by Type</h2>
             <div class="type-container">
     """
     for file in os.listdir("./types"):
-        # If it's e.g. "people.json", "organisations.json", etc.
         if file.endswith(".json"):
-            type_name = os.path.splitext(file)[0]  # e.g. "people"
-            # Exclude 'time'
+            type_name = os.path.splitext(file)[0]
             if type_name.lower() == "time":
                 continue
-
-            # Create a button/link to /type/<type_name>
-            html_template += f"<a href='/type/{type_name}' class='type-button'>{type_name.capitalize()}</a>"
+            pretty_type = type_name.replace("_", " ").capitalize()
+            html_template += f"<a href='/type/{type_name}' class='type-button'>{pretty_type}</a>"
     html_template += "</div>"
 
-
-    # --------------------------------------------------
-    # 5. Provide a “Generate Life Biography” link
-    # --------------------------------------------------
-    # This button leads to your wizard route (e.g. /life_wizard) that creates multi-type aggregator records
+    # 4. Generate Life Biography (updated link to /life_gen)
     html_template += """
             <div class="generate-life-container">
-                <h2>Generate Multi-Type Life Biography</h2>
-                <p>This starts a wizard to create a new 'life', referencing new or existing data across people, buildings, orgs, etc.</p>
-                <a href="/life_wizard" class="add-biography-button">Generate Life Biography</a>
+                <h2>🌍 Create a Life Biography</h2>
+                <p>Build a multi-type story by linking people, organisations, buildings, and more.</p>
+                <a href="/life_gen" class="add-biography-button">➕ Generate Life Biography</a>
             </div>
     """
 
-    # --------------------------------------------------
-    # 6. Optionally, list existing aggregator 'life' records in ./types/life/biographies/
-    # --------------------------------------------------
+    # 5. List existing Life Biographies
     life_dir = "./types/life/biographies"
     if os.path.exists(life_dir) and os.path.isdir(life_dir):
         aggregator_files = [f for f in os.listdir(life_dir) if f.endswith(".json")]
         if aggregator_files:
             html_template += """
-            <h2>Previously Created Life Records</h2>
+            <h2>📂 Previously Created Life Biographies</h2>
             <ul>
             """
-            for af in aggregator_files:
+            for af in sorted(aggregator_files, reverse=True):
                 agg_id = af[:-5]
-                html_template += f"<li><a href='/life_view/{agg_id}'>{agg_id}</a></li>"
+                display_name = agg_id.replace("_", " ")
+                html_template += f"<li><a href='/life_view/{agg_id}'>{display_name}</a></li>"
             html_template += "</ul>"
         else:
-            html_template += """
-            <h2>No Multi-Type Life Records Found</h2>
-            """
+            html_template += "<p>No Life Biographies found yet.</p>"
     else:
-        # no life folder at all
-        html_template += """
-        <h2>Multi-Type Life Folder Missing</h2>
-        <p>No ./types/life/biographies folder found to store aggregator records.</p>
-        """
+        html_template += "<p><em>Life biography folder not found (types/life/biographies).</em></p>"
 
-    # --------------------------------------------------
-    # Close out HTML
-    # --------------------------------------------------
-    html_template += """
-        </div> <!-- end .container -->
-    </body>
-    </html>
-    """
-
+    html_template += "</div></body></html>"
     return html_template
+
 
 
 from flask import session, request, redirect, url_for, flash
@@ -622,131 +626,87 @@ def life_gen():
 
     return final_html
 
+
 @app.route('/life_view/<aggregator_id>')
 def life_view(aggregator_id):
     """
-    Displays a single aggregator/multi-type 'life' record 
-    from ./types/events/biographies/<aggregator_id>.json,
-    showing references to people, orgs, buildings, etc.
+    Displays a single aggregator/multi-type 'life' record from:
+    ./types/life/biographies/<aggregator_id>.json
     """
+    import os
 
-    import os, json
-
-    aggregator_file = f"./types/events/biographies/{aggregator_id}.json"
+    aggregator_file = f"./types/life/biographies/{aggregator_id}.json"
     if not os.path.exists(aggregator_file):
         return f"<h1>Life {aggregator_id} Not Found</h1>", 404
 
-    # Load aggregator JSON
     aggregator_data = load_json_as_dict(aggregator_file)
     life_name = aggregator_data.get("name", f"Life {aggregator_id}")
 
-    # We'll assume aggregator_data might look like:
-    # {
-    #   "id": "Life_1680151112",
-    #   "name": "Alan Turing Extended Life",
-    #   "people_ids": ["AlanTuring_12345", "AnotherPerson_6789"],
-    #   "building_ids": ["KingsCollege_77777"],
-    #   "org_ids": ["BletchleyPark_99999"],
-    #   "timestamp": "1680151112"
-    # }
-
-    # 1) Grab references
     people_ids   = aggregator_data.get("people_ids", [])
     building_ids = aggregator_data.get("building_ids", [])
     org_ids      = aggregator_data.get("org_ids", [])
-    # If you also have settlement_ids, etc., do similarly
 
-    # 2) A helper to resolve a person's ID => (display_name, link)
-    def resolve_person(pid):
-        # e.g. read ./types/people/biographies/<pid>.json
-        path = f"./types/people/biographies/{pid}.json"
+    def resolve_entity(entity_type, eid):
+        path = f"./types/{entity_type}/biographies/{eid}.json"
         if os.path.exists(path):
-            pdata = load_json_as_dict(path)
-            display = pdata.get("name", pid)
-            link = f"/biography/people/{pid}"
-            return (pid, display, link)
+            data = load_json_as_dict(path)
+            display = data.get("name", eid)
+            link = f"/biography/{entity_type}/{eid}"
+            return (eid, display, link)
         else:
-            # fallback
-            return (pid, pid, None)
+            return (eid, eid, None)
 
-    # 3) Similarly for org
-    def resolve_org(oid):
-        path = f"./types/organisations/biographies/{oid}.json"
-        if os.path.exists(path):
-            odata = load_json_as_dict(path)
-            display = odata.get("name", oid)
-            link = f"/biography/organisations/{oid}"
-            return (oid, display, link)
-        else:
-            return (oid, oid, None)
+    resolved_people   = [resolve_entity("people", pid) for pid in people_ids]
+    resolved_orgs     = [resolve_entity("organisations", oid) for oid in org_ids]
+    resolved_bldgs    = [resolve_entity("buildings", bid) for bid in building_ids]
 
-    # 4) Similarly for building
-    def resolve_building(bid):
-        path = f"./types/buildings/biographies/{bid}.json"
-        if os.path.exists(path):
-            bdata = load_json_as_dict(path)
-            display = bdata.get("name", bid)
-            link = f"/biography/buildings/{bid}"
-            return (bid, display, link)
-        else:
-            return (bid, bid, None)
-
-    # Build lists for easy HTML
-    resolved_people = [resolve_person(pid) for pid in people_ids]
-    resolved_orgs   = [resolve_org(oid)   for oid in org_ids]
-    resolved_bldgs  = [resolve_building(bid) for bid in building_ids]
-
-    # 5) Construct HTML
     html = f"""
     <!DOCTYPE html>
     <html>
     <head>
-      <meta charset="UTF-8">
+      <meta charset='UTF-8'>
       <title>View Life: {life_name}</title>
+      <link rel='stylesheet' href='/static/styles.css'>
     </head>
     <body>
-      <h1>Viewing Life: {life_name}</h1>
-      <p><strong>ID:</strong> {aggregator_id}</p>
-    """
+      <div class='container'>
+        <h1>Viewing Life: {life_name}</h1>
+        <p><strong>ID:</strong> {aggregator_id}</p>
 
-    # List People
-    html += "<h2>People Involved</h2><ul>"
+        <h2>👤 People Involved</h2>
+        <ul>
+    """
     for pid, disp, link in resolved_people:
         if link:
             html += f"<li><a href='{link}'>{disp}</a> ({pid})</li>"
         else:
-            html += f"<li>{disp} ({pid}) - Not Found</li>"
+            html += f"<li>{disp} ({pid})</li>"
     html += "</ul>"
 
-    # List Orgs
-    html += "<h2>Organisations Involved</h2><ul>"
+    html += "<h2>🏢 Organisations Involved</h2><ul>"
     for oid, disp, link in resolved_orgs:
         if link:
             html += f"<li><a href='{link}'>{disp}</a> ({oid})</li>"
         else:
-            html += f"<li>{disp} ({oid}) - Not Found</li>"
+            html += f"<li>{disp} ({oid})</li>"
     html += "</ul>"
 
-    # List Buildings
-    html += "<h2>Buildings Involved</h2><ul>"
+    html += "<h2>🏛️ Buildings Involved</h2><ul>"
     for bid, disp, link in resolved_bldgs:
         if link:
             html += f"<li><a href='{link}'>{disp}</a> ({bid})</li>"
         else:
-            html += f"<li>{disp} ({bid}) - Not Found</li>"
+            html += f"<li>{disp} ({bid})</li>"
     html += "</ul>"
 
-    # If you stored times or partial years for the aggregator as well:
-    # you can display them here.
-
     html += f"""
-      <p><a href="/">Back to Home</a></p>
+        <p><a href='/'>← Back to Home</a></p>
+      </div>
     </body>
     </html>
     """
 
     return html
-
 
 def printLabel(label):
     prefix = label['label']+"="  
@@ -763,7 +723,248 @@ def printTime(timeLabel):
         return timeLabel["category"]
 
 
+from flask import request, redirect, flash
+import os, time
 
+@app.route('/life_biography_add', methods=['GET', 'POST'])
+def life_biography_add():
+    """
+    Allows user to create a rich 'life biography' by selecting entries from
+    people, buildings, orgs, etc. Each entry includes time, optional label and notes.
+    """
+    save_dir = "./types/life/biographies"
+    os.makedirs(save_dir, exist_ok=True)
+
+    if request.method == "POST":
+        life_name = request.form.get("life_name", "Unnamed_Life").strip()
+        entry_blocks = []
+        
+        index = 0
+        while True:
+            type_ = request.form.get(f"entry_{index}_type")
+            biography = request.form.get(f"entry_{index}_biography")
+            entry_idx = request.form.get(f"entry_{index}_entry")
+            date = request.form.get(f"entry_{index}_date")
+            label = request.form.get(f"entry_{index}_label")
+            notes = request.form.get(f"entry_{index}_notes")
+
+            if not type_:
+                break
+
+            entry_blocks.append({
+                "type": type_,
+                "biography": biography,
+                "entry_index": int(entry_idx),
+                "date": date,
+                "label": label,
+                "notes": notes
+            })
+            index += 1
+
+        life_id = f"Life_{int(time.time())}"
+        save_path = os.path.join(save_dir, f"{life_id}.json")
+        save_dict_as_json(save_path, {
+            "id": life_id,
+            "name": life_name,
+            "entries": entry_blocks
+        })
+
+        flash(f"Life biography '{life_name}' saved.", "success")
+        return redirect(f"/life_biography_view/{life_id}")
+
+    # ---- GET method ----
+    # Build selector form
+    html = """
+    <h1>Create Life Biography</h1>
+    <form method='post'>
+      <label>Life Name:</label>
+      <input type='text' name='life_name' required><br><br>
+
+      <div id="entry-container">
+        <!-- JS will populate multiple entry blocks here -->
+      </div>
+
+      <button type='submit'>Save Life Biography</button>
+    </form>
+
+    <script>
+      let counter = 0;
+      function addEntryBlock() {
+        const container = document.getElementById("entry-container");
+        const html = `
+        <div class="entry-block">
+          <h4>Entry \${counter + 1}</h4>
+          Type: <input name='entry_\${counter}_type' required>
+          Biography: <input name='entry_\${counter}_biography' required>
+          Entry #: <input name='entry_\${counter}_entry' type='number' required>
+          Date: <input name='entry_\${counter}_date'>
+          Label: <input name='entry_\${counter}_label'>
+          Notes: <input name='entry_\${counter}_notes'>
+          <hr>
+        </div>`;
+        container.insertAdjacentHTML('beforeend', html);
+        counter++;
+      }
+
+      // Add first block by default
+      window.onload = () => addEntryBlock();
+
+      // Add button
+      const btn = document.createElement('button');
+      btn.textContent = "Add Entry";
+      btn.type = "button";
+      btn.onclick = addEntryBlock;
+      document.forms[0].insertBefore(btn, document.getElementById("entry-container").nextSibling);
+    </script>
+    """
+    return html
+
+@app.route('/life_biography_view/<life_id>')
+def life_biography_view(life_id):
+    """
+    View a saved life biography made of multiple entries.
+    """
+    path = f"./types/life/biographies/{life_id}.json"
+    if not os.path.exists(path):
+        return f"<h1>Life {life_id} not found.</h1>", 404
+
+    data = load_json_as_dict(path)
+    name = data.get("name", life_id)
+    entries = data.get("entries", [])
+
+    html = f"""
+    <h1>Life Biography: {name}</h1>
+    <ul>
+    """
+    for e in entries:
+        html += f"<li><strong>{e['type']}</strong> → {e['biography']} / Entry #{e['entry_index']}<br>"
+        html += f"Date: {e.get('date','')} | Label: {e.get('label','')} | Notes: {e.get('notes','')}" 
+        html += "</li><br>"
+    html += """</ul>
+    <a href='/life_biography_add'>← Back to Add</a>
+    """
+    return html
+
+
+# @app.route('/life_gen', methods=['GET','POST'])
+# def life_gen():
+#     import os
+#     import time
+#     from flask import request, redirect, flash
+
+#     aggregator_path = "./types/life/biographies"
+#     os.makedirs(aggregator_path, exist_ok=True)
+
+#     if request.method == 'POST':
+#         life_name = request.form.get("life_name", "Unnamed_Life").strip()
+#         chosen_person = request.form.getlist("people_ids")
+#         chosen_buildings = request.form.getlist("building_ids")
+#         chosen_orgs = request.form.getlist("org_ids")
+
+#         aggregator_id = f"Life_{int(time.time())}"
+#         aggregator_data = {
+#             "id": aggregator_id,
+#             "name": life_name,
+#             "people_ids": chosen_person,
+#             "building_ids": chosen_buildings,
+#             "org_ids": chosen_orgs,
+#             "timestamp": str(int(time.time()))
+#         }
+
+#         save_dict_as_json(os.path.join(aggregator_path, f"{aggregator_id}.json"), aggregator_data)
+
+#         flash(f"Life Biography '{life_name}' created successfully!", "success")
+#         return redirect(f"/life_view/{aggregator_id}")
+
+#     def load_options_from_biographies(folder):
+#         opts = []
+#         if os.path.exists(folder):
+#             for fname in os.listdir(folder):
+#                 if fname.endswith(".json"):
+#                     data = load_json_as_dict(os.path.join(folder, fname))
+#                     pid = data.get("id", fname[:-5])
+#                     pname = data.get("name", pid)
+#                     opts.append((pid, pname))
+#         return opts
+
+#     people_opts = load_options_from_biographies("./types/people/biographies")
+#     org_opts = load_options_from_biographies("./types/organisations/biographies")
+#     building_opts = load_options_from_biographies("./types/buildings/biographies")
+
+#     def generate_option_html(opts):
+#         return "".join(f'<option value="{oid}">{oname}</option>' for oid, oname in opts)
+
+#     html_form = f"""
+#     <!DOCTYPE html>
+#     <html><head><meta charset="UTF-8"><title>Generate Life Biography</title></head>
+#     <body>
+#       <h1>Create a Multi-Type Life</h1>
+#       <form method="post">
+#         <label>Name for this Life:</label>
+#         <input type="text" name="life_name" placeholder="e.g. Alan Turing" required><br><br>
+
+#         <h3>Pick People:</h3>
+#         <select name="people_ids" multiple size="5">{generate_option_html(people_opts)}</select>
+
+#         <h3>Pick Organisations:</h3>
+#         <select name="org_ids" multiple size="5">{generate_option_html(org_opts)}</select>
+
+#         <h3>Pick Buildings:</h3>
+#         <select name="building_ids" multiple size="5">{generate_option_html(building_opts)}</select>
+
+#         <br><br>
+#         <button type="submit">Save Multi-Type Life</button>
+#       </form>
+#     </body></html>
+#     """
+#     return html_form
+
+# @app.route('/life_view/<aggregator_id>')
+# def life_view(aggregator_id):
+#     import os
+
+#     file_path = f"./types/life/biographies/{aggregator_id}.json"
+#     if not os.path.exists(file_path):
+#         return f"<h1>Life '{aggregator_id}' Not Found</h1>", 404
+
+#     data = load_json_as_dict(file_path)
+#     life_name = data.get("name", f"Life {aggregator_id}")
+
+#     def resolve_entry(entry_type, entry_id):
+#         path = f"./types/{entry_type}/biographies/{entry_id}.json"
+#         if os.path.exists(path):
+#             content = load_json_as_dict(path)
+#             return {
+#                 "name": content.get("name", entry_id),
+#                 "link": f"/biography/{entry_type}/{entry_id}"
+#             }
+#         return {"name": entry_id + " (Not Found)", "link": None}
+
+#     def render_section(title, ids, entry_type):
+#         html = f"<h2>{title}</h2><ul>"
+#         for eid in ids:
+#             resolved = resolve_entry(entry_type, eid)
+#             if resolved["link"]:
+#                 html += f"<li><a href='{resolved['link']}'>{resolved['name']}</a></li>"
+#             else:
+#                 html += f"<li>{resolved['name']}</li>"
+#         html += "</ul>"
+#         return html
+
+#     sections = ""
+#     sections += render_section("People Involved", data.get("people_ids", []), "people")
+#     sections += render_section("Organisations", data.get("org_ids", []), "organisations")
+#     sections += render_section("Buildings", data.get("building_ids", []), "buildings")
+
+#     return f"""
+#     <html><head><title>{life_name}</title></head>
+#     <body>
+#       <h1>{life_name}</h1>
+#       <p><strong>ID:</strong> {aggregator_id}</p>
+#       {sections}
+#       <p><a href="/">← Back to Home</a></p>
+#     </body></html>
+#     """
 
 @app.route('/biography/<string:type_name>/<string:biography_name>')
 def biography_page(type_name, biography_name):
