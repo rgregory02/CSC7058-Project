@@ -4,6 +4,8 @@ import shutil  # For moving files and folders
 import time  # For unique timestamps
 
 from flask import Flask, Response, jsonify, request, url_for, redirect, render_template, flash, get_flashed_messages, send_from_directory
+from flask import render_template_string
+from markupsafe import Markup
 from urllib.parse import quote, unquote
 from datetime import datetime  # For readable timestamps
 
@@ -59,7 +61,29 @@ def get_readable_time(timestamp):
 def printButton(button_label,url):
     return "<a href='"+url+"'><button>"+button_label+"</button></a>"
 
+def prettify_name(name):
+    """Converts snake_case or kebab-case to Title Case"""
+    return name.replace('_', ' ').replace('-', ' ').title()
 
+def get_label_description(labels_dir, label_name):
+    """Attempts to load a label description from a .txt file"""
+    desc_path = os.path.join(labels_dir, f"{label_name}.txt")
+    if os.path.exists(desc_path):
+        with open(desc_path, 'r') as f:
+            return f.read().strip()
+    return ""
+
+  
+
+# @app.route('/label_image/<type_name>/<label_folder>/<filename>')
+# def label_image(type_name, label_folder, filename):
+#     path = os.path.join('types', type_name, 'labels', label_folder)
+#     return send_from_directory(path, filename)
+
+
+@app.route('/types/<path:filename>')
+def serve_type_images(filename):
+    return send_from_directory('types', filename)
 
 @app.route('/')
 def index_page():
@@ -195,54 +219,39 @@ def life_wizard():
     A single route that:
       - On GET => show a step allowing user to pick which type to add, plus name of aggregator
       - On POST => if user is picking or creating a sub-biography, we do it inline, store result in session
-      - Eventually user can “finish” to save aggregator in ./types/life/biographies/<some_id>.json
-    For demonstration, we do everything in one route with 'mode' parameters to handle sub-steps.
-    In real usage, you'd have multiple routes or a wizard approach.
+      - Eventually user can "finish" to save aggregator in ./types/life/biographies/<some_id>.json
     """
 
-    # 1) Ensure session is ready
     if 'life_wizard' not in session:
-        # Initialize aggregator state
         session['life_wizard'] = {
-            'aggregator_name': '',  # user sets the “life” name
-            'created_items': []     # each item: {'type': 'people','id':'some_id'} etc.
+            'aggregator_name': '',
+            'created_items': []
         }
 
     wizard_data = session['life_wizard']
-
-    # 2) Check if user wants to “finish” or if they are creating a sub-biography
-    # We'll use a hidden field “action” to differentiate
-    action = request.form.get("action","")
+    action = request.form.get("action", "")
 
     if request.method == 'POST':
         if action == "set_aggregator_name":
-            # user typed aggregator_name in the main form
-            aggregator_name = request.form.get("aggregator_name","Unnamed Life").strip()
+            aggregator_name = request.form.get("aggregator_name", "Unnamed Life").strip()
             wizard_data['aggregator_name'] = aggregator_name
             session['life_wizard'] = wizard_data
             flash(f"Aggregator name set to '{aggregator_name}'", "info")
-            return redirect(url_for('life_wizard'))  # reload
+            return redirect(url_for('life_wizard'))
 
         elif action == "pick_type":
-            # user picks which type to create
-            chosen_type = request.form.get("chosen_type","people").strip()
-            # redirect to the same route but in “create_subbio” mode
+            chosen_type = request.form.get("chosen_type", "people").strip()
             return redirect(url_for('life_wizard', mode="create_subbio", sub_type=chosen_type))
 
         elif action == "create_subbio":
-            # user just submitted the sub-biography form
-            sub_type = request.args.get("sub_type","people").strip()
-            #  do the logic to create the biography
-            #  e.g. read name, description from form, then save in ./types/<sub_type>/biographies/
-            new_bio_name = request.form.get("bio_name","").strip()
-            new_desc     = request.form.get("description","").strip()
+            sub_type = request.args.get("sub_type", "people").strip()
+            new_bio_name = request.form.get("bio_name", "").strip()
+            new_desc = request.form.get("description", "").strip()
 
-            # unique ID for that biography
             import time
             timestamp = str(int(time.time()))
-            bio_id = f"{new_bio_name.replace(' ','_')}_{timestamp}"
+            bio_id = f"{new_bio_name.replace(' ', '_')}_{timestamp}"
 
-            # build the JSON data
             bio_data = {
                 "id": bio_id,
                 "name": new_bio_name,
@@ -250,13 +259,11 @@ def life_wizard():
                 "entries": [],
                 "timestamp": timestamp
             }
-            # save to e.g. ./types/people/biographies/bio_id.json
             sub_bio_dir = f"./types/{sub_type}/biographies"
             os.makedirs(sub_bio_dir, exist_ok=True)
             bio_file = os.path.join(sub_bio_dir, f"{bio_id}.json")
             save_dict_as_json(bio_file, bio_data)
 
-            # store a record in wizard_data['created_items']
             wizard_data['created_items'].append({
                 'type': sub_type,
                 'id': bio_id,
@@ -267,8 +274,35 @@ def life_wizard():
             flash(f"Created new {sub_type} biography '{new_bio_name}' with id={bio_id}", "success")
             return redirect(url_for('life_wizard'))
 
+        elif action == "add_existing_reference":
+            ref_type = request.form.get("ref_type", "").strip()
+            ref_id = request.form.get("ref_id", "").strip()
+            ref_label = request.form.get("ref_label", "").strip()
+            ref_confidence = request.form.get("ref_confidence", "80").strip()
+
+            bio_path = f"./types/{ref_type}/biographies/{ref_id}.json"
+            if not os.path.exists(bio_path):
+                flash(f"Error: Biography {ref_id} of type {ref_type} not found.", "error")
+                return redirect(url_for('life_wizard'))
+
+            with open(bio_path, "r") as f:
+                bio_data = json.load(f)
+
+            new_ref = {
+                "id": ref_id,
+                "name": bio_data.get("name", ref_id),
+                "type": ref_type,
+                "confidence": int(ref_confidence) / 100.0,
+                "label": ref_label
+            }
+
+            wizard_data["created_items"].append(new_ref)
+            session["life_wizard"] = wizard_data
+
+            flash(f"Added existing biography: {new_ref['name']} ({ref_type})", "success")
+            return redirect(url_for("life_wizard"))
+
         elif action == "finish":
-            # user wants to finalize aggregator
             aggregator_name = wizard_data['aggregator_name'] or "Unnamed Life"
             created_items = wizard_data['created_items']
 
@@ -276,7 +310,6 @@ def life_wizard():
                 flash("No sub-biographies added! Not saving aggregator.", "warning")
                 return redirect(url_for('life_wizard'))
 
-            # create aggregator in ./types/life/biographies
             life_dir = "./types/life/biographies"
             os.makedirs(life_dir, exist_ok=True)
             import time
@@ -291,92 +324,105 @@ def life_wizard():
             save_dict_as_json(life_path, aggregator_json)
 
             flash(f"Multi-type Life '{aggregator_name}' saved as {aggregator_id}!", "success")
-
-            # clear session wizard
             session.pop('life_wizard', None)
             return redirect(f"/life_view/{aggregator_id}")
 
         else:
-            # unknown action
             flash("Unknown action", "error")
             return redirect(url_for('life_wizard'))
 
-    # 3) If GET => or unhandled => show the main wizard page
-    mode = request.args.get("mode","")
-    sub_type = request.args.get("sub_type","")
-
-    aggregator_name = wizard_data.get('aggregator_name',"")
-    created_items   = wizard_data.get('created_items',[])
+    mode = request.args.get("mode", "")
+    sub_type = request.args.get("sub_type", "")
+    aggregator_name = wizard_data.get('aggregator_name', "")
+    created_items = wizard_data.get('created_items', [])
 
     if mode == "create_subbio":
-        # display sub-biography creation form for e.g. sub_type="people"
-        # (like your /biography_add route, but embedded in the wizard)
         return f"""
         <!DOCTYPE html>
         <html>
-        <head><meta charset="UTF-8"><title>Create {sub_type} Sub-Biography</title></head>
+        <head><meta charset=\"UTF-8\"><title>Create {sub_type} Sub-Biography</title></head>
         <body>
           <h1>Create a new {sub_type.capitalize()} Biography</h1>
-          <form method="post" action="{url_for('life_wizard', mode='create_subbio', sub_type=sub_type)}">
-            <input type="hidden" name="action" value="create_subbio">
-            <label for="bio_name">Name:</label>
-            <input type="text" name="bio_name" required><br><br>
-            <label for="description">Description:</label>
-            <input type="text" name="description"><br><br>
-            <button type="submit">Save {sub_type.capitalize()} Bio</button>
+          <form method=\"post\" action=\"{url_for('life_wizard', mode='create_subbio', sub_type=sub_type)}\">
+            <input type=\"hidden\" name=\"action\" value=\"create_subbio\">
+            <label for=\"bio_name\">Name:</label>
+            <input type=\"text\" name=\"bio_name\" required><br><br>
+            <label for=\"description\">Description:</label>
+            <input type=\"text\" name=\"description\"><br><br>
+            <button type=\"submit\">Save {sub_type.capitalize()} Bio</button>
           </form>
-          <p><a href="{url_for('life_wizard')}">Back to Wizard</a></p>
+          <p><a href=\"{url_for('life_wizard')}\">Back to Wizard</a></p>
         </body>
         </html>
         """
 
-    # otherwise main wizard screen
-    # show aggregator name if set, show any created items, allow pick new type, or finish
-    # build list of sub-biographies
     items_html = "<ul>"
     for it in created_items:
-        items_html += f"<li>{it['type'].capitalize()}: {it['name']} (id={it['id']})</li>"
+        label_info = f" — {it['label']}" if 'label' in it and it['label'] else ""
+        confidence_info = f" (Confidence: {int(it.get('confidence', 1.0) * 100)}%)"
+        items_html += f"<li>{it['type'].capitalize()}: {it['name']} (id={it['id']}){label_info}{confidence_info}</li>"
     items_html += "</ul>"
 
-    # list possible sub-types except "time"
-    # you can gather them from your dir if you want, or just hardcode:
-    sub_types = ["people","organisations","buildings","settlements"]
+    sub_types = ["people", "organisations", "buildings", "settlements"]
     sub_type_opts = "".join(f'<option value="{st}">{st.capitalize()}</option>' for st in sub_types)
 
     return f"""
     <!DOCTYPE html>
     <html>
-    <head><meta charset="UTF-8"><title>Multi-Type Life Wizard</title></head>
+    <head><meta charset=\"UTF-8\"><title>Multi-Type Life Wizard</title></head>
     <body>
       <h1>Multi-Type Life Wizard</h1>
       <p>Aggregator Name: <strong>{aggregator_name}</strong></p>
-      <form method="post">
-        <input type="hidden" name="action" value="set_aggregator_name">
-        <label for="aggregator_name">Set/Change Aggregator Name:</label>
-        <input type="text" name="aggregator_name" value="{aggregator_name}">
-        <button type="submit">Update Name</button>
+      <form method=\"post\">
+        <input type=\"hidden\" name=\"action\" value=\"set_aggregator_name\">
+        <label for=\"aggregator_name\">Set/Change Aggregator Name:</label>
+        <input type=\"text\" name=\"aggregator_name\" value=\"{aggregator_name}\">
+        <button type=\"submit\">Update Name</button>
       </form>
       <hr>
       <h2>Currently Added Sub-Biographies</h2>
       {items_html}
       <hr>
       <h2>Add a New Sub-Biography</h2>
-      <form method="post">
-        <input type="hidden" name="action" value="pick_type">
-        <label for="chosen_type">Which type to create?</label>
-        <select name="chosen_type">{sub_type_opts}</select>
-        <button type="submit">Next</button>
+      <form method=\"post\">
+        <input type=\"hidden\" name=\"action\" value=\"pick_type\">
+        <label for=\"chosen_type\">Which type to create?</label>
+        <select name=\"chosen_type\">{sub_type_opts}</select>
+        <button type=\"submit\">Next</button>
+      </form>
+      <hr>
+      <h2>Link an Existing Biography</h2>
+      <form method=\"post\">
+        <input type=\"hidden\" name=\"action\" value=\"add_existing_reference\">
+        <label for=\"ref_type\">Type:</label>
+        <select name=\"ref_type\" required>{sub_type_opts}</select><br><br>
+
+        <label for=\"ref_id\">Biography ID:</label>
+        <input type=\"text\" name=\"ref_id\" placeholder=\"e.g. AlanTuring_123\" required><br><br>
+
+        <label for=\"ref_label\">Label:</label>
+        <select name=\"ref_label\">
+          <option value=\"\">(none)</option>
+          <option value=\"mentor\">Mentor</option>
+          <option value=\"inspired_by\">Inspired By</option>
+          <option value=\"spouse\">Spouse</option>
+          <option value=\"location\">Primary Location</option>
+        </select><br><br>
+
+        <label for=\"ref_confidence\">Confidence (%):</label>
+        <input type=\"number\" name=\"ref_confidence\" min=\"0\" max=\"100\" value=\"80\"><br><br>
+
+        <button type=\"submit\">Add to Life Biography</button>
       </form>
       <hr>
       <h2>Finish Wizard</h2>
-      <form method="post">
-        <input type="hidden" name="action" value="finish">
-        <button type="submit">Save & Finish</button>
+      <form method=\"post\">
+        <input type=\"hidden\" name=\"action\" value=\"finish\">
+        <button type=\"submit\">Save & Finish</button>
       </form>
     </body>
     </html>
     """
-
 
 
 @app.route('/multi_life_wizard', methods=['GET','POST'])
@@ -2023,17 +2069,16 @@ def biography_editentry_submit(type_name, biography_name, entry_index):
     return redirect(f"/biography/{type_name}/{biography_name}")
 
 
-
 @app.route('/type/<string:type_name>')
 def type_page(type_name):
     """
     Displays the type page for biographies:
     - Search bar for partial matches by name or label values.
-    - Live checkboxes that filter by label name (e.g. 'onet_occupation', 'first_name').
-    - No 'Apply Filter' button—filters update on checkbox change.
+    - Live checkboxes that filter by label name.
+    - View-only mode: no add/edit/delete options.
+    - Link to label viewer.
     """
 
-    # 1. Load the type's metadata
     type_metadata_path = f"./types/{type_name}.json"
     if not os.path.exists(type_metadata_path):
         return f"""
@@ -2042,10 +2087,9 @@ def type_page(type_name):
         """, 404
     type_meta = load_json_as_dict(type_metadata_path)
 
-    # 2. Gather all biography files
     biographies_path = f"./types/{type_name}/biographies"
     biography_list = []
-    all_label_names = set()  # We'll store the label "names" (e.g. 'onet_occupation', 'first_name')
+    all_label_names = set()
 
     if os.path.exists(biographies_path):
         for file in os.listdir(biographies_path):
@@ -2053,78 +2097,44 @@ def type_page(type_name):
                 file_path = os.path.join(biographies_path, file)
                 bio_data = load_json_as_dict(file_path)
 
-                # Basic biography info
                 name = bio_data.get("name", "Unknown")
-                readable_time = bio_data.get("readable_time", "Unknown Time")
-
-                # Collect label names
                 label_names_in_this_bio = set()
-
-                # We'll also collect label values (for partial name search)
                 label_values_in_this_bio = []
 
                 for entry in bio_data.get("entries", []):
                     for lbl in entry.get("labels", []):
-                        # Skip time-based labels
                         if lbl["label"].lower() in ["time", "start", "end"]:
                             continue
-
                         label_name = lbl["label"].strip().lower()
                         label_value = lbl.get("value", "").strip().lower()
-
                         label_names_in_this_bio.add(label_name)
                         if label_value:
                             label_values_in_this_bio.append(label_value)
 
-                # Merge into global label name set
                 all_label_names.update(label_names_in_this_bio)
-
-                # Convert label names for each biography into a comma-separated string
-                # We'll store *both* label names and label values in separate data attributes,
-                # so we can do partial text search against label values, but filter by label NAME.
                 bio_label_names_str = ",".join(sorted(label_names_in_this_bio))
                 bio_label_values_str = ",".join(label_values_in_this_bio)
 
                 biography_list.append({
-                    "file_basename": file[:-5],  # e.g. 'AlanTuring_12345678'
+                    "file_basename": file[:-5],
                     "name": name.capitalize(),
-                    "timestamp": readable_time,
                     "label_names_str": bio_label_names_str,
                     "label_values_str": bio_label_values_str
                 })
 
-    # 3. Build checkboxes for label names
-    #    But we want them more user-friendly: "onet_occupation" → "Onet Occupation"
     def prettify_label_name(raw_name):
-        # Replace underscores with spaces and capitalize each word
-        # e.g. "onet_occupation" -> "Onet Occupation"
-        # e.g. "first_name" -> "First Name"
         return " ".join(word.capitalize() for word in raw_name.split("_"))
 
     sorted_label_names = sorted(all_label_names)
     label_options_html = ""
     for lbl_name in sorted_label_names:
-        # Convert "onet_occupation" -> "Onet Occupation"
         display_name = prettify_label_name(lbl_name)
         label_options_html += f"""
-        <label class="filter-label">
-            <input type="checkbox" value="{lbl_name}" class="filter-checkbox"> {display_name}
+        <label class='filter-label'>
+            <input type='checkbox' value='{lbl_name}' class='filter-checkbox'> {display_name}
         </label>
         """
 
-    # 4. Check for archived
-    archive_path = f"./types/{type_name}/archived_biographies"
-    has_archived = (os.path.exists(archive_path) and 
-                    any(f.endswith(".json") for f in os.listdir(archive_path)))
-    archived_section = f"""
-    <div class="view-archived-container">
-        <a href='/archived_biographies/{type_name}' class='view-archived-link'>
-            View Archived Biographies
-        </a>
-    </div>
-    """ if has_archived else ""
-
-    # 5. Build HTML for each biography item
     biography_items_html = ""
     for bio in biography_list:
         biography_items_html += f"""
@@ -2135,61 +2145,43 @@ def type_page(type_name):
             <a href="/biography/{type_name}/{bio['file_basename']}" class='biography-button'>
                 <strong>{bio['name']}</strong>
             </a>
-            <p class="timestamp">Created: {bio['timestamp']}</p>
         </div>
         """
 
-    # 6. Final HTML
     html_template = f"""
     <!DOCTYPE html>
     <html>
     <head>
-        <meta charset="UTF-8" />
+        <meta charset='UTF-8' />
         <title>{type_name.capitalize()}</title>
-        <link rel="stylesheet" href="/static/styles.css">
+        <link rel='stylesheet' href='/static/styles.css'>
     </head>
     <body>
-        <div class="container">
-            <a href="/" class="back-link">← Back</a>
+        <div class='container'>
+            <a href='/' class='back-link'>← Back</a>
             <h1>{type_name.capitalize()}</h1>
-            <p class="description">{type_meta.get("description", "No description available.")}</p>
+            <p class='description'>{type_meta.get("description", "No description available.")}</p>
 
-            <!-- SEARCH & FILTER BAR -->
-            <div class="search-container">
-                <input type="text" id="searchBar" class="search-input" placeholder="Search by name or label value...">
-                <button id="resetSearch" class="reset-button">Reset Search</button>
+            <div class='search-container'>
+                <input type='text' id='searchBar' class='search-input' placeholder='Search by name or label value...'>
+                <button id='resetSearch' class='reset-button'>Reset Search</button>
             </div>
 
-            <div class="filter-container">
+            <div class='filter-container'>
                 <label>Filter by Label Name:</label>
-                <div class="filter-labels">
+                <div class='filter-labels'>
                     {label_options_html}
                 </div>
-                <!-- REMOVED "Apply Filter" button -->
             </div>
 
             <h2>Biographies</h2>
-            <div class="biography-container" id="biographyList">
+            <div class='biography-container' id='biographyList'>
                 {biography_items_html if biography_items_html else "<p class='no-data'>No biographies found.</p>"}
             </div>
 
-            <!-- PAGINATION (optional) -->
-            <div class="pagination-container">
-                <label for="itemsPerPage">Items per page:</label>
-                <select id="itemsPerPage">
-                    <option value="5">5</option>
-                    <option value="10">10</option>
-                </select>
-                <button id="prevPage" class="pagination-button">← Prev</button>
-                <span id="pageNumber">1</span>
-                <button id="nextPage" class="pagination-button">Next →</button>
+            <div class="label-explorer-link">
+                <a href="/view_labels/{type_name}" class="view-labels-button">View All Labels</a>
             </div>
-
-            <div class="add-biography-container">
-                <a href='/biography_add/{type_name}' class="add-biography-button">+ Add Biography</a>
-            </div>
-
-            {archived_section}
         </div>
 
         <script>
@@ -2198,22 +2190,17 @@ def type_page(type_name):
             const checkboxes = document.querySelectorAll('.filter-checkbox');
             const biographyItems = document.querySelectorAll('.biography-item');
 
-            // LIVE search & filter function
             function applyFilters() {{
                 const query = searchBar.value.toLowerCase().trim();
-
-                // Which label names are selected?
                 const selectedLabelNames = Array.from(checkboxes)
                     .filter(ch => ch.checked)
                     .map(ch => ch.value.toLowerCase());
 
                 biographyItems.forEach(item => {{
-                    // data attributes
-                    const bioName = item.dataset.name;         // e.g. "alan turing"
-                    const labelNames = item.dataset.labelnames; // e.g. "onet_occupation,first_name"
-                    const labelValues = item.dataset.labelvalues; // e.g. "mathematician,coder"
+                    const bioName = item.dataset.name;
+                    const labelNames = item.dataset.labelnames;
+                    const labelValues = item.dataset.labelvalues;
 
-                    // PART A: Partial text search (in name or labelValues)
                     let searchMatch = true;
                     if (query) {{
                         const nameMatch = bioName.includes(query);
@@ -2221,9 +2208,6 @@ def type_page(type_name):
                         searchMatch = (nameMatch || valueMatch);
                     }}
 
-                    // PART B: Label name filter (AND logic)
-                    // labelNames might be something like "onet_occupation,first_name"
-                    // if user selected e.g. ["onet_occupation"], we check if 'onet_occupation' is in labelNames
                     let labelNameMatch = true;
                     if (selectedLabelNames.length > 0) {{
                         const labelNamesArr = labelNames.split(",");
@@ -2235,56 +2219,14 @@ def type_page(type_name):
                 }});
             }}
 
-            // Attach live event listeners
             searchBar.addEventListener('input', applyFilters);
             checkboxes.forEach(ch => ch.addEventListener('change', applyFilters));
 
-            // Reset
             resetButton.addEventListener('click', () => {{
                 searchBar.value = "";
                 checkboxes.forEach(ch => (ch.checked = false));
                 biographyItems.forEach(item => item.style.display = 'block');
             }});
-
-            // Basic pagination logic
-            const perPageSelect = document.getElementById('itemsPerPage');
-            let perPage = parseInt(perPageSelect.value);
-            let currentPage = 1;
-
-            function showPage(page) {{
-                const itemsArray = Array.from(biographyItems).filter(i => i.style.display !== 'none');
-                // Only paginate visible items
-                let start = (page - 1) * perPage;
-                let end = start + perPage;
-
-                itemsArray.forEach((bio, idx) => {{
-                    bio.style.display = (idx >= start && idx < end) ? 'block' : 'none';
-                }});
-
-                document.getElementById('pageNumber').innerText = page;
-            }}
-
-            document.getElementById('prevPage').addEventListener('click', () => {{
-                if (currentPage > 1) {{
-                    currentPage--;
-                    showPage(currentPage);
-                }}
-            }});
-            document.getElementById('nextPage').addEventListener('click', () => {{
-                const itemsArray = Array.from(biographyItems).filter(i => i.style.display !== 'none');
-                if ((currentPage * perPage) < itemsArray.length) {{
-                    currentPage++;
-                    showPage(currentPage);
-                }}
-            }});
-            perPageSelect.addEventListener('change', function() {{
-                perPage = parseInt(this.value);
-                currentPage = 1;
-                showPage(currentPage);
-            }});
-
-            // On load, show page 1
-            showPage(currentPage);
         </script>
     </body>
     </html>
@@ -2292,6 +2234,134 @@ def type_page(type_name):
 
     return html_template
 
+
+@app.route('/view_labels/<string:type_name>')
+def view_labels(type_name):
+    import os
+    import json
+
+    labels_dir = f'./types/{type_name}/labels'
+    if not os.path.exists(labels_dir):
+        return f"<h1>Error: Label folder not found for {type_name}</h1>", 404
+
+    label_types = []
+    for entry in sorted(os.listdir(labels_dir)):
+        full_path = os.path.join(labels_dir, entry)
+        if os.path.isdir(full_path):
+            images_and_metadata = []
+            for f in os.listdir(full_path):
+                if f.endswith('.json'):
+                    json_path = os.path.join(full_path, f)
+                    
+                    # Prefer .jpg, fallback to .png
+                    image_filename = f.replace('.json', '.jpg')
+                    image_full_path = os.path.join(full_path, image_filename)
+                    if not os.path.exists(image_full_path):
+                        image_filename = f.replace('.json', '.png')
+                        image_full_path = os.path.join(full_path, image_filename)
+                    
+                    # Construct image URL if it exists
+                    image_url = f"/types/{type_name}/labels/{entry}/{image_filename}" if os.path.exists(image_full_path) else None
+                    
+                    with open(json_path, 'r') as jf:
+                        try:
+                            data = json.load(jf)
+                            description = data.get("description", "")
+                            properties = data.get("properties", {})
+
+                            properties_list = []
+                            for key, val in properties.items():
+                                if isinstance(val, dict):
+                                    properties_list.append((prettify_name(key), val.get("value", "")))
+
+                            # Add JSON filename (without extension) to search text and display
+                            file_display_name = prettify_name(f.replace('.json', ''))
+
+                            search_text = " ".join([
+                                file_display_name
+                            ] + [
+                                str(val.get("value", "")) for val in properties.values()
+                                if isinstance(val, dict)
+                            ]).lower()
+
+                            images_and_metadata.append({
+                                "file": file_display_name,
+                                "img": image_url,
+                                "description": description,
+                                "properties_list": properties_list,
+                                "search_text": search_text
+                            })
+                        except Exception:
+                            continue
+
+            label_types.append({
+                "name": entry,
+                "display_name": prettify_name(entry),
+                "description": get_label_description(labels_dir, entry),
+                "values": images_and_metadata
+            })
+
+    html_template = '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>View Labels</title>
+        <link rel="stylesheet" href="/static/styles.css">
+        <style>
+            .label-img { max-width: 120px; display: block; margin: 4px 0; }
+            .label-group { margin-bottom: 30px; }
+            .label-values { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 10px; }
+            .label-box { border: 1px solid #ccc; padding: 8px; width: 150px; }
+            .label-description { font-style: italic; font-size: 0.9em; margin-bottom: 5px; }
+            .search-input { padding: 8px; width: 300px; margin-bottom: 20px; font-size: 1em; }
+            .back-link { margin-bottom: 20px; display: inline-block; text-decoration: none; font-size: 1.1em; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <a href="/type/{{ type_name }}" class="back-link">← Back</a>
+            <h1>View Labels for {{ type_name.capitalize() }}</h1>
+            <input type="text" id="labelSearch" class="search-input" placeholder="Search label values...">
+
+            {% for lbl in label_types %}
+            <div class="label-group">
+                <h2>{{ lbl.display_name }}</h2>
+                {% if lbl.description %}
+                <p class="label-description">{{ lbl.description }}</p>
+                {% endif %}
+                <div class="label-values">
+                    {% for item in lbl["values"] %}
+                    <div class="label-box" data-search="{{ item.search_text }}">
+                        {% if item.img %}
+                        <img src="{{ item.img }}" alt="Label Image" class="label-img">
+                        {% endif %}
+                        <strong>Name</strong>: {{ item.file }}<br>
+                        {% for pair in item["properties_list"] %}
+                            <strong>{{ pair[0] }}</strong>: {{ pair[1] }}<br>
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <script>
+            const input = document.getElementById('labelSearch');
+            input.addEventListener('input', () => {
+                const val = input.value.toLowerCase();
+                document.querySelectorAll('.label-box').forEach(box => {
+                    const text = box.dataset.search;
+                    box.style.display = text.includes(val) ? 'block' : 'none';
+                });
+            });
+        </script>
+    </body>
+    </html>
+    '''
+
+    return render_template_string(html_template, type_name=type_name, label_types=label_types)
 
 
 @app.route('/search/<string:type_name>')
