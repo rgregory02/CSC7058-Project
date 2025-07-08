@@ -3,8 +3,7 @@ import json
 import shutil  # For moving files and folders
 import time  # For unique timestamps
 
-from flask import Flask, Response, jsonify, request, url_for, redirect, render_template, flash, get_flashed_messages, send_from_directory
-from flask import render_template_string
+from flask import Flask, Response, jsonify, request, url_for, redirect, render_template, flash, get_flashed_messages, send_from_directory, render_template_string, session
 from markupsafe import Markup
 from urllib.parse import quote, unquote
 from datetime import datetime  # For readable timestamps
@@ -85,17 +84,144 @@ def get_label_description(labels_dir, label_name):
 def serve_type_images(filename):
     return send_from_directory('types', filename)
 
+# @app.route('/')
+# def index_page():
+#     """
+#     Updated index page that:
+#       - Shows a featured biography (Alan Turing, if exists),
+#       - Provides a global search form,
+#       - Lists each type (except 'time') with links,
+#       - Adds entry point to generate a life biography (via /life_gen),
+#       - Lists existing life biographies if present.
+#     """
+
+#     html_template = """
+#     <!DOCTYPE html>
+#     <html lang="en">
+#     <head>
+#         <meta charset="UTF-8" />
+#         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+#         <title>Welcome to the Biography System</title>
+#         <link rel="stylesheet" href="/static/styles.css" />
+#         <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+#         <style>
+#             .btn, .add-biography-button {
+#                 display: inline-block;
+#                 padding: 10px 16px;
+#                 background-color: #007bff;
+#                 color: white;
+#                 text-decoration: none;
+#                 border-radius: 6px;
+#                 font-size: 1em;
+#                 margin: 10px 0;
+#             }
+#             .btn:hover, .add-biography-button:hover {
+#                 background-color: #0056b3;
+#             }
+#             .type-container {
+#                 display: flex;
+#                 flex-wrap: wrap;
+#                 gap: 10px;
+#                 margin-bottom: 20px;
+#             }
+#             .type-button {
+#                 padding: 8px 12px;
+#                 background-color: #eaeaea;
+#                 text-decoration: none;
+#                 border-radius: 5px;
+#                 font-weight: bold;
+#                 color: #333;
+#             }
+#             .generate-life-container, .featured-bio {
+#                 margin-top: 40px;
+#             }
+#         </style>
+#     </head>
+#     <body>
+#         <div class="container">
+#             <h1>Welcome to the Biography System</h1>
+#             <p>This tool lets you explore structured biographies using real data and labels.
+#                You can also generate multi-type “Life Biographies” that span people, organisations, and places.</p>
+#     """
+
+#     # 1. Featured biography (Alan Turing)
+#     featured_path = "./types/people/biographies/AlanTuring_12345678.json"
+#     if os.path.exists(featured_path):
+#         featured_data = load_json_as_dict(featured_path)
+#         featured_name = featured_data.get("name", "Alan Turing")
+#         featured_desc = featured_data.get("description", "A pioneering computer scientist.")
+#         html_template += f"""
+#             <div class="featured-bio">
+#                 <h2>Featured Biography: {featured_name}</h2>
+#                 <p>{featured_desc}</p>
+#                 <a href="/biography/people/AlanTuring_12345678" class="btn">View Full Timeline</a>
+#             </div>
+#         """
+
+#     # 2. Global search
+#     html_template += """
+#             <h2>🔍 Global Search</h2>
+#             <form action="/global_search" method="get">
+#                 <input type="text" name="q" placeholder="Search all types..." />
+#                 <button type="submit">Search</button>
+#             </form>
+#     """
+
+#     # 3. Browse types (excluding 'time')
+#     html_template += """
+#             <h2>📚 Browse Biographies by Type</h2>
+#             <div class="type-container">
+#     """
+#     for file in os.listdir("./types"):
+#         if file.endswith(".json"):
+#             type_name = os.path.splitext(file)[0]
+#             if type_name.lower() == "time":
+#                 continue
+#             pretty_type = type_name.replace("_", " ").capitalize()
+#             html_template += f"<a href='/type/{type_name}' class='type-button'>{pretty_type}</a>"
+#     html_template += "</div>"
+
+#     # 4. Generate Life Biography (updated link to /life_gen)
+#     html_template += """
+#             <div class="generate-life-container">
+#                 <h2>🌍 Create a Life Biography</h2>
+#                 <p>Build a multi-type story by linking people, organisations, buildings, and more.</p>
+#                 <a href="/life_gen" class="add-biography-button">➕ Generate Life Biography</a>
+#             </div>
+#     """
+
+#     # 5. List existing Life Biographies
+#     life_dir = "./types/life/biographies"
+#     if os.path.exists(life_dir) and os.path.isdir(life_dir):
+#         aggregator_files = [f for f in os.listdir(life_dir) if f.endswith(".json")]
+#         if aggregator_files:
+#             html_template += """
+#             <h2>📂 Previously Created Life Biographies</h2>
+#             <ul>
+#             """
+#             for af in sorted(aggregator_files, reverse=True):
+#                 agg_id = af[:-5]
+#                 display_name = agg_id.replace("_", " ")
+#                 html_template += f"<li><a href='/life_view/{agg_id}'>{display_name}</a></li>"
+#             html_template += "</ul>"
+#         else:
+#             html_template += "<p>No Life Biographies found yet.</p>"
+#     else:
+#         html_template += "<p><em>Life biography folder not found (types/life/biographies).</em></p>"
+
+#     html_template += "</div></body></html>"
+#     return html_template
+
 @app.route('/')
 def index_page():
     """
-    Updated index page that:
-      - Shows a featured biography (Alan Turing, if exists),
-      - Provides a global search form,
-      - Lists each type (except 'time') with links,
-      - Adds entry point to generate a life biography (via /life_gen),
-      - Lists existing life biographies if present.
+    Index page for the biography system:
+      - Shows featured biography (Alan Turing),
+      - Global search form,
+      - Type-based navigation,
+      - Entry to iframe-based life wizard (/life_iframe_wizard),
+      - Lists existing life biographies.
     """
-
     html_template = """
     <!DOCTYPE html>
     <html lang="en">
@@ -145,7 +271,7 @@ def index_page():
                You can also generate multi-type “Life Biographies” that span people, organisations, and places.</p>
     """
 
-    # 1. Featured biography (Alan Turing)
+    # Featured biography
     featured_path = "./types/people/biographies/AlanTuring_12345678.json"
     if os.path.exists(featured_path):
         featured_data = load_json_as_dict(featured_path)
@@ -159,7 +285,7 @@ def index_page():
             </div>
         """
 
-    # 2. Global search
+    # Global search
     html_template += """
             <h2>🔍 Global Search</h2>
             <form action="/global_search" method="get">
@@ -168,7 +294,7 @@ def index_page():
             </form>
     """
 
-    # 3. Browse types (excluding 'time')
+    # Browse types
     html_template += """
             <h2>📚 Browse Biographies by Type</h2>
             <div class="type-container">
@@ -182,16 +308,16 @@ def index_page():
             html_template += f"<a href='/type/{type_name}' class='type-button'>{pretty_type}</a>"
     html_template += "</div>"
 
-    # 4. Generate Life Biography (updated link to /life_gen)
+    # Generate Life Biography (iframe wizard)
     html_template += """
             <div class="generate-life-container">
-                <h2>🌍 Create a Life Biography</h2>
-                <p>Build a multi-type story by linking people, organisations, buildings, and more.</p>
-                <a href="/life_gen" class="add-biography-button">➕ Generate Life Biography</a>
+                <h2>🌍 Create a Life Biography (Interactive)</h2>
+                <p>Use a multi-step wizard to build a personalised life biography using multiple types and confidence intervals.</p>
+                <a href="/life_iframe_wizard" class="add-biography-button">🧭 Start Life Biography Wizard</a>
             </div>
     """
 
-    # 5. List existing Life Biographies
+    # List existing life biographies
     life_dir = "./types/life/biographies"
     if os.path.exists(life_dir) and os.path.isdir(life_dir):
         aggregator_files = [f for f in os.listdir(life_dir) if f.endswith(".json")]
@@ -213,418 +339,678 @@ def index_page():
     html_template += "</div></body></html>"
     return html_template
 
+# from flask import session, request, redirect, url_for, flash
+
+# @app.route('/life_wizard', methods=['GET','POST'])
+# def life_wizard():
+#     """
+#     A single route that:
+#       - On GET => show a step allowing user to pick which type to add, plus name of aggregator
+#       - On POST => if user is picking or creating a sub-biography, we do it inline, store result in session
+#       - Eventually user can "finish" to save aggregator in ./types/life/biographies/<some_id>.json
+#     """
+
+#     if 'life_wizard' not in session:
+#         session['life_wizard'] = {
+#             'aggregator_name': '',
+#             'created_items': []
+#         }
+
+#     wizard_data = session['life_wizard']
+#     action = request.form.get("action", "")
+
+#     if request.method == 'POST':
+#         if action == "set_aggregator_name":
+#             aggregator_name = request.form.get("aggregator_name", "Unnamed Life").strip()
+#             wizard_data['aggregator_name'] = aggregator_name
+#             session['life_wizard'] = wizard_data
+#             flash(f"Aggregator name set to '{aggregator_name}'", "info")
+#             return redirect(url_for('life_wizard'))
+
+#         elif action == "pick_type":
+#             chosen_type = request.form.get("chosen_type", "people").strip()
+#             return redirect(url_for('life_wizard', mode="create_subbio", sub_type=chosen_type))
+
+#         elif action == "create_subbio":
+#             sub_type = request.args.get("sub_type", "people").strip()
+#             new_bio_name = request.form.get("bio_name", "").strip()
+#             new_desc = request.form.get("description", "").strip()
+
+#             import time
+#             timestamp = str(int(time.time()))
+#             bio_id = f"{new_bio_name.replace(' ', '_')}_{timestamp}"
+
+#             bio_data = {
+#                 "id": bio_id,
+#                 "name": new_bio_name,
+#                 "description": new_desc,
+#                 "entries": [],
+#                 "timestamp": timestamp
+#             }
+#             sub_bio_dir = f"./types/{sub_type}/biographies"
+#             os.makedirs(sub_bio_dir, exist_ok=True)
+#             bio_file = os.path.join(sub_bio_dir, f"{bio_id}.json")
+#             save_dict_as_json(bio_file, bio_data)
+
+#             wizard_data['created_items'].append({
+#                 'type': sub_type,
+#                 'id': bio_id,
+#                 'name': new_bio_name
+#             })
+#             session['life_wizard'] = wizard_data
+
+#             flash(f"Created new {sub_type} biography '{new_bio_name}' with id={bio_id}", "success")
+#             return redirect(url_for('life_wizard'))
+
+#         elif action == "add_existing_reference":
+#             ref_type = request.form.get("ref_type", "").strip()
+#             ref_id = request.form.get("ref_id", "").strip()
+#             ref_label = request.form.get("ref_label", "").strip()
+#             ref_confidence = request.form.get("ref_confidence", "80").strip()
+
+#             bio_path = f"./types/{ref_type}/biographies/{ref_id}.json"
+#             if not os.path.exists(bio_path):
+#                 flash(f"Error: Biography {ref_id} of type {ref_type} not found.", "error")
+#                 return redirect(url_for('life_wizard'))
+
+#             with open(bio_path, "r") as f:
+#                 bio_data = json.load(f)
+
+#             new_ref = {
+#                 "id": ref_id,
+#                 "name": bio_data.get("name", ref_id),
+#                 "type": ref_type,
+#                 "confidence": int(ref_confidence) / 100.0,
+#                 "label": ref_label
+#             }
+
+#             wizard_data["created_items"].append(new_ref)
+#             session["life_wizard"] = wizard_data
+
+#             flash(f"Added existing biography: {new_ref['name']} ({ref_type})", "success")
+#             return redirect(url_for("life_wizard"))
+
+#         elif action == "finish":
+#             aggregator_name = wizard_data['aggregator_name'] or "Unnamed Life"
+#             created_items = wizard_data['created_items']
+
+#             if not created_items:
+#                 flash("No sub-biographies added! Not saving aggregator.", "warning")
+#                 return redirect(url_for('life_wizard'))
+
+#             life_dir = "./types/life/biographies"
+#             os.makedirs(life_dir, exist_ok=True)
+#             import time
+#             aggregator_id = f"Life_{int(time.time())}"
+#             aggregator_json = {
+#                 "id": aggregator_id,
+#                 "name": aggregator_name,
+#                 "created_items": created_items,
+#                 "timestamp": str(int(time.time()))
+#             }
+#             life_path = os.path.join(life_dir, f"{aggregator_id}.json")
+#             save_dict_as_json(life_path, aggregator_json)
+
+#             flash(f"Multi-type Life '{aggregator_name}' saved as {aggregator_id}!", "success")
+#             session.pop('life_wizard', None)
+#             return redirect(f"/life_view/{aggregator_id}")
+
+#         else:
+#             flash("Unknown action", "error")
+#             return redirect(url_for('life_wizard'))
+
+#     mode = request.args.get("mode", "")
+#     sub_type = request.args.get("sub_type", "")
+#     aggregator_name = wizard_data.get('aggregator_name', "")
+#     created_items = wizard_data.get('created_items', [])
+
+#     if mode == "create_subbio":
+#         return f"""
+#         <!DOCTYPE html>
+#         <html>
+#         <head><meta charset=\"UTF-8\"><title>Create {sub_type} Sub-Biography</title></head>
+#         <body>
+#           <h1>Create a new {sub_type.capitalize()} Biography</h1>
+#           <form method=\"post\" action=\"{url_for('life_wizard', mode='create_subbio', sub_type=sub_type)}\">
+#             <input type=\"hidden\" name=\"action\" value=\"create_subbio\">
+#             <label for=\"bio_name\">Name:</label>
+#             <input type=\"text\" name=\"bio_name\" required><br><br>
+#             <label for=\"description\">Description:</label>
+#             <input type=\"text\" name=\"description\"><br><br>
+#             <button type=\"submit\">Save {sub_type.capitalize()} Bio</button>
+#           </form>
+#           <p><a href=\"{url_for('life_wizard')}\">Back to Wizard</a></p>
+#         </body>
+#         </html>
+#         """
+
+#     items_html = "<ul>"
+#     for it in created_items:
+#         label_info = f" — {it['label']}" if 'label' in it and it['label'] else ""
+#         confidence_info = f" (Confidence: {int(it.get('confidence', 1.0) * 100)}%)"
+#         items_html += f"<li>{it['type'].capitalize()}: {it['name']} (id={it['id']}){label_info}{confidence_info}</li>"
+#     items_html += "</ul>"
+
+#     sub_types = ["people", "organisations", "buildings", "settlements"]
+#     sub_type_opts = "".join(f'<option value="{st}">{st.capitalize()}</option>' for st in sub_types)
+
+#     return f"""
+#     <!DOCTYPE html>
+#     <html>
+#     <head><meta charset=\"UTF-8\"><title>Multi-Type Life Wizard</title></head>
+#     <body>
+#       <h1>Multi-Type Life Wizard</h1>
+#       <p>Aggregator Name: <strong>{aggregator_name}</strong></p>
+#       <form method=\"post\">
+#         <input type=\"hidden\" name=\"action\" value=\"set_aggregator_name\">
+#         <label for=\"aggregator_name\">Set/Change Aggregator Name:</label>
+#         <input type=\"text\" name=\"aggregator_name\" value=\"{aggregator_name}\">
+#         <button type=\"submit\">Update Name</button>
+#       </form>
+#       <hr>
+#       <h2>Currently Added Sub-Biographies</h2>
+#       {items_html}
+#       <hr>
+#       <h2>Add a New Sub-Biography</h2>
+#       <form method=\"post\">
+#         <input type=\"hidden\" name=\"action\" value=\"pick_type\">
+#         <label for=\"chosen_type\">Which type to create?</label>
+#         <select name=\"chosen_type\">{sub_type_opts}</select>
+#         <button type=\"submit\">Next</button>
+#       </form>
+#       <hr>
+#       <h2>Link an Existing Biography</h2>
+#       <form method=\"post\">
+#         <input type=\"hidden\" name=\"action\" value=\"add_existing_reference\">
+#         <label for=\"ref_type\">Type:</label>
+#         <select name=\"ref_type\" required>{sub_type_opts}</select><br><br>
+
+#         <label for=\"ref_id\">Biography ID:</label>
+#         <input type=\"text\" name=\"ref_id\" placeholder=\"e.g. AlanTuring_123\" required><br><br>
+
+#         <label for=\"ref_label\">Label:</label>
+#         <select name=\"ref_label\">
+#           <option value=\"\">(none)</option>
+#           <option value=\"mentor\">Mentor</option>
+#           <option value=\"inspired_by\">Inspired By</option>
+#           <option value=\"spouse\">Spouse</option>
+#           <option value=\"location\">Primary Location</option>
+#         </select><br><br>
+
+#         <label for=\"ref_confidence\">Confidence (%):</label>
+#         <input type=\"number\" name=\"ref_confidence\" min=\"0\" max=\"100\" value=\"80\"><br><br>
+
+#         <button type=\"submit\">Add to Life Biography</button>
+#       </form>
+#       <hr>
+#       <h2>Finish Wizard</h2>
+#       <form method=\"post\">
+#         <input type=\"hidden\" name=\"action\" value=\"finish\">
+#         <button type=\"submit\">Save & Finish</button>
+#       </form>
+#     </body>
+#     </html>
+#     """
 
 
-from flask import session, request, redirect, url_for, flash
+# @app.route('/multi_life_wizard', methods=['GET','POST'])
+# def multi_life_wizard():
+#     """
+#     A simplistic multi-step wizard:
+#       Step 1 (GET) => ask user to create/pick a building
+#       Step 2 => pick a person
+#       Step 3 => pick an organisation
+#       ...
+#       Final => merges them into one aggregator 'life' record
+#     For demonstration, we do a single form. In reality, you'd do multiple steps or store session data.
+#     """
 
-@app.route('/life_wizard', methods=['GET','POST'])
-def life_wizard():
-    """
-    A single route that:
-      - On GET => show a step allowing user to pick which type to add, plus name of aggregator
-      - On POST => if user is picking or creating a sub-biography, we do it inline, store result in session
-      - Eventually user can "finish" to save aggregator in ./types/life/biographies/<some_id>.json
-    """
+#     if request.method == 'POST':
+#         # 1) We collect building_name, person_name, org_name from the single form
+#         building_name = request.form.get("building_name","").strip()
+#         person_name   = request.form.get("person_name","").strip()
+#         org_name      = request.form.get("org_name","").strip()
+#         life_title    = request.form.get("life_title","My Life")
 
-    if 'life_wizard' not in session:
-        session['life_wizard'] = {
-            'aggregator_name': '',
-            'created_items': []
-        }
+#         # 2) Potentially create new building/person/org JSON in their respective folders:
+#         # e.g. create building_id
+#         import time
+#         building_id = "B_"+str(int(time.time()))
+#         # build building JSON in /types/buildings/biographies/<building_id>.json
+#         # We'll skip the actual code for brevity. Then do similarly for person, org
 
-    wizard_data = session['life_wizard']
-    action = request.form.get("action", "")
+#         # 3) Create aggregator life record
+#         aggregator_dir = "./types/life/biographies"
+#         os.makedirs(aggregator_dir, exist_ok=True)
+#         aggregator_id = f"Life_{int(time.time())}"
+#         aggregator_data = {
+#             "id": aggregator_id,
+#             "name": life_title,
+#             "building_id": building_id,
+#             "person_id": "P_...",  # whichever we assigned
+#             "org_id": "O_...",
+#             # plus partial/exact date or relationship info
+#         }
+#         aggregator_file = os.path.join(aggregator_dir, f"{aggregator_id}.json")
+#         save_dict_as_json(aggregator_file, aggregator_data)
 
-    if request.method == 'POST':
-        if action == "set_aggregator_name":
-            aggregator_name = request.form.get("aggregator_name", "Unnamed Life").strip()
-            wizard_data['aggregator_name'] = aggregator_name
-            session['life_wizard'] = wizard_data
-            flash(f"Aggregator name set to '{aggregator_name}'", "info")
-            return redirect(url_for('life_wizard'))
+#         flash(f"Life biography '{life_title}' created with building, person, org!", "success")
+#         return redirect(f"/life_view/{aggregator_id}")
 
-        elif action == "pick_type":
-            chosen_type = request.form.get("chosen_type", "people").strip()
-            return redirect(url_for('life_wizard', mode="create_subbio", sub_type=chosen_type))
+#     # If GET => show a single form for all steps (for brevity)
+#     # In real usage, you'd do multiple steps or advanced UI.
+#     html = """
+#     <!DOCTYPE html>
+#     <html>
+#     <head><meta charset="UTF-8"><title>Multi-Type Wizard</title></head>
+#     <body>
+#       <h1>Create a Multi-Type Life (Wizard)</h1>
+#       <form method="post">
+#         <label>Title for this Life:</label>
+#         <input type="text" name="life_title" placeholder="e.g. 'John's Full Life'"><br><br>
 
-        elif action == "create_subbio":
-            sub_type = request.args.get("sub_type", "people").strip()
-            new_bio_name = request.form.get("bio_name", "").strip()
-            new_desc = request.form.get("description", "").strip()
+#         <h2>Step 1: Create or name a Building</h2>
+#         <input type="text" name="building_name" placeholder="Enter a building name..."><br><br>
 
-            import time
-            timestamp = str(int(time.time()))
-            bio_id = f"{new_bio_name.replace(' ', '_')}_{timestamp}"
+#         <h2>Step 2: Create or name a Person</h2>
+#         <input type="text" name="person_name" placeholder="Enter a person name..."><br><br>
 
-            bio_data = {
-                "id": bio_id,
-                "name": new_bio_name,
-                "description": new_desc,
-                "entries": [],
-                "timestamp": timestamp
-            }
-            sub_bio_dir = f"./types/{sub_type}/biographies"
-            os.makedirs(sub_bio_dir, exist_ok=True)
-            bio_file = os.path.join(sub_bio_dir, f"{bio_id}.json")
-            save_dict_as_json(bio_file, bio_data)
+#         <h2>Step 3: Create or name an Organisation</h2>
+#         <input type="text" name="org_name" placeholder="Enter an org name..."><br><br>
 
-            wizard_data['created_items'].append({
-                'type': sub_type,
-                'id': bio_id,
-                'name': new_bio_name
-            })
-            session['life_wizard'] = wizard_data
+#         <button type="submit">Finish & Save Life</button>
+#       </form>
+#     </body>
+#     </html>
+#     """
+#     return html
 
-            flash(f"Created new {sub_type} biography '{new_bio_name}' with id={bio_id}", "success")
-            return redirect(url_for('life_wizard'))
-
-        elif action == "add_existing_reference":
-            ref_type = request.form.get("ref_type", "").strip()
-            ref_id = request.form.get("ref_id", "").strip()
-            ref_label = request.form.get("ref_label", "").strip()
-            ref_confidence = request.form.get("ref_confidence", "80").strip()
-
-            bio_path = f"./types/{ref_type}/biographies/{ref_id}.json"
-            if not os.path.exists(bio_path):
-                flash(f"Error: Biography {ref_id} of type {ref_type} not found.", "error")
-                return redirect(url_for('life_wizard'))
-
-            with open(bio_path, "r") as f:
-                bio_data = json.load(f)
-
-            new_ref = {
-                "id": ref_id,
-                "name": bio_data.get("name", ref_id),
-                "type": ref_type,
-                "confidence": int(ref_confidence) / 100.0,
-                "label": ref_label
-            }
-
-            wizard_data["created_items"].append(new_ref)
-            session["life_wizard"] = wizard_data
-
-            flash(f"Added existing biography: {new_ref['name']} ({ref_type})", "success")
-            return redirect(url_for("life_wizard"))
-
-        elif action == "finish":
-            aggregator_name = wizard_data['aggregator_name'] or "Unnamed Life"
-            created_items = wizard_data['created_items']
-
-            if not created_items:
-                flash("No sub-biographies added! Not saving aggregator.", "warning")
-                return redirect(url_for('life_wizard'))
-
-            life_dir = "./types/life/biographies"
-            os.makedirs(life_dir, exist_ok=True)
-            import time
-            aggregator_id = f"Life_{int(time.time())}"
-            aggregator_json = {
-                "id": aggregator_id,
-                "name": aggregator_name,
-                "created_items": created_items,
-                "timestamp": str(int(time.time()))
-            }
-            life_path = os.path.join(life_dir, f"{aggregator_id}.json")
-            save_dict_as_json(life_path, aggregator_json)
-
-            flash(f"Multi-type Life '{aggregator_name}' saved as {aggregator_id}!", "success")
-            session.pop('life_wizard', None)
-            return redirect(f"/life_view/{aggregator_id}")
-
-        else:
-            flash("Unknown action", "error")
-            return redirect(url_for('life_wizard'))
-
-    mode = request.args.get("mode", "")
-    sub_type = request.args.get("sub_type", "")
-    aggregator_name = wizard_data.get('aggregator_name', "")
-    created_items = wizard_data.get('created_items', [])
-
-    if mode == "create_subbio":
-        return f"""
-        <!DOCTYPE html>
-        <html>
-        <head><meta charset=\"UTF-8\"><title>Create {sub_type} Sub-Biography</title></head>
-        <body>
-          <h1>Create a new {sub_type.capitalize()} Biography</h1>
-          <form method=\"post\" action=\"{url_for('life_wizard', mode='create_subbio', sub_type=sub_type)}\">
-            <input type=\"hidden\" name=\"action\" value=\"create_subbio\">
-            <label for=\"bio_name\">Name:</label>
-            <input type=\"text\" name=\"bio_name\" required><br><br>
-            <label for=\"description\">Description:</label>
-            <input type=\"text\" name=\"description\"><br><br>
-            <button type=\"submit\">Save {sub_type.capitalize()} Bio</button>
-          </form>
-          <p><a href=\"{url_for('life_wizard')}\">Back to Wizard</a></p>
-        </body>
-        </html>
-        """
-
-    items_html = "<ul>"
-    for it in created_items:
-        label_info = f" — {it['label']}" if 'label' in it and it['label'] else ""
-        confidence_info = f" (Confidence: {int(it.get('confidence', 1.0) * 100)}%)"
-        items_html += f"<li>{it['type'].capitalize()}: {it['name']} (id={it['id']}){label_info}{confidence_info}</li>"
-    items_html += "</ul>"
-
-    sub_types = ["people", "organisations", "buildings", "settlements"]
-    sub_type_opts = "".join(f'<option value="{st}">{st.capitalize()}</option>' for st in sub_types)
-
-    return f"""
-    <!DOCTYPE html>
-    <html>
-    <head><meta charset=\"UTF-8\"><title>Multi-Type Life Wizard</title></head>
-    <body>
-      <h1>Multi-Type Life Wizard</h1>
-      <p>Aggregator Name: <strong>{aggregator_name}</strong></p>
-      <form method=\"post\">
-        <input type=\"hidden\" name=\"action\" value=\"set_aggregator_name\">
-        <label for=\"aggregator_name\">Set/Change Aggregator Name:</label>
-        <input type=\"text\" name=\"aggregator_name\" value=\"{aggregator_name}\">
-        <button type=\"submit\">Update Name</button>
-      </form>
-      <hr>
-      <h2>Currently Added Sub-Biographies</h2>
-      {items_html}
-      <hr>
-      <h2>Add a New Sub-Biography</h2>
-      <form method=\"post\">
-        <input type=\"hidden\" name=\"action\" value=\"pick_type\">
-        <label for=\"chosen_type\">Which type to create?</label>
-        <select name=\"chosen_type\">{sub_type_opts}</select>
-        <button type=\"submit\">Next</button>
-      </form>
-      <hr>
-      <h2>Link an Existing Biography</h2>
-      <form method=\"post\">
-        <input type=\"hidden\" name=\"action\" value=\"add_existing_reference\">
-        <label for=\"ref_type\">Type:</label>
-        <select name=\"ref_type\" required>{sub_type_opts}</select><br><br>
-
-        <label for=\"ref_id\">Biography ID:</label>
-        <input type=\"text\" name=\"ref_id\" placeholder=\"e.g. AlanTuring_123\" required><br><br>
-
-        <label for=\"ref_label\">Label:</label>
-        <select name=\"ref_label\">
-          <option value=\"\">(none)</option>
-          <option value=\"mentor\">Mentor</option>
-          <option value=\"inspired_by\">Inspired By</option>
-          <option value=\"spouse\">Spouse</option>
-          <option value=\"location\">Primary Location</option>
-        </select><br><br>
-
-        <label for=\"ref_confidence\">Confidence (%):</label>
-        <input type=\"number\" name=\"ref_confidence\" min=\"0\" max=\"100\" value=\"80\"><br><br>
-
-        <button type=\"submit\">Add to Life Biography</button>
-      </form>
-      <hr>
-      <h2>Finish Wizard</h2>
-      <form method=\"post\">
-        <input type=\"hidden\" name=\"action\" value=\"finish\">
-        <button type=\"submit\">Save & Finish</button>
-      </form>
-    </body>
-    </html>
-    """
-
-
-@app.route('/multi_life_wizard', methods=['GET','POST'])
-def multi_life_wizard():
-    """
-    A simplistic multi-step wizard:
-      Step 1 (GET) => ask user to create/pick a building
-      Step 2 => pick a person
-      Step 3 => pick an organisation
-      ...
-      Final => merges them into one aggregator 'life' record
-    For demonstration, we do a single form. In reality, you'd do multiple steps or store session data.
-    """
-
-    if request.method == 'POST':
-        # 1) We collect building_name, person_name, org_name from the single form
-        building_name = request.form.get("building_name","").strip()
-        person_name   = request.form.get("person_name","").strip()
-        org_name      = request.form.get("org_name","").strip()
-        life_title    = request.form.get("life_title","My Life")
-
-        # 2) Potentially create new building/person/org JSON in their respective folders:
-        # e.g. create building_id
-        import time
-        building_id = "B_"+str(int(time.time()))
-        # build building JSON in /types/buildings/biographies/<building_id>.json
-        # We'll skip the actual code for brevity. Then do similarly for person, org
-
-        # 3) Create aggregator life record
-        aggregator_dir = "./types/life/biographies"
-        os.makedirs(aggregator_dir, exist_ok=True)
-        aggregator_id = f"Life_{int(time.time())}"
-        aggregator_data = {
-            "id": aggregator_id,
-            "name": life_title,
-            "building_id": building_id,
-            "person_id": "P_...",  # whichever we assigned
-            "org_id": "O_...",
-            # plus partial/exact date or relationship info
-        }
-        aggregator_file = os.path.join(aggregator_dir, f"{aggregator_id}.json")
-        save_dict_as_json(aggregator_file, aggregator_data)
-
-        flash(f"Life biography '{life_title}' created with building, person, org!", "success")
-        return redirect(f"/life_view/{aggregator_id}")
-
-    # If GET => show a single form for all steps (for brevity)
-    # In real usage, you'd do multiple steps or advanced UI.
+# Step 1: Life Wizard Homepage with iframe navigation
+@app.route('/life_wizard')
+def life_wizard_home():
     html = """
     <!DOCTYPE html>
     <html>
-    <head><meta charset="UTF-8"><title>Multi-Type Wizard</title></head>
+    <head>
+        <title>Life Wizard</title>
+        <style>
+            iframe { width: 100%; height: 600px; border: 1px solid #ccc; margin-top: 20px; }
+        </style>
+    </head>
     <body>
-      <h1>Create a Multi-Type Life (Wizard)</h1>
-      <form method="post">
-        <label>Title for this Life:</label>
-        <input type="text" name="life_title" placeholder="e.g. 'John's Full Life'"><br><br>
+        <h1>Create Your Multi-Type Life Biography</h1>
+        <p>Start by choosing a time period below. After that, you'll select values for each type.</p>
 
-        <h2>Step 1: Create or name a Building</h2>
-        <input type="text" name="building_name" placeholder="Enter a building name..."><br><br>
+        <iframe src="/life_step/time/new" id="wizardFrame"></iframe>
+    </body>
+    </html>
+    """
+    return html
 
-        <h2>Step 2: Create or name a Person</h2>
-        <input type="text" name="person_name" placeholder="Enter a person name..."><br><br>
+# Step 2: Generic life_step handler
+@app.route('/life_step/<type_name>/<life_id>', methods=['GET', 'POST'])
+def life_step(type_name, life_id):
+    import uuid
+    from markupsafe import escape
 
-        <h2>Step 3: Create or name an Organisation</h2>
-        <input type="text" name="org_name" placeholder="Enter an org name..."><br><br>
+    folder = f"./types/{type_name}/biographies"
+    labels_folder = f"./types/{type_name}/labels"
+    os.makedirs(folder, exist_ok=True)
+    os.makedirs(f"./types/life/biographies", exist_ok=True)
 
-        <button type="submit">Finish & Save Life</button>
+    if life_id == "new":
+        life_id = f"Life_{int(time.time())}_{type_name}"
+        return redirect(f"/life_step/{type_name}/{life_id}")
+
+    if request.method == 'POST':
+        selected_id = request.form.get("selected_item")
+        confidence = request.form.get("confidence")
+        label_values = request.form.getlist("labels")
+
+        life_file = f"./types/life/biographies/{life_id}.json"
+        life_data = {}
+        if os.path.exists(life_file):
+            life_data = load_json_as_dict(life_file)
+
+        life_data.setdefault(type_name, {})
+        life_data[type_name]["id"] = selected_id
+        life_data[type_name]["labels"] = label_values
+        life_data[type_name]["confidence"] = confidence
+        life_data["life_id"] = life_id
+
+        save_dict_as_json(life_file, life_data)
+        flash(f"Saved {type_name} selection for {life_id}", "success")
+
+        # Determine next type
+        next_type = {
+            "time": "people",
+            "people": "buildings",
+            "buildings": "organisations",
+            "organisations": None
+        }.get(type_name)
+
+        if next_type:
+            return redirect(f"/life_step/{next_type}/{life_id}")
+        else:
+            return redirect(f"/life_view/{life_id}")
+
+    # Load options
+    options = []
+    if os.path.exists(folder):
+        for f in os.listdir(folder):
+            if f.endswith(".json"):
+                data = load_json_as_dict(os.path.join(folder, f))
+                display_name = data.get("name") or f[:-5]
+                options.append((f[:-5], display_name))
+
+    label_display = []
+    if os.path.exists(labels_folder):
+        for lbl in sorted(os.listdir(labels_folder)):
+            if lbl.endswith(".json"):
+                with open(os.path.join(labels_folder, lbl)) as lf:
+                    try:
+                        data = json.load(lf)
+                        label_display.append((lbl[:-5], data.get("description", "")))
+                    except:
+                        continue
+
+    html = f"""
+    <h2>Select a {escape(type_name.capitalize())}</h2>
+    <form method="post">
+        <label>Choose {escape(type_name)}:</label>
+        <select name="selected_item" required>
+            {''.join([f'<option value="{oid}">{name}</option>' for oid, name in options])}
+        </select><br><br>
+
+        <label>Confidence Interval:</label>
+        <select name="confidence">
+            <option value="exact">Exact</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+        </select><br><br>
+
+        <label>Select Label Values:</label><br>
+        {''.join([f'<input type="checkbox" name="labels" value="{val}">{val} ({desc})<br>' for val, desc in label_display])}
+
+        <br><br><button type="submit">Save and Continue</button>
+    </form>
+    """
+    return html
+
+
+@app.route('/iframe_select/<string:type_name>')
+def iframe_select_type(type_name):
+    """
+    Displays a simplified label/biography selector for a given type inside an iframe.
+    Users can click to select an item and set confidence and labels.
+    """
+    import os, json
+    biographies_path = f"./types/{type_name}/biographies"
+    label_path = f"./types/{type_name}/labels"
+
+    bios = []
+    if os.path.exists(biographies_path):
+        for file in os.listdir(biographies_path):
+            if file.endswith(".json"):
+                path = os.path.join(biographies_path, file)
+                bio = load_json_as_dict(path)
+                bios.append({
+                    "id": bio.get("id", file[:-5]),
+                    "name": bio.get("name", file[:-5])
+                })
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Select from {type_name}</title>
+      <style>
+        body {{ font-family: sans-serif; padding: 20px; }}
+        select, input {{ margin: 8px 0; width: 100%; max-width: 300px; }}
+        .item-box {{ margin-bottom: 15px; }}
+      </style>
+    </head>
+    <body>
+      <h2>Select a {type_name.capitalize()} and set details</h2>
+      <form method="post" action="/iframe_add_to_life">
+        <input type="hidden" name="type" value="{type_name}">
+        <div class="item-box">
+          <label>Select an item:</label>
+          <select name="item_id" required>
+            {''.join(f'<option value="{b["id"]}">{b["name"]}</option>' for b in bios)}
+          </select>
+        </div>
+        <div class="item-box">
+          <label>Label (optional):</label>
+          <input type="text" name="label" placeholder="e.g. inspired_by, mentor">
+        </div>
+        <div class="item-box">
+          <label>Confidence (0–100%):</label>
+          <input type="number" name="confidence" min="0" max="100" value="80">
+        </div>
+        <button type="submit">Save & Return</button>
       </form>
     </body>
     </html>
     """
     return html
 
+@app.route('/iframe_add_to_life', methods=['POST'])
+def iframe_add_to_life():
+    item = {
+        "type": request.form["type"],
+        "id": request.form["item_id"],
+        "label": request.form.get("label", ""),
+        "confidence": int(request.form.get("confidence", "80")) / 100.0
+    }
 
-@app.route('/life_gen', methods=['GET','POST'])
-def life_gen():
+    if "life_aggregator" not in session:
+        session["life_aggregator"] = {"items": []}
+
+    session["life_aggregator"]["items"].append(item)
+    session.modified = True
+    return "<script>window.top.location.href='/life_iframe_wizard';</script>"
+
+@app.route('/life_iframe_wizard')
+def life_iframe_wizard():
     """
-    Demonstration route that:
-     - On GET, shows a form letting user pick or create multiple people, orgs, buildings, etc.
-     - On POST, compiles them into a single aggregator (like "life biography") and saves.
+    Displays a multi-step wizard where each step is an iframe selecting a different type.
+    After completing all steps, user is redirected to /finalise_life_bio.
     """
+    step = int(request.args.get("step", 0))
+    steps = ["people", "organisations", "buildings"]
+    total = len(steps)
 
-    # Path to aggregator or "events" folder
-    aggregator_path = "./types/events/biographies"
-    os.makedirs(aggregator_path, exist_ok=True)
+    if step >= total:
+        return redirect("/finalise_life_bio")
 
-    if request.method == 'POST':
-        # 1) Collect user input
-        life_name = request.form.get("life_name","Unnamed_Life").strip()
+    type_name = steps[step]
 
-        # e.g. user picks from dropdown or enters new for each type
-        chosen_person = request.form.getlist("people_ids")       # user can pick multiple
-        chosen_buildings = request.form.getlist("building_ids")  # or "settlement_ids"
-        chosen_orgs = request.form.getlist("org_ids")
-
-        # 2) You might also let user set time intervals or partial vs. exact date
-        # For demonstration, we'll store them as-is
-        # 3) Build a single aggregator dictionary
-        import time
-        aggregator_id = f"Life_{int(time.time())}"
-        aggregator_data = {
-            "id": aggregator_id,
-            "name": life_name,
-            "people_ids": chosen_person,
-            "building_ids": chosen_buildings,
-            "org_ids": chosen_orgs,
-            "timestamp": str(int(time.time()))
-            # Add more fields if needed (time ranges, partial, etc.)
-        }
-
-        # 4) Save aggregator JSON
-        aggregator_file = os.path.join(aggregator_path, f"{aggregator_id}.json")
-        save_dict_as_json(aggregator_file, aggregator_data)
-
-        flash(f"Life Biography '{life_name}' created successfully!", "success")
-        return redirect(f"/life_view/{aggregator_id}")  # or some route to view the aggregator
-
-    # If GET => display the form
-    # We'll load each type's existing IDs for the user to pick from
-    # (people, org, building, etc.)
-
-    people_dir = "./types/people/biographies"
-    people_opts = []
-    if os.path.exists(people_dir):
-        for pf in os.listdir(people_dir):
-            if pf.endswith(".json"):
-                pd = load_json_as_dict(os.path.join(people_dir, pf))
-                pid = pd.get("id", pf[:-5])
-                pname = pd.get("name", pid)
-                people_opts.append((pid, pname))
-
-    org_dir = "./types/organisations/biographies"
-    org_opts = []
-    if os.path.exists(org_dir):
-        for of in os.listdir(org_dir):
-            if of.endswith(".json"):
-                od = load_json_as_dict(os.path.join(org_dir, of))
-                oid = od.get("id", of[:-5])
-                oname = od.get("name", oid)
-                org_opts.append((oid, oname))
-
-    # Similarly for buildings, settlements, etc. (not shown for brevity)
-    building_opts = []
-    building_dir = "./types/buildings/biographies"
-    if os.path.exists(building_dir):
-        for bf in os.listdir(building_dir):
-            if bf.endswith(".json"):
-                bd = load_json_as_dict(os.path.join(building_dir, bf))
-                bid = bd.get("id", bf[:-5])
-                bname = bd.get("name", bid)
-                building_opts.append((bid, bname))
-
-    # Build a minimal form
-    html_form = """
+    html = f"""
     <!DOCTYPE html>
     <html>
     <head>
-      <meta charset="UTF-8">
-      <title>Generate Life Biography</title>
+        <meta charset="UTF-8">
+        <title>Life Wizard – Step {step + 1} of {total}</title>
+        <style>
+            body {{
+                font-family: sans-serif;
+                padding: 20px;
+                background-color: #f9f9f9;
+            }}
+            iframe {{
+                border: 1px solid #ccc;
+                border-radius: 8px;
+                width: 100%;
+                height: 400px;
+            }}
+            .btn {{
+                display: inline-block;
+                margin-top: 20px;
+                padding: 10px 18px;
+                background-color: #007bff;
+                color: white;
+                text-decoration: none;
+                border-radius: 5px;
+            }}
+            .btn:hover {{
+                background-color: #0056b3;
+            }}
+        </style>
     </head>
     <body>
-      <h1>Create a Multi-Type Life</h1>
-      <form method="post">
-        <label for="life_name">Name for this Life/Story:</label>
-        <input type="text" name="life_name" placeholder="e.g. 'Alan Turing Extended Life'" required>
-        <br><br>
+        <h1>Step {step + 1} of {total}: Select from <em>{type_name.capitalize()}</em></h1>
 
-        <h3>Pick People:</h3>
-        <p>(Hold Ctrl or Shift to pick multiple if desired)</p>
-        <select name="people_ids" multiple size="5">PEOPLE_OPTIONS</select>
+        <iframe src="/iframe_select/{type_name}"></iframe>
 
-        <h3>Pick Organisations:</h3>
-        <select name="org_ids" multiple size="5">ORG_OPTIONS</select>
-
-        <h3>Pick Buildings:</h3>
-        <select name="building_ids" multiple size="5">BUILDING_OPTIONS</select>
-
-        <!-- if you also want 'settlements', add similarly -->
-
-        <br><br>
-        <button type="submit">Save Multi-Type Life</button>
-      </form>
+        <a class="btn" href="/life_iframe_wizard?step={step + 1}">Continue to Next Step →</a>
     </body>
     </html>
     """
+    return html
 
-    # Insert the <option> lists
-    people_html = "".join(f'<option value="{p[0]}">{p[1]}</option>' for p in people_opts)
-    orgs_html   = "".join(f'<option value="{o[0]}">{o[1]}</option>' for o in org_opts)
-    bldg_html   = "".join(f'<option value="{b[0]}">{b[1]}</option>' for b in building_opts)
+@app.route('/finalise_life_bio')
+def finalise_life_bio():
+    life = session.get("life_aggregator", {})
+    life["id"] = f"Life_{int(time.time())}"
+    life["timestamp"] = str(int(time.time()))
+    life["name"] = life.get("name", "My Life")
 
-    final_html = html_form
-    final_html = final_html.replace("PEOPLE_OPTIONS", people_html)
-    final_html = final_html.replace("ORG_OPTIONS", orgs_html)
-    final_html = final_html.replace("BUILDING_OPTIONS", bldg_html)
+    save_path = f"./types/life/biographies/{life['id']}.json"
+    save_dict_as_json(save_path, life)
+    session.pop("life_aggregator", None)
 
-    return final_html
+    return f"""
+    <h1>Life Biography Created</h1>
+    <p>ID: {life['id']}</p>
+    <a href="/life_view/{life['id']}">View Life</a>
+    """
+
+# @app.route('/life_gen', methods=['GET','POST'])
+# def life_gen():
+#     """
+#     Demonstration route that:
+#      - On GET, shows a form letting user pick or create multiple people, orgs, buildings, etc.
+#      - On POST, compiles them into a single aggregator (like "life biography") and saves.
+#     """
+
+#     # Path to aggregator or "events" folder
+#     aggregator_path = "./types/events/biographies"
+#     os.makedirs(aggregator_path, exist_ok=True)
+
+#     if request.method == 'POST':
+#         # 1) Collect user input
+#         life_name = request.form.get("life_name","Unnamed_Life").strip()
+
+#         # e.g. user picks from dropdown or enters new for each type
+#         chosen_person = request.form.getlist("people_ids")       # user can pick multiple
+#         chosen_buildings = request.form.getlist("building_ids")  # or "settlement_ids"
+#         chosen_orgs = request.form.getlist("org_ids")
+
+#         # 2) You might also let user set time intervals or partial vs. exact date
+#         # For demonstration, we'll store them as-is
+#         # 3) Build a single aggregator dictionary
+#         import time
+#         aggregator_id = f"Life_{int(time.time())}"
+#         aggregator_data = {
+#             "id": aggregator_id,
+#             "name": life_name,
+#             "people_ids": chosen_person,
+#             "building_ids": chosen_buildings,
+#             "org_ids": chosen_orgs,
+#             "timestamp": str(int(time.time()))
+#             # Add more fields if needed (time ranges, partial, etc.)
+#         }
+
+#         # 4) Save aggregator JSON
+#         aggregator_file = os.path.join(aggregator_path, f"{aggregator_id}.json")
+#         save_dict_as_json(aggregator_file, aggregator_data)
+
+#         flash(f"Life Biography '{life_name}' created successfully!", "success")
+#         return redirect(f"/life_view/{aggregator_id}")  # or some route to view the aggregator
+
+#     # If GET => display the form
+#     # We'll load each type's existing IDs for the user to pick from
+#     # (people, org, building, etc.)
+
+#     people_dir = "./types/people/biographies"
+#     people_opts = []
+#     if os.path.exists(people_dir):
+#         for pf in os.listdir(people_dir):
+#             if pf.endswith(".json"):
+#                 pd = load_json_as_dict(os.path.join(people_dir, pf))
+#                 pid = pd.get("id", pf[:-5])
+#                 pname = pd.get("name", pid)
+#                 people_opts.append((pid, pname))
+
+#     org_dir = "./types/organisations/biographies"
+#     org_opts = []
+#     if os.path.exists(org_dir):
+#         for of in os.listdir(org_dir):
+#             if of.endswith(".json"):
+#                 od = load_json_as_dict(os.path.join(org_dir, of))
+#                 oid = od.get("id", of[:-5])
+#                 oname = od.get("name", oid)
+#                 org_opts.append((oid, oname))
+
+#     # Similarly for buildings, settlements, etc. (not shown for brevity)
+#     building_opts = []
+#     building_dir = "./types/buildings/biographies"
+#     if os.path.exists(building_dir):
+#         for bf in os.listdir(building_dir):
+#             if bf.endswith(".json"):
+#                 bd = load_json_as_dict(os.path.join(building_dir, bf))
+#                 bid = bd.get("id", bf[:-5])
+#                 bname = bd.get("name", bid)
+#                 building_opts.append((bid, bname))
+
+#     # Build a minimal form
+#     html_form = """
+#     <!DOCTYPE html>
+#     <html>
+#     <head>
+#       <meta charset="UTF-8">
+#       <title>Generate Life Biography</title>
+#     </head>
+#     <body>
+#       <h1>Create a Multi-Type Life</h1>
+#       <form method="post">
+#         <label for="life_name">Name for this Life/Story:</label>
+#         <input type="text" name="life_name" placeholder="e.g. 'Alan Turing Extended Life'" required>
+#         <br><br>
+
+#         <h3>Pick People:</h3>
+#         <p>(Hold Ctrl or Shift to pick multiple if desired)</p>
+#         <select name="people_ids" multiple size="5">PEOPLE_OPTIONS</select>
+
+#         <h3>Pick Organisations:</h3>
+#         <select name="org_ids" multiple size="5">ORG_OPTIONS</select>
+
+#         <h3>Pick Buildings:</h3>
+#         <select name="building_ids" multiple size="5">BUILDING_OPTIONS</select>
+
+#         <!-- if you also want 'settlements', add similarly -->
+
+#         <br><br>
+#         <button type="submit">Save Multi-Type Life</button>
+#       </form>
+#     </body>
+#     </html>
+#     """
+
+#     # Insert the <option> lists
+#     people_html = "".join(f'<option value="{p[0]}">{p[1]}</option>' for p in people_opts)
+#     orgs_html   = "".join(f'<option value="{o[0]}">{o[1]}</option>' for o in org_opts)
+#     bldg_html   = "".join(f'<option value="{b[0]}">{b[1]}</option>' for b in building_opts)
+
+#     final_html = html_form
+#     final_html = final_html.replace("PEOPLE_OPTIONS", people_html)
+#     final_html = final_html.replace("ORG_OPTIONS", orgs_html)
+#     final_html = final_html.replace("BUILDING_OPTIONS", bldg_html)
+
+#     return final_html
 
 
 @app.route('/life_view/<aggregator_id>')
