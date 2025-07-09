@@ -1,0 +1,16 @@
+{
+    "time": {
+        "label_type": "life_decade",
+        "confidence": "exact",
+        "subvalue": "thirties"
+    },
+    "life_id": "Life_1752028048_Santa_Claus",
+    "mostlike": {
+        "id": "Santa_1752000176",
+        "confidence": "96"
+    },
+    "people": {
+        "label_type": "celebea_face_hq",
+        "confidence": "exact"
+    }
+}

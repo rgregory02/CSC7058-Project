@@ -4,7 +4,7 @@ import shutil  # For moving files and folders
 import time  # For unique timestamps
 
 from flask import Flask, Response, jsonify, request, url_for, redirect, render_template, flash, get_flashed_messages, send_from_directory, render_template_string, session
-from markupsafe import Markup
+from markupsafe import Markup, escape
 from urllib.parse import quote, unquote
 from datetime import datetime  # For readable timestamps
 
@@ -36,15 +36,25 @@ def load_json_as_dict(file_path):
         return {}  # Return an empty dict if loading fails
 
 def save_dict_as_json(file_path, dictionary):
-    """
-    Save a dictionary as a formatted JSON file.
-    Handles potential errors in writing.
-    """
     try:
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(dictionary, f, ensure_ascii=False, indent=4)
+        return True
     except IOError as e:
         print(f"Error saving JSON file {file_path}: {e}")
+        return False
+
+# def save_dict_as_json(file_path, dictionary):
+#     """
+#     Save a dictionary as a formatted JSON file.
+#     Handles potential errors in writing.
+#     """
+#     try:
+#         with open(file_path, 'w', encoding='utf-8') as f:
+#             json.dump(dictionary, f, ensure_ascii=False, indent=4)
+#     except IOError as e:
+#         print(f"Error saving JSON file {file_path}: {e}")
 
 def get_readable_time(timestamp):
     """
@@ -625,127 +635,370 @@ def index_page():
 #     """
 #     return html
 
-# Step 1: Life Wizard Homepage with iframe navigation
-@app.route('/life_wizard')
-def life_wizard_home():
-    html = """
+
+# @app.route("/life_iframe_wizard", methods=["GET", "POST"])
+# def life_iframe_wizard():
+#     """
+#     Step 0: Select a time period (from /types/time).
+#     Saves selected time to session and proceeds to 'most like' person step.
+#     """
+#     time_folder = "./types/time"
+#     time_options = []
+
+#     if os.path.exists(time_folder):
+#         for file in os.listdir(time_folder):
+#             if file.endswith(".json"):
+#                 data = load_json_as_dict(os.path.join(time_folder, file))
+#                 label = data.get("name", file[:-5])
+#                 value = os.path.splitext(file)[0]
+#                 time_options.append((value, label))
+
+#     if request.method == "POST":
+#         selected_time = request.form.get("time_period")
+#         session["life_time"] = selected_time
+#         return redirect("/iframe_select_mostlike")
+
+#     html = """
+#     <!DOCTYPE html>
+#     <html>
+#     <head><title>Select Time Period</title></head>
+#     <body>
+#       <h1>Step 0: Choose a Time Period</h1>
+#       <form method="POST">
+#         <label for="time_period">Select Time:</label>
+#         <select name="time_period" required>
+#     """
+#     html += "".join(f'<option value="{val}">{label}</option>' for val, label in time_options)
+#     html += """
+#         </select><br><br>
+#         <button type="submit">Continue →</button>
+#       </form>
+#     </body>
+#     </html>
+#     """
+#     return html
+
+# @app.route('/life_iframe_wizard')
+# def life_iframe_wizard():
+#     """
+#     Multi-step life biography builder using iframes for interactive type-based selection.
+#     Steps include:
+#         - time (choose a time period)
+#         - mostlike (optional: choose a person you're most like)
+#         - other types like people, organisations, buildings...
+#     """
+#     steps = ["time", "mostlike", "people", "organisations", "buildings"]
+#     step = int(request.args.get("step", 0))
+#     total = len(steps)
+
+#     if step >= total:
+#         return redirect("/finalise_life_bio")
+
+#     type_name = steps[step]
+
+#     # Determine iframe source per step
+#     if type_name == "time":
+#         iframe_src = "/iframe_select_time"
+#     elif type_name == "mostlike":
+#         iframe_src = "/iframe_select_mostlike"
+#     else:
+#         iframe_src = f"/iframe_select/{type_name}"
+
+#     # Pull previously saved session data for display
+#     saved_time = session.get("life_bio_time", "⏳ Not selected yet")
+#     saved_mostlike = session.get("life_bio_mostlike", "🧍 Not selected yet")
+#     selected_labels = session.get("life_bio_labels", {})
+
+#     # HTML output
+#     html = f"""
+#     <!DOCTYPE html>
+#     <html>
+#     <head>
+#       <meta charset="UTF-8">
+#       <title>Life Wizard: Step {step + 1} of {total}</title>
+#       <style>
+#         iframe {{ border: 1px solid #ccc; margin-top: 10px; }}
+#         .summary-box {{
+#           background: #f9f9f9;
+#           padding: 10px;
+#           border: 1px solid #ddd;
+#           margin-bottom: 20px;
+#         }}
+#       </style>
+#     </head>
+#     <body>
+#       <h1>Step {step + 1} of {total}: {type_name.capitalize()}</h1>
+
+#       <div class="summary-box">
+#         <strong>Time Period:</strong> {saved_time} <br>
+#         <strong>Most Like:</strong> {saved_mostlike} <br>
+#         <strong>Selected Labels:</strong><br>
+#     """
+
+#     for k, v in selected_labels.items():
+#         html += f"– {k.capitalize()}: {v}<br>"
+
+#     html += f"""
+#       </div>
+
+#       <iframe src="{iframe_src}" width="100%" height="400"></iframe>
+#       <br><br>
+#       <a href="/life_iframe_wizard?step={step + 1}">➡ Continue to Step {step + 2}</a>
+#     </body>
+#     </html>
+#     """
+#     return html
+
+# @app.route('/life_iframe_wizard')
+# def life_iframe_wizard():
+#     step = int(request.args.get("step", 0))
+#     steps = ["time", "mostlike", "people", "buildings", "organisations"]
+#     total = len(steps)
+
+#     if step >= total:
+#         return redirect("/finalise_life_bio")
+
+#     step_name = steps[step]
+
+#     # Step-specific iframe source
+#     iframe_src = f"/iframe_select_{step_name}" if step_name == "mostlike" else f"/life_step/{step_name}/{session.get('life_id', 'new')}"
+
+#     html = f"""
+#     <!DOCTYPE html>
+#     <html>
+#     <head>
+#       <meta charset="UTF-8">
+#       <title>Step {step + 1} of {total}</title>
+#     </head>
+#     <body>
+#       <h1>Step {step + 1}: {step_name.capitalize()}</h1>
+#       <iframe src="{iframe_src}" width="100%" height="500" style="border:1px solid #ccc;"></iframe>
+#       <br><br>
+#       <a href="/life_iframe_wizard?step={step + 1}">Continue to Next Step →</a>
+#     </body>
+#     </html>
+#     """
+#     return html
+
+#######################################
+# ROUTE 1: Life Iframe Wizard Navigation
+#######################################
+
+@app.route('/life_iframe_wizard')
+def life_iframe_wizard():
+    step = int(request.args.get("step", 0))
+    steps = ["time", "mostlike", "people", "buildings", "organisations"]
+    total = len(steps)
+
+    if step >= total:
+        return redirect("/finalise_life_bio")
+
+    step_name = steps[step]
+    iframe_src = f"/iframe_select_{step_name}" if step_name == "mostlike" else f"/life_step/{step_name}/{session.get('life_id', 'new')}"
+
+    name_display = session.get("life_bio_name", "Unnamed Biography")
+
+    html = f"""
     <!DOCTYPE html>
     <html>
-    <head>
-        <title>Life Wizard</title>
-        <style>
-            iframe { width: 100%; height: 600px; border: 1px solid #ccc; margin-top: 20px; }
-        </style>
-    </head>
+    <head><meta charset="UTF-8"><title>Step {step + 1} of {total}</title></head>
     <body>
-        <h1>Create Your Multi-Type Life Biography</h1>
-        <p>Start by choosing a time period below. After that, you'll select values for each type.</p>
-
-        <iframe src="/life_step/time/new" id="wizardFrame"></iframe>
+      <h1>Step {step + 1}: {step_name.capitalize()}</h1>
+      <h3>Name: {name_display}</h3>
+      <iframe src="{iframe_src}" width="100%" height="500" style="border:1px solid #ccc;"></iframe>
+      <br><br>
+      <a href="/life_iframe_wizard?step={step + 1}">Continue to Next Step →</a>
     </body>
     </html>
     """
     return html
 
-# Step 2: Generic life_step handler
-@app.route('/life_step/<type_name>/<life_id>', methods=['GET', 'POST'])
-def life_step(type_name, life_id):
-    import uuid
-    from markupsafe import escape
 
-    folder = f"./types/{type_name}/biographies"
-    labels_folder = f"./types/{type_name}/labels"
-    os.makedirs(folder, exist_ok=True)
-    os.makedirs(f"./types/life/biographies", exist_ok=True)
+###############################################
+# ROUTE 2: Time Step for Naming and Time Label
+###############################################
+
+@app.route('/life_step/time/<life_id>', methods=['GET', 'POST'])
+def life_step_time(life_id):
+    type_name = "time"
+    base_dir = f"./types/{type_name}"
+    labels_folder = os.path.join(base_dir, "labels")
+    life_dir = "./types/life/biographies"
+    os.makedirs(labels_folder, exist_ok=True)
+    os.makedirs(life_dir, exist_ok=True)
 
     if life_id == "new":
-        life_id = f"Life_{int(time.time())}_{type_name}"
-        return redirect(f"/life_step/{type_name}/{life_id}")
+        return """
+        <html><body>
+        <h2>Name Your Life Biography</h2>
+        <form method="get" action="/life_step/time/Life_start_named">
+            <input type="text" name="chosen_name" required placeholder="e.g. My Epic Life">
+            <button type="submit">Start</button>
+        </form>
+        </body></html>
+        """
 
-    if request.method == 'POST':
-        selected_id = request.form.get("selected_item")
-        confidence = request.form.get("confidence")
-        label_values = request.form.getlist("labels")
+    if life_id == "Life_start_named":
+        chosen_name = request.args.get("chosen_name", "").strip().replace(" ", "_")
+        if not chosen_name:
+            return redirect("/life_step/time/new")
 
-        life_file = f"./types/life/biographies/{life_id}.json"
-        life_data = {}
-        if os.path.exists(life_file):
-            life_data = load_json_as_dict(life_file)
+        full_id = f"Life_{int(time.time())}_{chosen_name}"
+        session['life_id'] = full_id
+        session['life_bio_name'] = chosen_name
+        return redirect(f"/life_step/time/{full_id}")
 
-        life_data.setdefault(type_name, {})
-        life_data[type_name]["id"] = selected_id
-        life_data[type_name]["labels"] = label_values
-        life_data[type_name]["confidence"] = confidence
+    # Load existing data
+    life_file = os.path.join(life_dir, f"{life_id}.json")
+    life_data = load_json_as_dict(life_file)
+
+    selected_label_type = request.form.get("label_type") if request.method == 'POST' else None
+    selected_subvalue = request.form.get("subvalue") if request.method == 'POST' else None
+    selected_date = request.form.get("date_value") if request.method == 'POST' else None
+    selected_confidence = request.form.get("confidence") if request.method == 'POST' else None
+
+    # Handle save
+    if request.method == 'POST' and selected_label_type:
+        life_data.setdefault(type_name, {"label_type": selected_label_type})
         life_data["life_id"] = life_id
+        life_data[type_name]["confidence"] = selected_confidence
 
-        save_dict_as_json(life_file, life_data)
-        flash(f"Saved {type_name} selection for {life_id}", "success")
+        if selected_label_type == "date" and selected_date:
+            life_data[type_name]["date_value"] = selected_date
+            save_dict_as_json(life_file, life_data)
+            return redirect("/life_iframe_wizard?step=1")
 
-        # Determine next type
-        next_type = {
-            "time": "people",
-            "people": "buildings",
-            "buildings": "organisations",
-            "organisations": None
-        }.get(type_name)
+        elif selected_subvalue:
+            life_data[type_name]["subvalue"] = selected_subvalue
+            save_dict_as_json(life_file, life_data)
+            return redirect("/life_iframe_wizard?step=1")
 
-        if next_type:
-            return redirect(f"/life_step/{next_type}/{life_id}")
-        else:
-            return redirect(f"/life_view/{life_id}")
-
-    # Load options
-    options = []
-    if os.path.exists(folder):
-        for f in os.listdir(folder):
-            if f.endswith(".json"):
-                data = load_json_as_dict(os.path.join(folder, f))
-                display_name = data.get("name") or f[:-5]
-                options.append((f[:-5], display_name))
-
-    label_display = []
+    # Load label types
+    top_labels = []
     if os.path.exists(labels_folder):
-        for lbl in sorted(os.listdir(labels_folder)):
-            if lbl.endswith(".json"):
-                with open(os.path.join(labels_folder, lbl)) as lf:
+        for file in os.listdir(labels_folder):
+            if file.endswith(".json"):
+                with open(os.path.join(labels_folder, file)) as f:
                     try:
-                        data = json.load(lf)
-                        label_display.append((lbl[:-5], data.get("description", "")))
+                        data = json.load(f)
+                        desc = data.get("description", "")
+                        top_labels.append((file[:-5], desc))
                     except:
                         continue
 
-    html = f"""
-    <h2>Select a {escape(type_name.capitalize())}</h2>
-    <form method="post">
-        <label>Choose {escape(type_name)}:</label>
-        <select name="selected_item" required>
-            {''.join([f'<option value="{oid}">{name}</option>' for oid, name in options])}
-        </select><br><br>
+    # Generate subinput
+    subinput_html = ""
+    if selected_label_type:
+        label_subfolder_path = os.path.join(labels_folder, selected_label_type)
+        if selected_label_type == 'date':
+            subinput_html = """
+                <label for='date_value'>Enter Date:</label>
+                <input type='date' name='date_value' required>
+            """
+        elif os.path.isdir(label_subfolder_path):
+            subvalues = [f[:-5] for f in os.listdir(label_subfolder_path) if f.endswith(".json")]
+            subinput_html = f"""
+                <label for='subvalue'>Choose from:</label>
+                <select name='subvalue' required>
+                    {''.join([f"<option value='{val}'>{val}</option>" for val in subvalues])}
+                </select>
+            """
 
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><title>Step 1: Time Selection</title></head>
+    <body>
+      <h1>Step 1: Select Time Context</h1>
+      <h3>Name: {session.get('life_bio_name', 'Unnamed')}</h3>
+      <form method="post">
+        <label for='label_type'>Choose a Time Label Type:</label>
+        <select name='label_type' required onchange='this.form.submit()'>
+            <option value=''>-- Select --</option>
+            {''.join(f"<option value='{lbl}' {'selected' if lbl == selected_label_type else ''}>{lbl} - {desc}</option>" for lbl, desc in top_labels)}
+        </select>
+        <br><br>
         <label>Confidence Interval:</label>
-        <select name="confidence">
+        <select name="confidence" required>
             <option value="exact">Exact</option>
             <option value="high">High</option>
             <option value="medium">Medium</option>
             <option value="low">Low</option>
-        </select><br><br>
-
-        <label>Select Label Values:</label><br>
-        {''.join([f'<input type="checkbox" name="labels" value="{val}">{val} ({desc})<br>' for val, desc in label_display])}
-
-        <br><br><button type="submit">Save and Continue</button>
-    </form>
+        </select>
+        <br><br>
+        {subinput_html}
+        <br><br>
+        <button type="submit">Save and Continue</button>
+      </form>
+    </body>
+    </html>
     """
     return html
+
+@app.route('/iframe_select_time')
+def iframe_select_time():
+    """
+    Iframe step for selecting a time period from the types/time/labels folder.
+    """
+    label_dir = "./types/time/labels"
+    time_options = []
+
+    if os.path.exists(label_dir):
+        for file in os.listdir(label_dir):
+            if file.endswith(".json"):
+                try:
+                    label_path = os.path.join(label_dir, file)
+                    data = load_json_as_dict(label_path)
+                    label_name = data.get("name") or os.path.splitext(file)[0]
+                    time_options.append(label_name)
+                except Exception as e:
+                    print(f"Error reading {file}: {e}")
+
+    html = """
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="UTF-8"><title>Select Time Period</title></head>
+    <body>
+      <h2>Step 1: Choose a Time Period</h2>
+      <form action="/save_time_choice" method="post">
+    """
+
+    if time_options:
+        for option in time_options:
+            html += f"""
+            <div>
+              <input type="radio" name="time_choice" value="{option}" required>
+              <label>{option}</label>
+            </div>
+            """
+        html += """
+            <br><button type="submit">Save & Continue</button>
+        </form>
+        """
+    else:
+        html += "<p><em>No time periods found in /types/time/labels</em></p>"
+
+    html += "</body></html>"
+    return html
+
+@app.route('/save_time_choice', methods=['POST'])
+def save_time_choice():
+    choice = request.form.get("time_choice")
+    if choice:
+        session['life_bio_time'] = choice
+    return redirect("/life_iframe_wizard?step=1")
 
 
 @app.route('/iframe_select/<string:type_name>')
 def iframe_select_type(type_name):
     """
-    Displays a simplified label/biography selector for a given type inside an iframe.
-    Users can click to select an item and set confidence and labels.
+    Displays a selector inside an iframe with:
+    - Biography options (with optional images),
+    - Confidence slider,
+    - Optional label input.
     """
     import os, json
+
     biographies_path = f"./types/{type_name}/biographies"
     label_path = f"./types/{type_name}/labels"
 
@@ -757,45 +1010,151 @@ def iframe_select_type(type_name):
                 bio = load_json_as_dict(path)
                 bios.append({
                     "id": bio.get("id", file[:-5]),
-                    "name": bio.get("name", file[:-5])
+                    "name": bio.get("name", file[:-5]),
+                    "image": bio.get("image", "")  # optional
                 })
 
-    html = f"""
+    html = """
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="UTF-8">
-      <title>Select from {type_name}</title>
+      <title>Select Item</title>
       <style>
-        body {{ font-family: sans-serif; padding: 20px; }}
-        select, input {{ margin: 8px 0; width: 100%; max-width: 300px; }}
-        .item-box {{ margin-bottom: 15px; }}
+        body { font-family: sans-serif; padding: 20px; }
+        .bio-card {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          margin-bottom: 15px;
+          padding: 10px;
+          border: 1px solid #ccc;
+          border-radius: 8px;
+        }
+        img {
+          width: 64px; height: 64px;
+          object-fit: cover;
+          border-radius: 8px;
+          background-color: #f0f0f0;
+        }
+        select, input[type='text'], input[type='range'] {
+          margin-top: 8px;
+          width: 100%;
+          max-width: 300px;
+        }
+        .confidence-display {
+          font-weight: bold;
+          margin-top: 5px;
+        }
       </style>
     </head>
     <body>
-      <h2>Select a {type_name.capitalize()} and set details</h2>
+      <h2>Select from {type_name}</h2>
       <form method="post" action="/iframe_add_to_life">
         <input type="hidden" name="type" value="{type_name}">
-        <div class="item-box">
-          <label>Select an item:</label>
-          <select name="item_id" required>
-            {''.join(f'<option value="{b["id"]}">{b["name"]}</option>' for b in bios)}
-          </select>
-        </div>
-        <div class="item-box">
-          <label>Label (optional):</label>
-          <input type="text" name="label" placeholder="e.g. inspired_by, mentor">
-        </div>
-        <div class="item-box">
-          <label>Confidence (0–100%):</label>
-          <input type="number" name="confidence" min="0" max="100" value="80">
-        </div>
-        <button type="submit">Save & Return</button>
+        <label>Select an item:</label><br>
+        <select name="item_id" required>
+    """.replace("{type_name}", type_name.capitalize())
+
+    for bio in bios:
+        img_path = f"/serve_label_image/{type_name}/{bio['id']}/{bio['image']}" if bio['image'] else "/static/placeholder.png"
+        html += f'<option value="{bio["id"]}">{bio["name"]}</option>'
+
+    html += """
+        </select><br><br>
+
+        <label>Label (optional):</label><br>
+        <input type="text" name="label" placeholder="e.g. inspired_by, mentor"><br><br>
+
+        <label>Confidence:</label><br>
+        <input type="range" id="confidence" name="confidence" min="0" max="100" value="80" oninput="document.getElementById('confVal').innerText = this.value + '%'">
+        <div class="confidence-display">Confidence: <span id="confVal">80%</span></div>
+
+        <br><br><button type="submit">Save & Return</button>
+      </form>
+    </body>
+    </html>
+    """
+
+    return html
+
+@app.route('/iframe_select_mostlike')
+def iframe_select_mostlike():
+    people_path = "./types/people/biographies"
+    bios = []
+
+    if os.path.exists(people_path):
+        for file in os.listdir(people_path):
+            if file.endswith(".json"):
+                path = os.path.join(people_path, file)
+                bio = load_json_as_dict(path)
+                bios.append({
+                    "id": bio.get("id", file[:-5]),
+                    "name": bio.get("name", file[:-5]),
+                    "image": bio.get("image", "")  # optional
+                })
+
+    html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Most Like</title>
+      <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .card { display: flex; align-items: center; margin-bottom: 12px; border: 1px solid #ccc; padding: 10px; border-radius: 8px; }
+        img { width: 60px; height: 60px; object-fit: cover; border-radius: 50%; margin-right: 15px; }
+        select, input[type='range'] { width: 100%; max-width: 300px; }
+        .confidence-display { font-weight: bold; margin-top: 5px; }
+      </style>
+    </head>
+    <body>
+      <h2>Choose the person you're most like</h2>
+      <form method="post" action="/save_mostlike">
+        <label>Person:</label><br>
+        <select name="mostlike_id" required>
+    """
+
+    for bio in bios:
+        html += f'<option value="{bio["id"]}">{bio["name"]}</option>'
+
+    html += """
+        </select><br><br>
+
+        <label>Confidence:</label><br>
+        <input type="range" name="confidence" min="0" max="100" value="75" oninput="document.getElementById('confShow').innerText = this.value + '%'">
+        <div class="confidence-display">Confidence: <span id="confShow">75%</span></div>
+
+        <br><button type="submit">Save and Continue</button>
       </form>
     </body>
     </html>
     """
     return html
+
+@app.route('/save_mostlike', methods=['POST'])
+def save_mostlike():
+    mostlike_id = request.form.get("mostlike_id")
+    confidence = request.form.get("confidence", "75")
+    life_id = session.get("life_id")
+
+    if not life_id:
+        flash("No active life biography session", "danger")
+        return redirect("/")
+
+    life_file = f"./types/life/biographies/{life_id}.json"
+    life_data = {}
+    if os.path.exists(life_file):
+        life_data = load_json_as_dict(life_file)
+
+    life_data["mostlike"] = {
+        "id": mostlike_id,
+        "confidence": confidence
+    }
+
+    save_dict_as_json(life_file, life_data)
+
+    return redirect("/life_iframe_wizard?step=2")
 
 @app.route('/iframe_add_to_life', methods=['POST'])
 def iframe_add_to_life():
@@ -813,59 +1172,217 @@ def iframe_add_to_life():
     session.modified = True
     return "<script>window.top.location.href='/life_iframe_wizard';</script>"
 
-@app.route('/life_iframe_wizard')
-def life_iframe_wizard():
-    """
-    Displays a multi-step wizard where each step is an iframe selecting a different type.
-    After completing all steps, user is redirected to /finalise_life_bio.
-    """
-    step = int(request.args.get("step", 0))
-    steps = ["people", "organisations", "buildings"]
-    total = len(steps)
+# @app.route('/life_step/time/<life_id>', methods=['GET', 'POST'])
+# def life_step_time(life_id):
+#     from markupsafe import escape
 
-    if step >= total:
-        return redirect("/finalise_life_bio")
+#     type_name = "time"
+#     base_dir = f"./types/{type_name}"
+#     labels_folder = os.path.join(base_dir, "labels")
+#     life_dir = "./types/life/biographies"
+#     os.makedirs(labels_folder, exist_ok=True)
+#     os.makedirs(life_dir, exist_ok=True)
 
-    type_name = steps[step]
+#     # Step 1: If "new", prompt for a name
+#     if life_id == "new":
+#         return """
+#         <html><body>
+#         <h2>Name Your Life Biography</h2>
+#         <form method="get" action="/life_step/time/Life_start_named">
+#             <input type="text" name="chosen_name" required placeholder="e.g. My Epic Life">
+#             <button type="submit">Start</button>
+#         </form>
+#         </body></html>
+#         """
+
+#     # Step 2: If redirected from above, extract chosen name and generate ID
+#     if life_id == "Life_start_named":
+#         chosen_name = request.args.get("chosen_name", "").strip().replace(" ", "_")
+#         if not chosen_name:
+#             return redirect("/life_step/time/new")
+#         life_id = f"Life_{int(time.time())}_{chosen_name}"
+#         return redirect(f"/life_step/time/{life_id}")
+
+#     # Load or initialise life biography file
+#     life_file = os.path.join(life_dir, f"{life_id}.json")
+#     life_data = load_json_as_dict(life_file)
+
+#     selected_label_type = request.form.get("label_type") if request.method == 'POST' else None
+#     selected_subvalue = request.form.get("subvalue") if request.method == 'POST' else None
+#     selected_date = request.form.get("date_value") if request.method == 'POST' else None
+#     selected_confidence = request.form.get("confidence") if request.method == 'POST' else None
+
+#     # Handle form submission
+#     if request.method == 'POST' and selected_label_type:
+#         life_data.setdefault(type_name, {"label_type": selected_label_type})
+#         life_data["life_id"] = life_id
+#         life_data[type_name]["confidence"] = selected_confidence
+
+#         if selected_label_type == "date" and selected_date:
+#             life_data[type_name]["date_value"] = selected_date
+#             save_dict_as_json(life_file, life_data)
+#             return redirect(f"/life_step/people/{life_id}")
+#         elif selected_subvalue:
+#             life_data[type_name]["subvalue"] = selected_subvalue
+#             save_dict_as_json(life_file, life_data)
+#             return redirect(f"/life_step/people/{life_id}")
+
+#     # Load available top-level labels
+#     top_labels = []
+#     if os.path.exists(labels_folder):
+#         for file in os.listdir(labels_folder):
+#             if file.endswith(".json"):
+#                 with open(os.path.join(labels_folder, file)) as f:
+#                     try:
+#                         data = json.load(f)
+#                         desc = data.get("description", "")
+#                         top_labels.append((file[:-5], desc))
+#                     except:
+#                         continue
+
+#     # If selected label has a subfolder, list its options
+#     subinput_html = ""
+#     if selected_label_type:
+#         label_subfolder_path = os.path.join(labels_folder, selected_label_type)
+#         if selected_label_type == 'date':
+#             subinput_html = """
+#                 <label for='date_value'>Enter Date:</label>
+#                 <input type='date' name='date_value' required>
+#             """
+#         elif os.path.isdir(label_subfolder_path):
+#             subvalues = [
+#                 file[:-5] for file in sorted(os.listdir(label_subfolder_path))
+#                 if file.endswith(".json")
+#             ]
+#             subinput_html = f"""
+#                 <label for='subvalue'>Choose from:</label>
+#                 <select name='subvalue' required>
+#                     {''.join(f"<option value='{val}'>{val}</option>" for val in subvalues)}
+#                 </select>
+#             """
+
+#     # Build full HTML
+#     html = f"""
+#     <!DOCTYPE html>
+#     <html>
+#     <head><title>Step 1: Time Selection</title></head>
+#     <body>
+#       <h1>Step 1: Select Time Context</h1>
+#       <form method="post">
+#         <label for='label_type'>Choose a Time Label Type:</label>
+#         <select name='label_type' required onchange='this.form.submit()'>
+#             <option value=''>-- Select --</option>
+#             {''.join(f"<option value='{lbl}' {'selected' if lbl == selected_label_type else ''}>{lbl} - {desc}</option>" for lbl, desc in top_labels)}
+#         </select>
+#         <br><br>
+#         <label>Confidence Interval:</label>
+#         <select name="confidence" required>
+#             <option value="exact">Exact</option>
+#             <option value="high">High</option>
+#             <option value="medium">Medium</option>
+#             <option value="low">Low</option>
+#         </select>
+#         <br><br>
+#         {subinput_html}
+#         <br><br>
+#         <button type="submit">Save and Continue</button>
+#       </form>
+#     </body>
+#     </html>
+#     """
+#     return html
+
+@app.route('/life_step/people/<life_id>', methods=['GET', 'POST'])
+def life_step_people(life_id):
+    from markupsafe import escape
+
+    type_name = 'people'
+    folder = f"./types/{type_name}/biographies"
+    labels_folder = f"./types/{type_name}/labels"
+    os.makedirs(folder, exist_ok=True)
+    os.makedirs(f"./types/life/biographies", exist_ok=True)
+
+    life_file = f"./types/life/biographies/{life_id}.json"
+    life_data = {}
+    if os.path.exists(life_file):
+        life_data = load_json_as_dict(life_file)
+
+    selected_label_type = request.form.get("label_type") if request.method == 'POST' else None
+    selected_subvalue = request.form.get("subvalue") if request.method == 'POST' else None
+    selected_date = request.form.get("date_value") if request.method == 'POST' else None
+    selected_confidence = request.form.get("confidence") if request.method == 'POST' else None
+
+    # Save and redirect only if inputs are valid
+    if request.method == 'POST' and selected_label_type:
+        life_data.setdefault(type_name, {})
+        life_data[type_name]["label_type"] = selected_label_type
+        life_data[type_name]["confidence"] = selected_confidence
+
+        if selected_label_type == 'date' and selected_date:
+            life_data[type_name]["date_value"] = selected_date
+        elif selected_subvalue:
+            life_data[type_name]["subvalue"] = selected_subvalue
+
+        life_data["life_id"] = life_id
+        save_dict_as_json(life_file, life_data)
+
+        return redirect(f"/life_step/buildings/{life_id}")
+
+    # Load label types
+    top_labels = []
+    if os.path.exists(labels_folder):
+        for file in os.listdir(labels_folder):
+            if file.endswith(".json"):
+                with open(os.path.join(labels_folder, file)) as f:
+                    try:
+                        data = json.load(f)
+                        desc = data.get("description", "")
+                        top_labels.append((file[:-5], desc))
+                    except:
+                        continue
+
+    # Generate subinput HTML
+    subinput_html = ""
+    if selected_label_type:
+        label_subfolder_path = os.path.join(labels_folder, selected_label_type)
+        if selected_label_type == 'date':
+            subinput_html = """
+                <label for='date_value'>Enter Date:</label>
+                <input type='date' name='date_value' required>
+            """
+        elif os.path.isdir(label_subfolder_path):
+            subvalues = [f[:-5] for f in os.listdir(label_subfolder_path) if f.endswith(".json")]
+            subinput_html = f"""
+                <label for='subvalue'>Choose from:</label>
+                <select name='subvalue' required>
+                    {''.join([f"<option value='{val}'>{val}</option>" for val in subvalues])}
+                </select>
+            """
 
     html = f"""
     <!DOCTYPE html>
     <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>Life Wizard – Step {step + 1} of {total}</title>
-        <style>
-            body {{
-                font-family: sans-serif;
-                padding: 20px;
-                background-color: #f9f9f9;
-            }}
-            iframe {{
-                border: 1px solid #ccc;
-                border-radius: 8px;
-                width: 100%;
-                height: 400px;
-            }}
-            .btn {{
-                display: inline-block;
-                margin-top: 20px;
-                padding: 10px 18px;
-                background-color: #007bff;
-                color: white;
-                text-decoration: none;
-                border-radius: 5px;
-            }}
-            .btn:hover {{
-                background-color: #0056b3;
-            }}
-        </style>
-    </head>
+    <head><title>Step 2: People</title></head>
     <body>
-        <h1>Step {step + 1} of {total}: Select from <em>{type_name.capitalize()}</em></h1>
-
-        <iframe src="/iframe_select/{type_name}"></iframe>
-
-        <a class="btn" href="/life_iframe_wizard?step={step + 1}">Continue to Next Step →</a>
+      <h1>Step 2: People</h1>
+      <form method="post">
+        <label for='label_type'>Choose label type:</label>
+        <select name='label_type' required onchange='this.form.submit()'>
+            <option value=''>-- select --</option>
+            {''.join([f"<option value='{lbl}' {'selected' if lbl == selected_label_type else ''}>{lbl} - {desc}</option>" for lbl, desc in top_labels])}
+        </select>
+        <br><br>
+        <label>Confidence Interval:</label>
+        <select name="confidence">
+            <option value="exact">Exact</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+        </select>
+        <br><br>
+        {subinput_html}
+        <br><br><button type="submit">Save and Continue</button>
+      </form>
     </body>
     </html>
     """
