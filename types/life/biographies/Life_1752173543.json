@@ -1,0 +1,15 @@
+{
+    "life_id": "Life_1752173543",
+    "name": "TestTest",
+    "entries": [],
+    "time": [
+        {
+            "label_type": "life_decade",
+            "confidence": "exact"
+        },
+        {
+            "label_type": "date",
+            "confidence": "exact"
+        }
+    ]
+}

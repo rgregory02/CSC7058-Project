@@ -1,0 +1,17 @@
+{
+    "life_id": "Life_1752173297",
+    "name": "Tester",
+    "entries": [],
+    "times": [
+        {
+            "time_id": "time_c5cb03",
+            "label_type": "date",
+            "date_value": "2025-07-02",
+            "confidence": "high"
+        }
+    ],
+    "people": {
+        "label_type": "celebea_face_hq",
+        "confidence": "exact"
+    }
+}

@@ -25,6 +25,11 @@
                 {
                     "label": "first_name",
                     "value": "JimmyJimBob123"
+                },
+                {
+                    "label": "celebea_face_hq",
+                    "value": "1",
+                    "confidence": 1.0
                 }
             ]
         },
@@ -50,6 +55,23 @@
                 "end": {
                     "approach": "life_decade",
                     "value": "90"
+                }
+            },
+            "labels": []
+        },
+        {
+            "time_period": {
+                "start": {
+                    "approach": "date",
+                    "mode": "partial",
+                    "value": "Unknown Year",
+                    "is_partial": true
+                },
+                "end": {
+                    "approach": "date",
+                    "mode": "exact",
+                    "value": "No Date",
+                    "is_partial": false
                 }
             },
             "labels": []
