@@ -1,0 +1,88 @@
+<!-- templates/life_step_time.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Select Time Period</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<div class="container">
+    <h1>Step 1: Time</h1>
+    <p><strong>Name:</strong> {{ name }}</p>
+    <hr>
+    <h2>🧭 Select a Time Period</h2>
+    <form method="POST">
+        <label for="label_type">Choose a time type:</label>
+        <select id="label_type" name="label_type" class="dropdown" onchange="this.form.submit()" required>
+            <option value="">-- Select Time Label --</option>
+            {% for label, desc in label_files %}
+                <option value="{{ label }}" {% if label == selected_label_type %}selected{% endif %}>
+                    {{ label|replace('_', ' ')|title }}{% if desc %} - {{ desc }}{% endif %}
+                </option>
+            {% endfor %}
+        </select>
+
+        <div id="calendar_input" style="display:none; margin-top:15px;">
+            <label for="date_value">Pick a date:</label>
+            <input type="date" id="date_value" name="date_value" class="input-field" value="{{ selected_date or '' }}">
+        </div>
+
+        <div id="subvalue_input" style="display:none; margin-top:15px;">
+            <label for="subvalue">Select a value:</label>
+            <select id="subvalue" name="subvalue" class="dropdown">
+                {% for item in subfolder_labels %}
+                    <option value="{{ item }}" {% if item == selected_subvalue %}selected{% endif %}>{{ item|replace('_', ' ')|title }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="margin-top:15px;">
+            <label for="confidence">Confidence:</label>
+            <input type="range" id="confidence" name="confidence" min="0" max="100" value="{{ selected_confidence or 100 }}">
+            <span id="confidence_display">{{ selected_confidence or 100 }}</span>%
+            <div><small id="confidence_level"></small></div>
+        </div>
+
+        <button type="submit" class="add-entry-button">✅ Save Time Selection</button>
+    </form>
+
+    <hr>
+    <h3>Current Time Period</h3>
+    <ul>
+        {% for tag, conf in existing_entries %}
+        <li>{{ tag }} – Confidence: {{ conf }}</li>
+        {% endfor %}
+    </ul>
+    <br>
+    <a href="/life_iframe_wizard?step=1&life_id={{ life_id }}">Continue →</a>
+</div>
+
+<script>
+    function toggleInputs() {
+        const labelType = document.getElementById("label_type").value;
+        document.getElementById("calendar_input").style.display = (labelType === "date") ? "block" : "none";
+        document.getElementById("subvalue_input").style.display = (labelType !== "date" && labelType !== "") ? "block" : "none";
+    }
+
+    toggleInputs(); // run on page load
+
+    const confidenceInput = document.getElementById("confidence");
+    const confidenceDisplay = document.getElementById("confidence_display");
+    const confidenceLevel = document.getElementById("confidence_level");
+
+    function updateConfidenceDisplay() {
+        const value = parseInt(confidenceInput.value);
+        confidenceDisplay.textContent = value;
+        if (value <= 33) confidenceLevel.textContent = "Confidence level: Low";
+        else if (value <= 66) confidenceLevel.textContent = "Confidence level: Medium";
+        else if (value < 100) confidenceLevel.textContent = "Confidence level: High";
+        else confidenceLevel.textContent = "Confidence level: Exact";
+    }
+
+    confidenceInput.addEventListener("input", updateConfidenceDisplay);
+    updateConfidenceDisplay();
+</script>
+</body>
+</html>

@@ -34,128 +34,357 @@ def serve_type_images(filename):
 
 @app.route('/')
 def index_page():
-    """
-    Index page for the biography system:
-      - Global search form,
-      - Type-based navigation,
-      - Entry to iframe-based life wizard (/life_iframe_wizard),
-      - Lists existing life biographies with actual names.
-    """
-    html_template = """
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Welcome to the Biography System</title>
-        <link rel="stylesheet" href="/static/styles.css" />
-        <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
-        <style>
-            .btn, .add-biography-button {
-                display: inline-block;
-                padding: 10px 16px;
-                background-color: #007bff;
-                color: white;
-                text-decoration: none;
-                border-radius: 6px;
-                font-size: 1em;
-                margin: 10px 0;
-            }
-            .btn:hover, .add-biography-button:hover {
-                background-color: #0056b3;
-            }
-            .type-container {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 10px;
-                margin-bottom: 20px;
-            }
-            .type-button {
-                padding: 8px 12px;
-                background-color: #eaeaea;
-                text-decoration: none;
-                border-radius: 5px;
-                font-weight: bold;
-                color: #333;
-            }
-            .generate-life-container, .featured-bio {
-                margin-top: 40px;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>Welcome to the Biography System</h1>
-            <p>This tool lets you explore structured biographies using real data and labels.
-               You can also generate multi-type “Life Biographies” that span people, organisations, and places.</p>
-    """
+    life_bios = []
+    types = []
 
-    # Global search
-    html_template += """
-            <h2>🔍 Global Search</h2>
-            <form action="/global_search" method="get">
-                <input type="text" name="q" placeholder="Search all types..." />
-                <button type="submit">Search</button>
-            </form>
-    """
-
-    # Browse types
-    html_template += """
-            <h2>📚 Browse Biographies by Type</h2>
-            <div class="type-container">
-    """
-    for file in os.listdir("./types"):
+    # Load types (excluding time.json)
+    for file in sorted(os.listdir("./types")):
         if file.endswith(".json"):
-            type_name = os.path.splitext(file)[0]
-            if type_name.lower() == "time":
-                continue
-            pretty_type = type_name.replace("_", " ").capitalize()
-            html_template += f"<a href='/type/{type_name}' class='type-button'>{pretty_type}</a>"
-    html_template += "</div>"
+            name = os.path.splitext(file)[0]
+            if name.lower() != "time":
+                types.append(name)
 
-    # Generate Life Biography (iframe wizard)
-    html_template += """
-            <div class="generate-life-container">
-                <h2>🌍 Create a Life Biography (Interactive)</h2>
-                <p>Use a multi-step wizard to build a personalised life biography using multiple types and confidence intervals.</p>
-                <a href="/life_iframe_wizard" class="add-biography-button">🧭 Start Life Biography Wizard</a>
-            </div>
-    """
-
-    # List existing life biographies
+    # Load existing life biographies
     life_dir = "./types/life/biographies"
-    if os.path.exists(life_dir) and os.path.isdir(life_dir):
-        aggregator_files = [f for f in os.listdir(life_dir) if f.endswith(".json")]
-        if aggregator_files:
-            html_template += """
-            <h2>📂 Previously Created Life Biographies</h2>
-            <ul>
-            """
-            for af in sorted(aggregator_files, reverse=True):
-                agg_id = af[:-5]
-                full_path = os.path.join(life_dir, af)
-                data = load_json_as_dict(full_path)
-                custom_name = data.get("name", agg_id.replace("_", " "))
-                html_template += f"<li><a href='/life_view/{agg_id}'>{custom_name}</a></li>"
-            html_template += "</ul>"
-        else:
-            html_template += "<p>No Life Biographies found yet.</p>"
-    else:
-        html_template += "<p><em>Life biography folder not found (types/life/biographies).</em></p>"
+    if os.path.exists(life_dir):
+        for af in sorted(os.listdir(life_dir), reverse=True):
+            if af.endswith(".json"):
+                try:
+                    agg_id = af[:-5]
+                    data = load_json_as_dict(os.path.join(life_dir, af))
+                    custom_name = data.get("name", agg_id.replace("_", " "))
+                    life_bios.append((agg_id, custom_name))
+                except Exception as e:
+                    print(f"Error loading {af}: {e}")
 
-    html_template += "</div></body></html>"
-    return html_template
+    return render_template("index.html", types=types, life_bios=life_bios)
+
+# @app.route('/')
+# def index_page():
+#     life_bios = []
+#     types = []
+
+#     # Load existing types
+#     for file in os.listdir("./types"):
+#         if file.endswith(".json") and os.path.splitext(file)[0].lower() != "time":
+#             types.append(os.path.splitext(file)[0])
+
+#     # Load existing life biographies
+#     life_dir = "./types/life/biographies"
+#     if os.path.exists(life_dir):
+#         for af in sorted(os.listdir(life_dir), reverse=True):
+#             if af.endswith(".json"):
+#                 agg_id = af[:-5]
+#                 data = load_json_as_dict(os.path.join(life_dir, af))
+#                 custom_name = data.get("name", agg_id.replace("_", " "))
+#                 life_bios.append((agg_id, custom_name))
+
+#     return render_template("index.html", types=types, life_bios=life_bios)
+
+# @app.route("/global_search")
+# def global_search():
+#     query = request.args.get("q", "").lower()
+#     page = int(request.args.get("page", 1))
+#     per_page = 10
+
+#     results = []
+#     life_dir = "./types/life/biographies"
+
+#     if query and os.path.exists(life_dir):
+#         for file in os.listdir(life_dir):
+#             if not file.endswith(".json"):
+#                 continue
+#             data = load_json_as_dict(os.path.join(life_dir, file))
+#             name = data.get("name", "").lower()
+#             if query in name:
+#                 results.append((file[:-5], data.get("name", file[:-5])))
+
+#             # Search in time or people if present
+#             for section in ["time", "people", "organisations", "buildings"]:
+#                 for entry in data.get(section, []):
+#                     if any(query in str(value).lower() for value in entry.values()):
+#                         results.append((file[:-5], data.get("name", file[:-5])))
+#                         break
+
+#     # Remove duplicates
+#     results = list(dict(results).items())
+
+#     # Paginate
+#     start = (page - 1) * per_page
+#     end = start + per_page
+#     paginated = results[start:end]
+#     total_pages = (len(results) + per_page - 1) // per_page
+
+#     return render_template(
+#         "global_search.html",
+#         query=query,
+#         results=paginated,
+#         page=page,
+#         total_pages=total_pages
+#     )
+
+# @app.route("/global_search")
+# def global_search():
+#     query = request.args.get("q", "").strip().lower()
+#     page = int(request.args.get("page", 1))
+#     per_page = 10
+#     life_dir = "./types/life/biographies"
+#     seen = set()
+#     results = []
+
+#     if query and os.path.exists(life_dir):
+#         for file in os.listdir(life_dir):
+#             if not file.endswith(".json"):
+#                 continue
+#             file_path = os.path.join(life_dir, file)
+#             try:
+#                 data = load_json_as_dict(file_path)
+#             except Exception as e:
+#                 print(f"Error reading {file_path}: {e}")
+#                 continue
+
+#             life_id = file[:-5]
+#             display_name = data.get("name", life_id)
+#             searchable = [display_name.lower()]
+
+#             for section in ["time", "people", "organisations", "buildings"]:
+#                 for entry in data.get(section, []):
+#                     searchable.extend([str(v).lower() for v in entry.values()])
+
+#             if any(query in val for val in searchable):
+#                 if life_id not in seen:
+#                     results.append((life_id, display_name))
+#                     seen.add(life_id)
+
+#     # Pagination
+#     start = (page - 1) * per_page
+#     end = start + per_page
+#     paginated = results[start:end]
+#     total_pages = (len(results) + per_page - 1) // per_page
+
+#     return render_template(
+#         "global_search.html",
+#         query=query,
+#         results=paginated,
+#         page=page,
+#         total_pages=total_pages
+#     )
+
+@app.route("/global_search")
+def global_search():
+    query = request.args.get("q", "").lower()
+    page = int(request.args.get("page", 1))
+    per_page = 10
+
+    results = []
+    life_dir = "./types/life/biographies"
+
+    if query and os.path.exists(life_dir):
+        for file in os.listdir(life_dir):
+            if not file.endswith(".json"):
+                continue
+
+            try:
+                full_path = os.path.join(life_dir, file)
+                data = load_json_as_dict(full_path)
+                name = data.get("name", "").lower()
+                matched = False
+
+                # Check name
+                if query in name:
+                    matched = True
+
+                # Check entries in all known sections
+                for section in ["time", "people", "organisations", "buildings"]:
+                    for entry in data.get(section, []):
+                        # Only try .values() if it's a dictionary
+                        if isinstance(entry, dict):
+                            searchable = [str(v).lower() for v in entry.values()]
+                            if any(query in val for val in searchable if isinstance(val, str)):
+                                matched = True
+                                break
+                        elif isinstance(entry, str) and query in entry.lower():
+                            matched = True
+                            break
+
+                if matched:
+                    results.append((file[:-5], data.get("name", file[:-5])))
+
+            except Exception as e:
+                print(f"Error searching {file}: {e}")
+                continue
+
+    # Remove duplicates
+    results = list(dict(results).items())
+
+    # Paginate
+    start = (page - 1) * per_page
+    end = start + per_page
+    paginated = results[start:end]
+    total_pages = (len(results) + per_page - 1) // per_page
+
+    return render_template(
+        "global_search.html",
+        query=query,
+        results=paginated,
+        page=page,
+        total_pages=total_pages
+    )
+
+@app.route("/api/search_life_bios")
+def api_search_life_bios():
+    query = request.args.get("q", "").lower()
+    life_dir = "./types/life/biographies"
+    matches = []
+
+    if query and os.path.exists(life_dir):
+        for file in os.listdir(life_dir):
+            if not file.endswith(".json"):
+                continue
+            try:
+                data = load_json_as_dict(os.path.join(life_dir, file))
+                name = data.get("name", "").lower()
+                if query in name:
+                    matches.append({
+                        "life_id": file[:-5],
+                        "name": data.get("name", file[:-5])
+                    })
+            except:
+                continue
+
+    return jsonify(matches[:10])  # Return only first 10 matches for speed
+
+# @app.route('/')
+# def index_page():
+#     """
+#     Index page for the biography system:
+#       - Global search form,
+#       - Type-based navigation,
+#       - Entry to iframe-based life wizard (/life_iframe_wizard),
+#       - Lists existing life biographies with actual names.
+#     """
+#     html_template = """
+#     <!DOCTYPE html>
+#     <html lang="en">
+#     <head>
+#         <meta charset="UTF-8" />
+#         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+#         <title>Welcome to the Biography System</title>
+#         <link rel="stylesheet" href="/static/styles.css" />
+#         <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+#         <style>
+#             .btn, .add-biography-button {
+#                 display: inline-block;
+#                 padding: 10px 16px;
+#                 background-color: #007bff;
+#                 color: white;
+#                 text-decoration: none;
+#                 border-radius: 6px;
+#                 font-size: 1em;
+#                 margin: 10px 0;
+#             }
+#             .btn:hover, .add-biography-button:hover {
+#                 background-color: #0056b3;
+#             }
+#             .type-container {
+#                 display: flex;
+#                 flex-wrap: wrap;
+#                 gap: 10px;
+#                 margin-bottom: 20px;
+#             }
+#             .type-button {
+#                 padding: 8px 12px;
+#                 background-color: #eaeaea;
+#                 text-decoration: none;
+#                 border-radius: 5px;
+#                 font-weight: bold;
+#                 color: #333;
+#             }
+#             .generate-life-container, .featured-bio {
+#                 margin-top: 40px;
+#             }
+#         </style>
+#     </head>
+#     <body>
+#         <div class="container">
+#             <h1>Welcome to the Biography System</h1>
+#             <p>This tool lets you explore structured biographies using real data and labels.
+#                You can also generate multi-type “Life Biographies” that span people, organisations, and places.</p>
+#     """
+
+#     # Global search
+#     html_template += """
+#             <h2>🔍 Global Search</h2>
+#             <form action="/global_search" method="get">
+#                 <input type="text" name="q" placeholder="Search all types..." />
+#                 <button type="submit">Search</button>
+#             </form>
+#     """
+
+#     # Browse types
+#     html_template += """
+#             <h2>📚 Browse Biographies by Type</h2>
+#             <div class="type-container">
+#     """
+#     for file in os.listdir("./types"):
+#         if file.endswith(".json"):
+#             type_name = os.path.splitext(file)[0]
+#             if type_name.lower() == "time":
+#                 continue
+#             pretty_type = type_name.replace("_", " ").capitalize()
+#             html_template += f"<a href='/type/{type_name}' class='type-button'>{pretty_type}</a>"
+#     html_template += "</div>"
+
+#     # Generate Life Biography (iframe wizard)
+#     html_template += """
+#             <div class="generate-life-container">
+#                 <h2>🌍 Create a Life Biography (Interactive)</h2>
+#                 <p>Use a multi-step wizard to build a personalised life biography using multiple types and confidence intervals.</p>
+#                 <a href="/life_iframe_wizard" class="add-biography-button">🧭 Start Life Biography Wizard</a>
+#             </div>
+#     """
+
+#     # List existing life biographies
+#     life_dir = "./types/life/biographies"
+#     if os.path.exists(life_dir) and os.path.isdir(life_dir):
+#         aggregator_files = [f for f in os.listdir(life_dir) if f.endswith(".json")]
+#         if aggregator_files:
+#             html_template += """
+#             <h2>📂 Previously Created Life Biographies</h2>
+#             <ul>
+#             """
+#             for af in sorted(aggregator_files, reverse=True):
+#                 agg_id = af[:-5]
+#                 full_path = os.path.join(life_dir, af)
+#                 data = load_json_as_dict(full_path)
+#                 custom_name = data.get("name", agg_id.replace("_", " "))
+#                 html_template += f"<li><a href='/life_view/{agg_id}'>{custom_name}</a></li>"
+#             html_template += "</ul>"
+#         else:
+#             html_template += "<p>No Life Biographies found yet.</p>"
+#     else:
+#         html_template += "<p><em>Life biography folder not found (types/life/biographies).</em></p>"
+
+#     html_template += "</div></body></html>"
+#     return html_template
+
 
 @app.route('/life_iframe_wizard')
 def life_iframe_wizard():
+    # Ensure session has valid data
+    life_id = session.get("life_id")
+    life_name = session.get("life_name")
+
+    if not life_id or not life_name:
+        return redirect('/start_life_naming')  # force naming before starting wizard
+
+    # Step tracking
     step = int(request.args.get("step", 0))
     steps = ["time", "mostlike", "people", "buildings", "organisations"]
     total = len(steps)
 
+    # Create JSON on step 0
     if step == 0:
-        # Ensure life_id and name are saved at the start
-        life_id = session.get("life_id")
-        life_name = session.get("life_name", "Unknown")
         file_path = f"./types/life/biographies/{life_id}.json"
         if not os.path.exists(file_path):
             save_dict_as_json(file_path, {
@@ -168,43 +397,129 @@ def life_iframe_wizard():
         return redirect("/finalise_life_bio")
 
     step_name = steps[step]
-    iframe_src = f"/life_step/{step_name}/{session['life_id']}"
+    iframe_src = f"/life_step/{step_name}/{life_id}"
 
-    return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Step {step + 1} of {total}</title></head><body>
-      <h1>Step {step + 1}: {step_name.capitalize()}</h1>
-      <p><strong>Name:</strong> {session.get('life_name', '')}</p>
-      <iframe src="{iframe_src}" width="100%" height="500" style="border:1px solid #ccc;"></iframe>
-      <br><br><a href="/life_iframe_wizard?step={step + 1}">Continue →</a>
-    </body></html>"""
+    return render_template(
+        "life_iframe_wizard.html",
+        step=step,
+        step_name=step_name.capitalize(),
+        total=total,
+        iframe_src=iframe_src,
+        life_name=life_name
+    )
+
+# @app.route('/life_iframe_wizard')
+# def life_iframe_wizard():
+#     step = int(request.args.get("step", 0))
+#     steps = ["time", "mostlike", "people", "buildings", "organisations"]
+#     total = len(steps)
+
+#     # Save the file with basic info on first step
+#     if step == 0:
+#         life_id = session.get("life_id")
+#         life_name = session.get("life_name", "Unknown")
+#         file_path = f"./types/life/biographies/{life_id}.json"
+#         if not os.path.exists(file_path):
+#             save_dict_as_json(file_path, {
+#                 "life_id": life_id,
+#                 "name": life_name,
+#                 "entries": []
+#             })
+
+#     if step >= total:
+#         return redirect("/finalise_life_bio")
+
+#     step_name = steps[step]
+#     iframe_src = f"/life_step/{step_name}/{session['life_id']}"
+
+#     return render_template("life_iframe_wizard.html",
+#                            step=step,
+#                            step_name=step_name,
+#                            total=total,
+#                            life_name=session.get("life_name", ""),
+#                            iframe_src=iframe_src,
+#                            next_step=step + 1)
+
+# @app.route('/life_iframe_wizard')
+# def life_iframe_wizard():
+#     step = int(request.args.get("step", 0))
+#     steps = ["time", "mostlike", "people", "buildings", "organisations"]
+#     total = len(steps)
+
+#     if step == 0:
+#         # Ensure life_id and name are saved at the start
+#         life_id = session.get("life_id")
+#         life_name = session.get("life_name", "Unknown")
+#         file_path = f"./types/life/biographies/{life_id}.json"
+#         if not os.path.exists(file_path):
+#             save_dict_as_json(file_path, {
+#                 "life_id": life_id,
+#                 "name": life_name,
+#                 "entries": []
+#             })
+
+#     if step >= total:
+#         return redirect("/finalise_life_bio")
+
+#     step_name = steps[step]
+#     iframe_src = f"/life_step/{step_name}/{session['life_id']}"
+
+#     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Step {step + 1} of {total}</title></head><body>
+#       <h1>Step {step + 1}: {step_name.capitalize()}</h1>
+#       <p><strong>Name:</strong> {session.get('life_name', '')}</p>
+#       <iframe src="{iframe_src}" width="100%" height="500" style="border:1px solid #ccc;"></iframe>
+#       <br><br><a href="/life_iframe_wizard?step={step + 1}">Continue →</a>
+#     </body></html>"""
 
 @app.route('/start_life_naming', methods=['GET', 'POST'])
 def start_life_naming():
+    # Clear previous session
+    session.pop('life_name', None)
+    session.pop('life_id', None)
+
     if request.method == 'POST':
         name = request.form.get("life_name", "").strip()
         if not name:
             return "<p>Please enter a name.</p>"
 
-        # Store name in session and redirect
         session['life_name'] = name
         session['life_id'] = f"Life_{int(time.time())}"
         return redirect("/life_iframe_wizard?step=0")
 
-    return """
-    <html>
-    <head><title>Name Your Life Biography</title></head>
-    <body>
-      <h2>Start a Life Biography</h2>
-      <form method="post">
-        <label for="life_name">Enter Name:</label>
-        <input type="text" name="life_name" required>
-        <br><br>
-        <button type="submit">Begin</button>
-      </form>
-    </body>
-    </html>
-    """
+    return render_template("start_life_naming.html")
 
+# @app.route('/start_life_naming', methods=['GET', 'POST'])
+# def start_life_naming():
+#     if request.method == 'POST':
+#         name = request.form.get("life_name", "").strip()
+#         if not name:
+#             return "<p>Please enter a name.</p>"
 
+#         # Store name in session and redirect
+#         session['life_name'] = name
+#         session['life_id'] = f"Life_{int(time.time())}"
+#         return redirect("/life_iframe_wizard?step=0")
+
+#     return """
+#     <html>
+#     <head><title>Name Your Life Biography</title></head>
+#     <body>
+#       <h2>Start a Life Biography</h2>
+#       <form method="post">
+#         <label for="life_name">Enter Name:</label>
+#         <input type="text" name="life_name" required>
+#         <br><br>
+#         <button type="submit">Begin</button>
+#       </form>
+#     </body>
+#     </html>
+#     """
+
+@app.route('/reset_life_session')
+def reset_life_session():
+    session.pop('life_name', None)
+    session.pop('life_id', None)
+    return redirect('/start_life_naming')
 
 @app.route("/life_step/time/<life_id>", methods=["GET", "POST"])
 def life_step_time(life_id):
@@ -213,293 +528,120 @@ def life_step_time(life_id):
     os.makedirs(labels_folder, exist_ok=True)
     os.makedirs(life_folder, exist_ok=True)
 
+    # Load life data
     life_file = os.path.join(life_folder, f"{life_id}.json")
     life_data = load_json_as_dict(life_file)
     name = life_data.get("name", "[Unknown]")
 
+    # Get form values
     selected_label_type = request.form.get("label_type")
     selected_subvalue = request.form.get("subvalue")
     selected_date = request.form.get("date_value")
     selected_confidence = request.form.get("confidence")
 
-    # Save entry if form submitted with complete data
-    if request.method == 'POST' and selected_label_type:
-        life_data.setdefault("time", [])
-        entry = {
-            "label_type": selected_label_type,
-            "confidence": selected_confidence or "exact"
-        }
-        if selected_label_type == "date" and selected_date:
-            entry["date_value"] = selected_date
-        elif selected_subvalue:
-            entry["subvalue"] = selected_subvalue
+    # Form submission logic
+    if request.method == "POST":
+        if selected_label_type == "date" and selected_date and selected_confidence:
+            entry = {
+                "label_type": selected_label_type,
+                "confidence": selected_confidence,
+                "date_value": selected_date
+            }
+            life_data["time"] = [entry]
+            save_dict_as_json(life_file, life_data)
+            return redirect(f"/life_step/people/{life_id}")
 
-        life_data["time"].append(entry)
-        save_dict_as_json(life_file, life_data)
-        return redirect(f"/life_step/time/{life_id}")
+        elif selected_subvalue and selected_confidence:
+            entry = {
+                "label_type": selected_label_type,
+                "subvalue": selected_subvalue,
+                "confidence": selected_confidence
+            }
+            life_data["time"] = [entry]
+            save_dict_as_json(life_file, life_data)
+            return redirect(f"/life_step/people/{life_id}")
 
-    # Load label options
-    top_labels = []
+    # Load available top-level label files
+    label_files = []
     if os.path.exists(labels_folder):
         for file in os.listdir(labels_folder):
-            if file.endswith(".json"):
-                with open(os.path.join(labels_folder, file)) as f:
-                    try:
+            full_path = os.path.join(labels_folder, file)
+            if file.endswith(".json") and os.path.isfile(full_path):
+                try:
+                    with open(full_path) as f:
                         data = json.load(f)
+                        label = os.path.splitext(file)[0]
                         desc = data.get("description", "")
-                        label_name = os.path.splitext(file)[0]
-                        top_labels.append((label_name, desc))
-                    except:
-                        continue
+                        label_files.append((label, desc))
+                except Exception as e:
+                    print(f"Error loading {file}: {e}")
+                    continue
 
-    # Render subinput
-    subinput_html = ""
-    if selected_label_type:
-        subpath = os.path.join(labels_folder, selected_label_type)
-        if selected_label_type == "date":
-            subinput_html = """
-                <label for='date_value'>Choose Date:</label>
-                <input type='date' name='date_value' required>
-            """
-        elif os.path.isdir(subpath):
-            suboptions = []
-            for f in os.listdir(subpath):
-                if f.endswith(".json"):
-                    val = os.path.splitext(f)[0]
-                    suboptions.append(f"<option value='{val}'>{prettify(val)}</option>")
-            subinput_html = f"""
-                <label for='subvalue'>Choose:</label>
-                <select name='subvalue' required>{''.join(suboptions)}</select>
-            """
+    # Load suboptions if label has a folder
+    subfolder_labels = []
+    if selected_label_type and selected_label_type != "date":
+        subfolder_path = os.path.join(labels_folder, selected_label_type)
+        if os.path.isdir(subfolder_path):
+            subfolder_labels = [
+                os.path.splitext(f)[0]
+                for f in os.listdir(subfolder_path)
+                if f.endswith(".json")
+            ]
 
-    # Slider for confidence
-    confidence_html = """
-        <label for='confidence'>Confidence:</label>
-        <input type='range' name='confidence' min='0' max='100' value='100' step='1' 
-               oninput='this.nextElementSibling.value = this.value'>
-        <output>100</output>
-        <p><small>0–33 = Low, 34–66 = Medium, 67–99 = High, 100 = Exact</small></p>
-    """
-
-    # Display existing time periods
-    existing_entries = life_data.get("time", [])
-    display_list = ""
-    for entry in existing_entries:
+    # Display existing time entry
+    existing_entry = life_data.get("time", [])
+    display_list = []
+    for entry in existing_entry:
         tag = entry.get("subvalue") or entry.get("date_value") or "[unspecified]"
-        conf = entry.get("confidence", "[unknown]")
-        display_list += f"<li>{tag} – {conf}</li>"
+        conf = entry.get("confidence", "unknown")
+        display_list.append((tag, conf))
 
-    html = f"""
-    <html><head><title>Step 1: Time</title></head><body>
-    <h1>Step 1: Time</h1>
-    <p><strong>Name:</strong> {escape(name)}</p>
-    <hr>
-    <h2>Step 1: Add Time Period</h2>
-    <form method='post'>
-        <label>Choose Time Label Type:</label>
-        <select name='label_type' onchange='this.form.submit()'>
-            <option value=''>-- Select --</option>
-            {''.join([f"<option value='{lbl}' {'selected' if lbl == selected_label_type else ''}>{prettify(lbl)} - {desc}</option>" for lbl, desc in top_labels])}
-        </select>
-        <br><br>
-        {confidence_html}
-        <br><br>
-        {subinput_html}
-        <br><br>
-        <button type='submit'>Save & Add Another</button>
-    </form>
-    <hr>
-    <h3>Current Time Periods in this Life</h3>
-    <ul>{display_list}</ul>
-    <br>
-    <a href='/life_iframe_wizard?step=1&life_id={life_id}'>Continue →</a>
-    </body></html>
-    """
-    return html
+    return render_template(
+        "life_step_time.html",
+        life_id=life_id,
+        name=name,
+        label_files=label_files,
+        selected_label_type=selected_label_type,
+        selected_subvalue=selected_subvalue,
+        selected_date=selected_date,
+        selected_confidence=selected_confidence,
+        subfolder_labels=subfolder_labels,
+        existing_entries=display_list
+    )
 
-# @app.route('/life_step/time/<life_id>', methods=['GET', 'POST'])
+# @app.route("/life_step/time/<life_id>", methods=["GET", "POST"])
 # def life_step_time(life_id):
-#     import uuid
-#     from markupsafe import escape
+#     labels_folder = "./types/time/labels"
+#     life_folder = "./types/life/biographies"
+#     os.makedirs(labels_folder, exist_ok=True)
+#     os.makedirs(life_folder, exist_ok=True)
 
-#     folder = f"./types/time/biographies"
-#     labels_folder = f"./types/time/labels"
-#     os.makedirs(folder, exist_ok=True)
-#     os.makedirs(f"./types/life/biographies", exist_ok=True)
-
-#     if life_id == "new":
-#         return redirect("/life_iframe_wizard")
-
-#     life_file = f"./types/life/biographies/{life_id}.json"
+#     life_file = os.path.join(life_folder, f"{life_id}.json")
 #     life_data = load_json_as_dict(life_file)
+#     name = life_data.get("name", "[Unknown]")
 
 #     selected_label_type = request.form.get("label_type")
 #     selected_subvalue = request.form.get("subvalue")
 #     selected_date = request.form.get("date_value")
 #     selected_confidence = request.form.get("confidence")
-#     form_action = request.form.get("action")
 
+#     # Save entry if form submitted with complete data
 #     if request.method == 'POST' and selected_label_type:
-#         time_entry = {
-#             "label_type": selected_label_type,
-#             "confidence": selected_confidence
-#         }
-#         if selected_label_type == 'date' and selected_date:
-#             time_entry["date_value"] = selected_date
-#         elif selected_subvalue:
-#             time_entry["subvalue"] = selected_subvalue
-
 #         life_data.setdefault("time", [])
-#         life_data["time"].append(time_entry)
-#         life_data["life_id"] = life_id
+#         entry = {
+#             "label_type": selected_label_type,
+#             "confidence": selected_confidence or "exact"
+#         }
+#         if selected_label_type == "date" and selected_date:
+#             entry["date_value"] = selected_date
+#         elif selected_subvalue:
+#             entry["subvalue"] = selected_subvalue
+
+#         life_data["time"].append(entry)
 #         save_dict_as_json(life_file, life_data)
-
-#         if form_action == "add":
-#             return redirect(f"/life_step/time/{life_id}")
-#         else:
-#             return redirect(f"/life_step/people/{life_id}")
-
-#     # Load label types from JSON files in labels folder
-#     top_labels = []
-#     if os.path.exists(labels_folder):
-#         for file in os.listdir(labels_folder):
-#             if file.endswith(".json"):
-#                 with open(os.path.join(labels_folder, file)) as f:
-#                     try:
-#                         data = json.load(f)
-#                         desc = data.get("description", "")
-#                         top_labels.append((file[:-5], desc))
-#                     except:
-#                         continue
-
-#     # Generate subfolder or date input
-#     subinput_html = ""
-#     if selected_label_type:
-#         label_subfolder_path = os.path.join(labels_folder, selected_label_type)
-#         if selected_label_type == 'date':
-#             subinput_html = f"""
-#                 <label for='date_value'>Enter Date:</label>
-#                 <input type='date' name='date_value' required>
-#             """
-#         elif os.path.isdir(label_subfolder_path):
-#             subvalues = [file[:-5] for file in sorted(os.listdir(label_subfolder_path)) if file.endswith(".json")]
-#             subinput_html = f"""
-#                 <label for='subvalue'>Choose from:</label>
-#                 <select name='subvalue' required>
-#                     {''.join([f"<option value='{val}'>{val}</option>" for val in subvalues])}
-#                 </select>
-#             """
-
-#     # Render previously added time entries
-#     current_entries_html = ""
-#     time_entries = life_data.get("time", [])
-#     if time_entries:
-#         current_entries_html = "<ul>"
-#         for entry in time_entries:
-#             label = entry.get("subvalue") or entry.get("date_value") or "[unspecified]"
-#             confidence = entry.get("confidence", "[unknown]")
-#             current_entries_html += f"<li>{label} – {confidence}</li>"
-#         current_entries_html += "</ul>"
-#     else:
-#         current_entries_html = "<p>No time periods added yet.</p>"
-
-#     html = f"""
-#     <!DOCTYPE html>
-#     <html>
-#     <head><title>Step 1: Time</title></head>
-#     <body>
-#       <h1>Step 1: Time</h1>
-#       <p><strong>Name:</strong> {life_data.get("name", "[unknown]")}</p>
-#       <h2>Step 1: Add Time Period</h2>
-#       <form method="post">
-#         <label for='label_type'>Choose Time Label Type:</label>
-#         <select name='label_type' required onchange='this.form.submit()'>
-#             <option value=''>-- Select --</option>
-#             {''.join([f"<option value='{lbl}' {'selected' if lbl == selected_label_type else ''}>{lbl} - {desc}</option>" for lbl, desc in top_labels])}
-#         </select>
-#         <br><br>
-#         <label>Confidence:</label>
-#         <select name="confidence">
-#             <option value="exact">Exact</option>
-#             <option value="high">High</option>
-#             <option value="medium">Medium</option>
-#             <option value="low">Low</option>
-#         </select>
-#         <br><br>
-#         {subinput_html}
-#         <br><br>
-#         <button type="submit" name="action" value="add">Save & Add Another</button>
-#       </form>
-
-#       <hr>
-#       <h3>Current Time Periods in this Life</h3>
-#       {current_entries_html}
-#       <br>
-#       <a href="/life_step/people/{life_id}">Continue ➔</a>
-#     </body>
-#     </html>
-#     """
-#     return html
-
-# @app.route('/life_step/time/<life_id>', methods=['GET', 'POST'])
-# def life_step_time(life_id):
-#     import uuid
-#     from markupsafe import escape
-
-#     type_name = "time"
-#     base_dir = f"./types/{type_name}"
-#     labels_folder = os.path.join(base_dir, "labels")
-#     life_dir = "./types/life/biographies"
-#     os.makedirs(labels_folder, exist_ok=True)
-#     os.makedirs(life_dir, exist_ok=True)
-
-#     # Step 1: If "new", prompt for a name
-#     if life_id == "new":
-#         return """
-#         <html><body>
-#         <h2>Name Your Life Biography</h2>
-#         <form method="get" action="/life_step/time/Life_start_named">
-#             <input type="text" name="chosen_name" required placeholder="e.g. My Epic Life">
-#             <button type="submit">Start</button>
-#         </form>
-#         </body></html>
-#         """
-
-#     # Step 2: If redirected from above, extract chosen name and generate ID
-#     if life_id == "Life_start_named":
-#         chosen_name = request.args.get("chosen_name", "").strip().replace(" ", "_")
-#         if not chosen_name:
-#             return redirect("/life_step/time/new")
-#         life_id = f"Life_{int(time.time())}_{chosen_name}"
 #         return redirect(f"/life_step/time/{life_id}")
 
-#     # Load or initialize life biography file
-#     life_file = os.path.join(life_dir, f"{life_id}.json")
-#     life_data = load_json_as_dict(life_file)
-#     life_data.setdefault("life_id", life_id)
-#     life_data.setdefault("times", [])
-
-#     if request.method == 'POST':
-#         label_type = request.form.get("label_type")
-#         subvalue = request.form.get("subvalue")
-#         date_value = request.form.get("date_value")
-#         confidence = request.form.get("confidence")
-
-#         if label_type and (subvalue or date_value):
-#             new_time = {
-#                 "time_id": f"time_{uuid.uuid4().hex[:6]}",
-#                 "label_type": label_type,
-#                 "subvalue": subvalue,
-#                 "date_value": date_value,
-#                 "confidence": confidence
-#             }
-#             # Filter out empty keys
-#             new_time = {k: v for k, v in new_time.items() if v}
-#             life_data["times"].append(new_time)
-#             save_dict_as_json(life_file, life_data)
-#             return redirect(f"/life_step/people/{life_id}/{new_time['time_id']}")
-
-#     # Load available top-level labels
+#     # Load label options
 #     top_labels = []
 #     if os.path.exists(labels_folder):
 #         for file in os.listdir(labels_folder):
@@ -508,179 +650,76 @@ def life_step_time(life_id):
 #                     try:
 #                         data = json.load(f)
 #                         desc = data.get("description", "")
-#                         top_labels.append((file[:-5], desc))
+#                         label_name = os.path.splitext(file)[0]
+#                         top_labels.append((label_name, desc))
 #                     except:
 #                         continue
 
-#     selected_label_type = request.form.get("label_type") if request.method == 'POST' else None
+#     # Render subinput
 #     subinput_html = ""
 #     if selected_label_type:
-#         label_subfolder_path = os.path.join(labels_folder, selected_label_type)
-#         if selected_label_type == 'date':
+#         subpath = os.path.join(labels_folder, selected_label_type)
+#         if selected_label_type == "date":
 #             subinput_html = """
-#                 <label for='date_value'>Enter Date:</label>
+#                 <label for='date_value'>Choose Date:</label>
 #                 <input type='date' name='date_value' required>
 #             """
-#         elif os.path.isdir(label_subfolder_path):
-#             subvalues = [f[:-5] for f in os.listdir(label_subfolder_path) if f.endswith(".json")]
+#         elif os.path.isdir(subpath):
+#             suboptions = []
+#             for f in os.listdir(subpath):
+#                 if f.endswith(".json"):
+#                     val = os.path.splitext(f)[0]
+#                     suboptions.append(f"<option value='{val}'>{prettify(val)}</option>")
 #             subinput_html = f"""
-#                 <label for='subvalue'>Choose from:</label>
-#                 <select name='subvalue' required>
-#                     {''.join([f"<option value='{val}'>{val}</option>" for val in subvalues])}
-#                 </select>
+#                 <label for='subvalue'>Choose:</label>
+#                 <select name='subvalue' required>{''.join(suboptions)}</select>
 #             """
 
+#     # Slider for confidence
+#     confidence_html = """
+#         <label for='confidence'>Confidence:</label>
+#         <input type='range' name='confidence' min='0' max='100' value='100' step='1' 
+#                oninput='this.nextElementSibling.value = this.value'>
+#         <output>100</output>
+#         <p><small>0–33 = Low, 34–66 = Medium, 67–99 = High, 100 = Exact</small></p>
+#     """
+
+#     # Display existing time periods
+#     existing_entries = life_data.get("time", [])
+#     display_list = ""
+#     for entry in existing_entries:
+#         tag = entry.get("subvalue") or entry.get("date_value") or "[unspecified]"
+#         conf = entry.get("confidence", "[unknown]")
+#         display_list += f"<li>{tag} – {conf}</li>"
+
 #     html = f"""
-#     <!DOCTYPE html>
-#     <html>
-#     <head><title>Step 1: Time Selection</title></head>
-#     <body>
-#       <h1>Step 1: Add Time Period</h1>
-#       <form method="post">
-#         <label for='label_type'>Choose Time Label Type:</label>
-#         <select name='label_type' required onchange='this.form.submit()'>
+#     <html><head><title>Step 1: Time</title></head><body>
+#     <h1>Step 1: Time</h1>
+#     <p><strong>Name:</strong> {escape(name)}</p>
+#     <hr>
+#     <h2>Step 1: Add Time Period</h2>
+#     <form method='post'>
+#         <label>Choose Time Label Type:</label>
+#         <select name='label_type' onchange='this.form.submit()'>
 #             <option value=''>-- Select --</option>
-#             {''.join([f"<option value='{lbl}' {'selected' if lbl == selected_label_type else ''}>{lbl} - {desc}</option>" for lbl, desc in top_labels])}
+#             {''.join([f"<option value='{lbl}' {'selected' if lbl == selected_label_type else ''}>{prettify(lbl)} - {desc}</option>" for lbl, desc in top_labels])}
 #         </select>
 #         <br><br>
-#         <label>Confidence:</label>
-#         <select name="confidence" required>
-#             <option value="exact">Exact</option>
-#             <option value="high">High</option>
-#             <option value="medium">Medium</option>
-#             <option value="low">Low</option>
-#         </select>
+#         {confidence_html}
 #         <br><br>
 #         {subinput_html}
 #         <br><br>
-#         <button type="submit">Save & Continue</button>
-#       </form>
-
-#       <h2>Current Time Periods in this Life</h2>
-#       <ul>
-#         {''.join([f"<li>{entry.get('label_type', '')}: {entry.get('subvalue', entry.get('date_value', ''))} ({entry.get('confidence', '')})</li>" for entry in life_data['times']])}
-#       </ul>
-#     </body>
-#     </html>
+#         <button type='submit'>Save & Add Another</button>
+#     </form>
+#     <hr>
+#     <h3>Current Time Periods in this Life</h3>
+#     <ul>{display_list}</ul>
+#     <br>
+#     <a href='/life_iframe_wizard?step=1&life_id={life_id}'>Continue →</a>
+#     </body></html>
 #     """
 #     return html
 
-# @app.route('/life_step/time/<life_id>', methods=['GET', 'POST'])
-# def life_step_time(life_id):
-#     type_name = "time"
-#     base_dir = f"./types/{type_name}"
-#     labels_folder = os.path.join(base_dir, "labels")
-#     life_dir = "./types/life/biographies"
-#     os.makedirs(labels_folder, exist_ok=True)
-#     os.makedirs(life_dir, exist_ok=True)
-
-#     if life_id == "new":
-#         return """
-#         <html><body>
-#         <h2>Name Your Life Biography</h2>
-#         <form method="get" action="/life_step/time/Life_start_named">
-#             <input type="text" name="chosen_name" required placeholder="e.g. My Epic Life">
-#             <button type="submit">Start</button>
-#         </form>
-#         </body></html>
-#         """
-
-#     if life_id == "Life_start_named":
-#         chosen_name = request.args.get("chosen_name", "").strip().replace(" ", "_")
-#         if not chosen_name:
-#             return redirect("/life_step/time/new")
-
-#         full_id = f"Life_{int(time.time())}_{chosen_name}"
-#         session['life_id'] = full_id
-#         session['life_bio_name'] = chosen_name
-#         return redirect(f"/life_step/time/{full_id}")
-
-#     # Load existing data
-#     life_file = os.path.join(life_dir, f"{life_id}.json")
-#     life_data = load_json_as_dict(life_file)
-
-#     selected_label_type = request.form.get("label_type") if request.method == 'POST' else None
-#     selected_subvalue = request.form.get("subvalue") if request.method == 'POST' else None
-#     selected_date = request.form.get("date_value") if request.method == 'POST' else None
-#     selected_confidence = request.form.get("confidence") if request.method == 'POST' else None
-
-#     # Handle save
-#     if request.method == 'POST' and selected_label_type:
-#         life_data.setdefault(type_name, {"label_type": selected_label_type})
-#         life_data["life_id"] = life_id
-#         life_data[type_name]["confidence"] = selected_confidence
-
-#         if selected_label_type == "date" and selected_date:
-#             life_data[type_name]["date_value"] = selected_date
-#             save_dict_as_json(life_file, life_data)
-#             return redirect("/life_iframe_wizard?step=1")
-
-#         elif selected_subvalue:
-#             life_data[type_name]["subvalue"] = selected_subvalue
-#             save_dict_as_json(life_file, life_data)
-#             return redirect("/life_iframe_wizard?step=1")
-
-#     # Load label types
-#     top_labels = []
-#     if os.path.exists(labels_folder):
-#         for file in os.listdir(labels_folder):
-#             if file.endswith(".json"):
-#                 with open(os.path.join(labels_folder, file)) as f:
-#                     try:
-#                         data = json.load(f)
-#                         desc = data.get("description", "")
-#                         top_labels.append((file[:-5], desc))
-#                     except:
-#                         continue
-
-#     # Generate subinput
-#     subinput_html = ""
-#     if selected_label_type:
-#         label_subfolder_path = os.path.join(labels_folder, selected_label_type)
-#         if selected_label_type == 'date':
-#             subinput_html = """
-#                 <label for='date_value'>Enter Date:</label>
-#                 <input type='date' name='date_value' required>
-#             """
-#         elif os.path.isdir(label_subfolder_path):
-#             subvalues = [f[:-5] for f in os.listdir(label_subfolder_path) if f.endswith(".json")]
-#             subinput_html = f"""
-#                 <label for='subvalue'>Choose from:</label>
-#                 <select name='subvalue' required>
-#                     {''.join([f"<option value='{val}'>{val}</option>" for val in subvalues])}
-#                 </select>
-#             """
-
-#     html = f"""
-#     <!DOCTYPE html>
-#     <html>
-#     <head><title>Step 1: Time Selection</title></head>
-#     <body>
-#       <h1>Step 1: Select Time Context</h1>
-#       <h3>Name: {session.get('life_bio_name', 'Unnamed')}</h3>
-#       <form method="post">
-#         <label for='label_type'>Choose a Time Label Type:</label>
-#         <select name='label_type' required onchange='this.form.submit()'>
-#             <option value=''>-- Select --</option>
-#             {''.join(f"<option value='{lbl}' {'selected' if lbl == selected_label_type else ''}>{lbl} - {desc}</option>" for lbl, desc in top_labels)}
-#         </select>
-#         <br><br>
-#         <label>Confidence Interval:</label>
-#         <select name="confidence" required>
-#             <option value="exact">Exact</option>
-#             <option value="high">High</option>
-#             <option value="medium">Medium</option>
-#             <option value="low">Low</option>
-#         </select>
-#         <br><br>
-#         {subinput_html}
-#         <br><br>
-#         <button type="submit">Save and Continue</button>
-#       </form>
-#     </body>
-#     </html>
-#     """
-#     return html
 
 @app.route('/iframe_select_time')
 def iframe_select_time():
@@ -919,125 +958,6 @@ def iframe_add_to_life():
     session.modified = True
     return "<script>window.top.location.href='/life_iframe_wizard';</script>"
 
-# @app.route('/life_step/time/<life_id>', methods=['GET', 'POST'])
-# def life_step_time(life_id):
-#     from markupsafe import escape
-
-#     type_name = "time"
-#     base_dir = f"./types/{type_name}"
-#     labels_folder = os.path.join(base_dir, "labels")
-#     life_dir = "./types/life/biographies"
-#     os.makedirs(labels_folder, exist_ok=True)
-#     os.makedirs(life_dir, exist_ok=True)
-
-#     # Step 1: If "new", prompt for a name
-#     if life_id == "new":
-#         return """
-#         <html><body>
-#         <h2>Name Your Life Biography</h2>
-#         <form method="get" action="/life_step/time/Life_start_named">
-#             <input type="text" name="chosen_name" required placeholder="e.g. My Epic Life">
-#             <button type="submit">Start</button>
-#         </form>
-#         </body></html>
-#         """
-
-#     # Step 2: If redirected from above, extract chosen name and generate ID
-#     if life_id == "Life_start_named":
-#         chosen_name = request.args.get("chosen_name", "").strip().replace(" ", "_")
-#         if not chosen_name:
-#             return redirect("/life_step/time/new")
-#         life_id = f"Life_{int(time.time())}_{chosen_name}"
-#         return redirect(f"/life_step/time/{life_id}")
-
-#     # Load or initialise life biography file
-#     life_file = os.path.join(life_dir, f"{life_id}.json")
-#     life_data = load_json_as_dict(life_file)
-
-#     selected_label_type = request.form.get("label_type") if request.method == 'POST' else None
-#     selected_subvalue = request.form.get("subvalue") if request.method == 'POST' else None
-#     selected_date = request.form.get("date_value") if request.method == 'POST' else None
-#     selected_confidence = request.form.get("confidence") if request.method == 'POST' else None
-
-#     # Handle form submission
-#     if request.method == 'POST' and selected_label_type:
-#         life_data.setdefault(type_name, {"label_type": selected_label_type})
-#         life_data["life_id"] = life_id
-#         life_data[type_name]["confidence"] = selected_confidence
-
-#         if selected_label_type == "date" and selected_date:
-#             life_data[type_name]["date_value"] = selected_date
-#             save_dict_as_json(life_file, life_data)
-#             return redirect(f"/life_step/people/{life_id}")
-#         elif selected_subvalue:
-#             life_data[type_name]["subvalue"] = selected_subvalue
-#             save_dict_as_json(life_file, life_data)
-#             return redirect(f"/life_step/people/{life_id}")
-
-#     # Load available top-level labels
-#     top_labels = []
-#     if os.path.exists(labels_folder):
-#         for file in os.listdir(labels_folder):
-#             if file.endswith(".json"):
-#                 with open(os.path.join(labels_folder, file)) as f:
-#                     try:
-#                         data = json.load(f)
-#                         desc = data.get("description", "")
-#                         top_labels.append((file[:-5], desc))
-#                     except:
-#                         continue
-
-#     # If selected label has a subfolder, list its options
-#     subinput_html = ""
-#     if selected_label_type:
-#         label_subfolder_path = os.path.join(labels_folder, selected_label_type)
-#         if selected_label_type == 'date':
-#             subinput_html = """
-#                 <label for='date_value'>Enter Date:</label>
-#                 <input type='date' name='date_value' required>
-#             """
-#         elif os.path.isdir(label_subfolder_path):
-#             subvalues = [
-#                 file[:-5] for file in sorted(os.listdir(label_subfolder_path))
-#                 if file.endswith(".json")
-#             ]
-#             subinput_html = f"""
-#                 <label for='subvalue'>Choose from:</label>
-#                 <select name='subvalue' required>
-#                     {''.join(f"<option value='{val}'>{val}</option>" for val in subvalues)}
-#                 </select>
-#             """
-
-#     # Build full HTML
-#     html = f"""
-#     <!DOCTYPE html>
-#     <html>
-#     <head><title>Step 1: Time Selection</title></head>
-#     <body>
-#       <h1>Step 1: Select Time Context</h1>
-#       <form method="post">
-#         <label for='label_type'>Choose a Time Label Type:</label>
-#         <select name='label_type' required onchange='this.form.submit()'>
-#             <option value=''>-- Select --</option>
-#             {''.join(f"<option value='{lbl}' {'selected' if lbl == selected_label_type else ''}>{lbl} - {desc}</option>" for lbl, desc in top_labels)}
-#         </select>
-#         <br><br>
-#         <label>Confidence Interval:</label>
-#         <select name="confidence" required>
-#             <option value="exact">Exact</option>
-#             <option value="high">High</option>
-#             <option value="medium">Medium</option>
-#             <option value="low">Low</option>
-#         </select>
-#         <br><br>
-#         {subinput_html}
-#         <br><br>
-#         <button type="submit">Save and Continue</button>
-#       </form>
-#     </body>
-#     </html>
-#     """
-#     return html
 
 @app.route('/life_step/people/<life_id>', methods=['GET', 'POST'])
 def life_step_people(life_id):
@@ -1151,130 +1071,6 @@ def finalise_life_bio():
     <p>ID: {life['id']}</p>
     <a href="/life_view/{life['id']}">View Life</a>
     """
-
-# @app.route('/life_gen', methods=['GET','POST'])
-# def life_gen():
-#     """
-#     Demonstration route that:
-#      - On GET, shows a form letting user pick or create multiple people, orgs, buildings, etc.
-#      - On POST, compiles them into a single aggregator (like "life biography") and saves.
-#     """
-
-#     # Path to aggregator or "events" folder
-#     aggregator_path = "./types/events/biographies"
-#     os.makedirs(aggregator_path, exist_ok=True)
-
-#     if request.method == 'POST':
-#         # 1) Collect user input
-#         life_name = request.form.get("life_name","Unnamed_Life").strip()
-
-#         # e.g. user picks from dropdown or enters new for each type
-#         chosen_person = request.form.getlist("people_ids")       # user can pick multiple
-#         chosen_buildings = request.form.getlist("building_ids")  # or "settlement_ids"
-#         chosen_orgs = request.form.getlist("org_ids")
-
-#         # 2) You might also let user set time intervals or partial vs. exact date
-#         # For demonstration, we'll store them as-is
-#         # 3) Build a single aggregator dictionary
-#         import time
-#         aggregator_id = f"Life_{int(time.time())}"
-#         aggregator_data = {
-#             "id": aggregator_id,
-#             "name": life_name,
-#             "people_ids": chosen_person,
-#             "building_ids": chosen_buildings,
-#             "org_ids": chosen_orgs,
-#             "timestamp": str(int(time.time()))
-#             # Add more fields if needed (time ranges, partial, etc.)
-#         }
-
-#         # 4) Save aggregator JSON
-#         aggregator_file = os.path.join(aggregator_path, f"{aggregator_id}.json")
-#         save_dict_as_json(aggregator_file, aggregator_data)
-
-#         flash(f"Life Biography '{life_name}' created successfully!", "success")
-#         return redirect(f"/life_view/{aggregator_id}")  # or some route to view the aggregator
-
-#     # If GET => display the form
-#     # We'll load each type's existing IDs for the user to pick from
-#     # (people, org, building, etc.)
-
-#     people_dir = "./types/people/biographies"
-#     people_opts = []
-#     if os.path.exists(people_dir):
-#         for pf in os.listdir(people_dir):
-#             if pf.endswith(".json"):
-#                 pd = load_json_as_dict(os.path.join(people_dir, pf))
-#                 pid = pd.get("id", pf[:-5])
-#                 pname = pd.get("name", pid)
-#                 people_opts.append((pid, pname))
-
-#     org_dir = "./types/organisations/biographies"
-#     org_opts = []
-#     if os.path.exists(org_dir):
-#         for of in os.listdir(org_dir):
-#             if of.endswith(".json"):
-#                 od = load_json_as_dict(os.path.join(org_dir, of))
-#                 oid = od.get("id", of[:-5])
-#                 oname = od.get("name", oid)
-#                 org_opts.append((oid, oname))
-
-#     # Similarly for buildings, settlements, etc. (not shown for brevity)
-#     building_opts = []
-#     building_dir = "./types/buildings/biographies"
-#     if os.path.exists(building_dir):
-#         for bf in os.listdir(building_dir):
-#             if bf.endswith(".json"):
-#                 bd = load_json_as_dict(os.path.join(building_dir, bf))
-#                 bid = bd.get("id", bf[:-5])
-#                 bname = bd.get("name", bid)
-#                 building_opts.append((bid, bname))
-
-#     # Build a minimal form
-#     html_form = """
-#     <!DOCTYPE html>
-#     <html>
-#     <head>
-#       <meta charset="UTF-8">
-#       <title>Generate Life Biography</title>
-#     </head>
-#     <body>
-#       <h1>Create a Multi-Type Life</h1>
-#       <form method="post">
-#         <label for="life_name">Name for this Life/Story:</label>
-#         <input type="text" name="life_name" placeholder="e.g. 'Alan Turing Extended Life'" required>
-#         <br><br>
-
-#         <h3>Pick People:</h3>
-#         <p>(Hold Ctrl or Shift to pick multiple if desired)</p>
-#         <select name="people_ids" multiple size="5">PEOPLE_OPTIONS</select>
-
-#         <h3>Pick Organisations:</h3>
-#         <select name="org_ids" multiple size="5">ORG_OPTIONS</select>
-
-#         <h3>Pick Buildings:</h3>
-#         <select name="building_ids" multiple size="5">BUILDING_OPTIONS</select>
-
-#         <!-- if you also want 'settlements', add similarly -->
-
-#         <br><br>
-#         <button type="submit">Save Multi-Type Life</button>
-#       </form>
-#     </body>
-#     </html>
-#     """
-
-#     # Insert the <option> lists
-#     people_html = "".join(f'<option value="{p[0]}">{p[1]}</option>' for p in people_opts)
-#     orgs_html   = "".join(f'<option value="{o[0]}">{o[1]}</option>' for o in org_opts)
-#     bldg_html   = "".join(f'<option value="{b[0]}">{b[1]}</option>' for b in building_opts)
-
-#     final_html = html_form
-#     final_html = final_html.replace("PEOPLE_OPTIONS", people_html)
-#     final_html = final_html.replace("ORG_OPTIONS", orgs_html)
-#     final_html = final_html.replace("BUILDING_OPTIONS", bldg_html)
-
-#     return final_html
 
 
 @app.route('/life_view/<aggregator_id>')
@@ -1495,126 +1291,6 @@ def life_biography_view(life_id):
     """
     return html
 
-
-# @app.route('/life_gen', methods=['GET','POST'])
-# def life_gen():
-#     import os
-#     import time
-#     from flask import request, redirect, flash
-
-#     aggregator_path = "./types/life/biographies"
-#     os.makedirs(aggregator_path, exist_ok=True)
-
-#     if request.method == 'POST':
-#         life_name = request.form.get("life_name", "Unnamed_Life").strip()
-#         chosen_person = request.form.getlist("people_ids")
-#         chosen_buildings = request.form.getlist("building_ids")
-#         chosen_orgs = request.form.getlist("org_ids")
-
-#         aggregator_id = f"Life_{int(time.time())}"
-#         aggregator_data = {
-#             "id": aggregator_id,
-#             "name": life_name,
-#             "people_ids": chosen_person,
-#             "building_ids": chosen_buildings,
-#             "org_ids": chosen_orgs,
-#             "timestamp": str(int(time.time()))
-#         }
-
-#         save_dict_as_json(os.path.join(aggregator_path, f"{aggregator_id}.json"), aggregator_data)
-
-#         flash(f"Life Biography '{life_name}' created successfully!", "success")
-#         return redirect(f"/life_view/{aggregator_id}")
-
-#     def load_options_from_biographies(folder):
-#         opts = []
-#         if os.path.exists(folder):
-#             for fname in os.listdir(folder):
-#                 if fname.endswith(".json"):
-#                     data = load_json_as_dict(os.path.join(folder, fname))
-#                     pid = data.get("id", fname[:-5])
-#                     pname = data.get("name", pid)
-#                     opts.append((pid, pname))
-#         return opts
-
-#     people_opts = load_options_from_biographies("./types/people/biographies")
-#     org_opts = load_options_from_biographies("./types/organisations/biographies")
-#     building_opts = load_options_from_biographies("./types/buildings/biographies")
-
-#     def generate_option_html(opts):
-#         return "".join(f'<option value="{oid}">{oname}</option>' for oid, oname in opts)
-
-#     html_form = f"""
-#     <!DOCTYPE html>
-#     <html><head><meta charset="UTF-8"><title>Generate Life Biography</title></head>
-#     <body>
-#       <h1>Create a Multi-Type Life</h1>
-#       <form method="post">
-#         <label>Name for this Life:</label>
-#         <input type="text" name="life_name" placeholder="e.g. Alan Turing" required><br><br>
-
-#         <h3>Pick People:</h3>
-#         <select name="people_ids" multiple size="5">{generate_option_html(people_opts)}</select>
-
-#         <h3>Pick Organisations:</h3>
-#         <select name="org_ids" multiple size="5">{generate_option_html(org_opts)}</select>
-
-#         <h3>Pick Buildings:</h3>
-#         <select name="building_ids" multiple size="5">{generate_option_html(building_opts)}</select>
-
-#         <br><br>
-#         <button type="submit">Save Multi-Type Life</button>
-#       </form>
-#     </body></html>
-#     """
-#     return html_form
-
-# @app.route('/life_view/<aggregator_id>')
-# def life_view(aggregator_id):
-#     import os
-
-#     file_path = f"./types/life/biographies/{aggregator_id}.json"
-#     if not os.path.exists(file_path):
-#         return f"<h1>Life '{aggregator_id}' Not Found</h1>", 404
-
-#     data = load_json_as_dict(file_path)
-#     life_name = data.get("name", f"Life {aggregator_id}")
-
-#     def resolve_entry(entry_type, entry_id):
-#         path = f"./types/{entry_type}/biographies/{entry_id}.json"
-#         if os.path.exists(path):
-#             content = load_json_as_dict(path)
-#             return {
-#                 "name": content.get("name", entry_id),
-#                 "link": f"/biography/{entry_type}/{entry_id}"
-#             }
-#         return {"name": entry_id + " (Not Found)", "link": None}
-
-#     def render_section(title, ids, entry_type):
-#         html = f"<h2>{title}</h2><ul>"
-#         for eid in ids:
-#             resolved = resolve_entry(entry_type, eid)
-#             if resolved["link"]:
-#                 html += f"<li><a href='{resolved['link']}'>{resolved['name']}</a></li>"
-#             else:
-#                 html += f"<li>{resolved['name']}</li>"
-#         html += "</ul>"
-#         return html
-
-#     sections = ""
-#     sections += render_section("People Involved", data.get("people_ids", []), "people")
-#     sections += render_section("Organisations", data.get("org_ids", []), "organisations")
-#     sections += render_section("Buildings", data.get("building_ids", []), "buildings")
-
-#     return f"""
-#     <html><head><title>{life_name}</title></head>
-#     <body>
-#       <h1>{life_name}</h1>
-#       <p><strong>ID:</strong> {aggregator_id}</p>
-#       {sections}
-#       <p><a href="/">← Back to Home</a></p>
-#     </body></html>
-#     """
 
 @app.route('/biography/<string:type_name>/<string:biography_name>')
 def biography_page(type_name, biography_name):
