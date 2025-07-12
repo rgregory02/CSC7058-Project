@@ -1,25 +1,18 @@
 {
-    "life_id": "Life_1752337774",
-    "name": "Star",
-    "created": "2025-07-12T17:29:34.415012+01:00",
+    "life_id": "Life_1752345454",
+    "name": "Santa",
+    "created": "2025-07-12T19:37:34.547183+01:00",
     "entries": [],
     "time": [
         {
             "label_type": "date",
-            "confidence": "44",
-            "date_value": "2025-07-14"
+            "confidence": "100",
+            "date_value": "2025-07-15"
         }
     ],
     "buildings": [
         {
             "id": "House_1742178822",
-            "label": "",
-            "confidence": 0.8
-        }
-    ],
-    "events": [
-        {
-            "id": "Life_1742998219",
             "label": "",
             "confidence": 0.8
         }
@@ -30,5 +23,6 @@
             "label": "",
             "confidence": 0.8
         }
-    ]
+    ],
+    "finalised": true
 }

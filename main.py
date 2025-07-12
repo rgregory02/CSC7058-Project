@@ -163,33 +163,33 @@ def api_search_life_bios():
 
     return jsonify(matches[:10])  # Return only first 10 matches for speed
 
-
 @app.route('/life_iframe_wizard')
 def life_iframe_wizard():
     step = request.args.get("step", "0")
 
     if step == "0":
-        # Just render the confirmation screen — don't save yet
+        # Show name confirmation screen only
         return render_template("life_step_name.html", life_id=session.get('life_id'))
 
     elif step == "1":
-        # Only now, save the draft for the first time
-        if 'life_id' not in session:
+        # Only save draft once life_name is known and not already saved
+        if 'life_id' not in session and 'life_name' in session:
             session['life_id'] = f"Life_{int(time.time())}"
             now_uk = datetime.now(ZoneInfo("Europe/London")).isoformat()
             file_path = f"./types/life/biographies/{session['life_id']}.json"
             save_dict_as_json(file_path, {
                 "life_id": session['life_id'],
-                "name": session.get('life_name', 'Untitled'),
+                "name": session['life_name'],
                 "created": now_uk,
                 "entries": []
             })
         return redirect(url_for('life_step_time', life_id=session.get('life_id')))
 
     else:
-        # Remaining steps are dynamic: subtract 2 to offset name+time
+        # Remaining steps are dynamic: subtract 2 to offset name + time
         return redirect(url_for('life_step_dynamic', step=int(step) - 2))
-#
+
+
 
 @app.route("/life_step/dynamic/<int:step>")
 def life_step_dynamic(step):
@@ -261,16 +261,19 @@ def save_dynamic_step(type_name):
 def start_life_naming():
     if request.method == 'POST':
         name = request.form.get("life_name", "").strip()
+
+        # ✅ Basic validation: name must not be empty
         if not name:
             return "<p>Please enter a name.</p>"
 
-        # Just store name in session (no file yet)
+        # 🧹 Clear previous session data
+        session.pop('life_id', None)
         session['life_name'] = name
-        session.pop('life_id', None)  # Clear any previous session ID
 
-        # Proceed to first wizard step (which will handle file creation)
+        # 🚀 Proceed to confirmation step — file not saved yet
         return redirect("/life_iframe_wizard?step=0")
 
+    # 🖼️ Display the name entry form
     return render_template("start_life_naming.html")
 
 
@@ -707,20 +710,29 @@ def life_step_people(life_id):
 
 @app.route('/finalise_life_bio')
 def finalise_life_bio():
-    life = session.get("life_aggregator", {})
-    life["id"] = f"Life_{int(time.time())}"
-    life["timestamp"] = str(int(time.time()))
-    life["name"] = life.get("name", "My Life")
+    life_id = session.get("life_id")
+    if not life_id:
+        return "<p>Error: No active life biography session.</p>"
 
-    save_path = f"./types/life/biographies/{life['id']}.json"
-    save_dict_as_json(save_path, life)
-    session.pop("life_aggregator", None)
+    file_path = f"./types/life/biographies/{life_id}.json"
+    if not os.path.exists(file_path):
+        return "<p>Error: Draft biography file not found.</p>"
+
+    # Load and update the draft
+    life = load_json_as_dict(file_path)
+    life["finalised"] = True
+    save_dict_as_json(file_path, life)
+
+    # Optional: clear session if you want to end the flow
+    session.pop("life_id", None)
+    session.pop("life_name", None)
 
     return f"""
     <h1>Life Biography Created</h1>
-    <p>ID: {life['id']}</p>
-    <a href="/life_view/{life['id']}">View Life</a>
+    <p>ID: {life_id}</p>
+    <a href="/life_view/{life_id}">View Life</a>
     """
+
 
 
 @app.route('/life_view/<aggregator_id>')
@@ -819,7 +831,7 @@ def cancel_life_creation():
 # @app.route('/cancel_life_creation')
 # def cancel_life_creation():
 #     session.pop('life_name', None)
-#     session.pop('life_id', None)
+#     session.pop('life_id', None)f
 #     return redirect('/')
 
 def printLabel(label):
