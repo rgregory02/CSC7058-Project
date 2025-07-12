@@ -6,7 +6,17 @@ import time  # For unique timestamps
 from flask import Flask, Response, jsonify, request, url_for, redirect, render_template, flash, get_flashed_messages, send_from_directory, render_template_string, session
 from markupsafe import Markup, escape
 from urllib.parse import quote, unquote
-from datetime import datetime  # For readable timestamps
+from datetime import datetime, timezone
+
+def safe_date(x):
+    try:
+        dt = datetime.fromisoformat(x[2])
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return datetime.min.replace(tzinfo=timezone.utc)
+
 try:
     from zoneinfo import ZoneInfo  # type: ignore[import]  # Python 3.9+
 except ImportError:
@@ -36,34 +46,63 @@ def serve_type_images(filename):
     return send_from_directory('types', filename)
 
 
+from flask import render_template
 from datetime import datetime
+import os
+from utils import load_json_as_dict  # adjust if your utility function is elsewhere
 
 @app.route('/')
 def index_page():
     life_bios = []
     types = []
 
+    # Load available types
     for file in os.listdir("./types"):
         if file.endswith(".json") and os.path.splitext(file)[0].lower() != "time":
             types.append(os.path.splitext(file)[0])
 
+    # Load life bios
     life_dir = "./types/life/biographies"
     if os.path.exists(life_dir):
-        for af in sorted(os.listdir(life_dir), reverse=True):
+        for af in os.listdir(life_dir):
             if af.endswith(".json"):
                 agg_id = af[:-5]
                 data = load_json_as_dict(os.path.join(life_dir, af))
                 name = data.get("name", agg_id.replace("_", " "))
-                created_str = data.get("created")
-                try:
-                    # Format nicely
-                    dt = datetime.fromisoformat(created_str)
-                    display_created = dt.strftime("%d %b %Y, %H:%M")
-                except:
-                    display_created = "[unknown time]"
-                life_bios.append((agg_id, name, display_created))
+                created = data.get("created", "")  # ISO string
+                life_bios.append((agg_id, name, created))
+
+    # Sort by safe parsed date (newest first)
+    life_bios.sort(key=safe_date, reverse=True)
 
     return render_template("index.html", types=types, life_bios=life_bios)
+
+# @app.route('/')
+# def index_page():
+#     life_bios = []
+#     types = []
+
+#     for file in os.listdir("./types"):
+#         if file.endswith(".json") and os.path.splitext(file)[0].lower() != "time":
+#             types.append(os.path.splitext(file)[0])
+
+#     life_dir = "./types/life/biographies"
+#     if os.path.exists(life_dir):
+#         for af in sorted(os.listdir(life_dir), reverse=True):
+#             if af.endswith(".json"):
+#                 agg_id = af[:-5]
+#                 data = load_json_as_dict(os.path.join(life_dir, af))
+#                 name = data.get("name", agg_id.replace("_", " "))
+#                 created_str = data.get("created")
+#                 try:
+#                     # Format nicely
+#                     dt = datetime.fromisoformat(created_str)
+#                     display_created = dt.strftime("%d %b %Y, %H:%M")
+#                 except:
+#                     display_created = "[unknown time]"
+#                 life_bios.append((agg_id, name, display_created))
+
+#     return render_template("index.html", types=types, life_bios=life_bios)
 
 # @app.route('/')
 # def index_page():
