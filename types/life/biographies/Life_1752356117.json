@@ -1,0 +1,14 @@
+{
+    "life_id": "Life_1752356117",
+    "name": "Tony",
+    "created": "2025-07-12T22:35:17.823626+01:00",
+    "entries": [],
+    "time": [
+        {
+            "label_type": "date",
+            "confidence": 51,
+            "date_value": "2025-07-22"
+        }
+    ],
+    "finalised": true
+}

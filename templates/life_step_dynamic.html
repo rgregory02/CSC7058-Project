@@ -4,24 +4,62 @@
   <meta charset="UTF-8">
   <title>Step: {{ current_type|capitalize }}</title>
   <style>
-    body { font-family: sans-serif; background: #f2f2f2; padding: 40px; text-align: center; }
+    body {
+      font-family: sans-serif;
+      background: #f2f2f2;
+      padding: 40px;
+      text-align: center;
+    }
     .box {
-      background: white; max-width: 600px; margin: auto;
-      padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      background: white;
+      max-width: 600px;
+      margin: auto;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
     h1 { margin-bottom: 10px; }
-    h2 { font-size: 1.1em; color: #555; margin-top: 0; }
-    .meta { margin-bottom: 20px; color: #333; font-size: 0.95em; }
-    select, input[type="text"], input[type="range"] {
-      margin-top: 10px; margin-bottom: 20px; width: 100%; padding: 10px;
+    .meta {
+      margin-bottom: 20px;
+      color: #333;
+      font-size: 0.95em;
     }
-    .confidence-display { font-weight: bold; }
-    button {
-      background-color: #4CAF50; color: white;
-      padding: 10px 20px; border: none; border-radius: 5px;
-      cursor: pointer; font-size: 1em; margin-top: 10px;
+    select, input[type="range"] {
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+      margin-bottom: 15px;
     }
-    .skip-button { background-color: #888; }
+    .confidence-display {
+      font-weight: bold;
+      margin-bottom: 20px;
+    }
+    .existing-entry {
+      font-size: 0.9em;
+      color: #444;
+      background: #f0f0f0;
+      border-radius: 5px;
+      padding: 6px;
+      margin: 4px auto;
+      max-width: 80%;
+    }
+    .button {
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 1em;
+      border: none;
+      cursor: pointer;
+    }
+    .save-button {
+      background-color: #4CAF50;
+      color: white;
+    }
+    .skip-button {
+      background-color: #999;
+      color: white;
+    }
+    .btn-grey { background-color: #6c757d; }
+    .btn-red { background-color: #dc3545; }
     .nav-buttons {
       display: flex;
       justify-content: space-between;
@@ -29,16 +67,12 @@
     }
     .btn {
       padding: 10px 16px;
-      border: none;
       border-radius: 6px;
       font-size: 1rem;
-      cursor: pointer;
       text-decoration: none;
       color: white;
+      display: inline-block;
     }
-    .btn:hover { opacity: 0.9; }
-    .btn-grey { background-color: #6c757d; }
-    .btn-red { background-color: #dc3545; }
   </style>
 </head>
 <body>
@@ -65,33 +99,38 @@
       </div>
     {% endif %}
 
+    {% if existing_labels %}
+      <div class="meta"><strong>Already linked:</strong></div>
+      {% for label in existing_labels %}
+        <div class="existing-entry">
+          {{ label.id|replace('_', ' ') }} – Confidence: {{ label.confidence }}%
+        </div>
+      {% endfor %}
+    {% endif %}
+
     {% if skip_allowed %}
       <p>No available {{ current_type }} to select.</p>
       <form method="get" action="/life_step/dynamic/{{ next_step }}">
-        <button class="button skip-button" type="submit">Skip to Next Step</button>
+        <button class="button skip-button" type="submit">⏭️ Skip to Next Step</button>
       </form>
     {% else %}
-      <form method="post" action="/life_step/save/{{ current_type }}?next={{ next_step }}">
-        <label for="bio_id">Select from {{ current_type|capitalize }}:</label><br>
-        <select name="bio_id" required>
+      <form method="post">
+        <label for="selected_id">Select from {{ current_type|capitalize }}:</label>
+        <select name="selected_id" id="selected_id" required>
           {% for file in label_files %}
             <option value="{{ file }}">{{ file.replace('_', ' ') }}</option>
           {% endfor %}
-        </select><br>
+        </select>
 
-        <label for="label">Label (optional):</label>
-        <input type="text" name="label" placeholder="e.g., mentor, location"><br>
+        <label for="confidence">Confidence:</label>
+        <input type="range" id="confidence" name="confidence" min="0" max="100" value="80" oninput="updateConfidenceDisplay()">
 
-        <label for="confidence">Confidence:</label><br>
-        <input type="range" id="confidence" name="confidence" min="0" max="100"
-               value="{{ confidence|default(80) }}"
-               oninput="updateConfidenceDisplay()">
         <div class="confidence-display">
           <span id="confVal">80%</span>
           <div id="confLevel" style="font-size: 0.9em;"></div>
         </div>
 
-        <button type="submit">Save and Continue</button>
+        <button type="submit" class="button save-button">✅ Save and Continue</button>
       </form>
     {% endif %}
 
@@ -107,11 +146,11 @@
 
   <script>
     function updateConfidenceDisplay() {
-      const val = document.getElementById("confidence").value;
+      const val = parseInt(document.getElementById("confidence").value || "80");
       document.getElementById("confVal").innerText = val + "%";
 
       const level = document.getElementById("confLevel");
-      if (val == 100) {
+      if (val === 100) {
         level.innerText = "Confidence level: Exact";
         level.style.color = "green";
       } else if (val >= 67) {

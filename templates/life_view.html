@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Viewing Life: {{ life_name }}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    body {
+      background: #f6f6f6;
+      font-family: sans-serif;
+      text-align: center;
+      padding: 60px;
+    }
+    .card {
+      background: white;
+      max-width: 800px;
+      margin: auto;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1);
+    }
+    h1 {
+      font-size: 1.6em;
+      margin-bottom: 10px;
+    }
+    p {
+      margin-bottom: 10px;
+      color: #555;
+    }
+    ul {
+      list-style-type: none;
+      padding: 0;
+    }
+    li {
+      margin-bottom: 10px;
+    }
+    a {
+      text-decoration: none;
+      color: #007bff;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    .section-title {
+      margin-top: 25px;
+      font-size: 1.2em;
+      color: #333;
+    }
+    .emoji {
+      margin-right: 6px;
+    }
+    .back-link {
+      margin-top: 20px;
+      display: inline-block;
+      color: #333;
+      font-weight: bold;
+    }
+    .add-button {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 10px 18px;
+      background-color: #4CAF50;
+      color: white;
+      border-radius: 6px;
+      text-decoration: none;
+    }
+    .add-button:hover {
+      background-color: #45a049;
+    }
+    .confidence-tag {
+      font-size: 0.9em;
+    }
+    .confidence-high { color: green; }
+    .confidence-medium { color: orange; }
+    .confidence-low { color: red; }
+    .subtitle {
+      font-size: 0.9em;
+      color: #777;
+      margin-top: -5px;
+      margin-bottom: 15px;
+    }
+    .entry-block {
+      background-color: #fdfdfd;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      text-align: left;
+    }
+    .entry-block strong {
+      color: #222;
+    }
+    .entry-links {
+      margin-top: 6px;
+      margin-left: 10px;
+    }
+    .entry-links li {
+      font-size: 0.95em;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Viewing Life: {{ life_name }}</h1>
+    <p><strong>ID:</strong> {{ life_id }}</p>
+
+    {% if entries %}
+      <div class="section-title">🕰️ Time Periods ({{ entries|length }})</div>
+      {% for entry in entries %}
+        <div class="entry-block">
+          <strong>{{ entry.time.date_value or entry.time.subvalue or "[unspecified]" }}</strong> –
+          <span class="confidence-tag 
+            {% if entry.time.confidence == 100 %}confidence-high
+            {% elif entry.time.confidence >= 67 %}confidence-high
+            {% elif entry.time.confidence >= 34 %}confidence-medium
+            {% else %}confidence-low{% endif %}">
+            Confidence: {{ entry.time.confidence }}%{% if entry.time.confidence == 100 %} (Exact){% endif %}
+          </span>
+
+          {% if entry.people %}
+            <ul class="entry-links">
+              <li><strong>People:</strong>
+                {% for person in entry.people %}
+                  {% if person.link %}
+                    <a href="{{ person.link }}">{{ person.display }}</a>
+                  {% else %}
+                    {{ person.display }}
+                  {% endif %}
+                  ({{ person.id }}){% if not loop.last %}, {% endif %}
+                {% endfor %}
+              </li>
+            </ul>
+          {% endif %}
+
+          {% if entry.buildings %}
+            <ul class="entry-links">
+              <li><strong>Buildings:</strong>
+                {% for building in entry.buildings %}
+                  {% if building.link %}
+                    <a href="{{ building.link }}">{{ building.display }}</a>
+                  {% else %}
+                    {{ building.display }}
+                  {% endif %}
+                  ({{ building.id }}){% if not loop.last %}, {% endif %}
+                {% endfor %}
+              </li>
+            </ul>
+          {% endif %}
+
+          {% if entry.organisations %}
+            <ul class="entry-links">
+              <li><strong>Organisations:</strong>
+                {% for org in entry.organisations %}
+                  {% if org.link %}
+                    <a href="{{ org.link }}">{{ org.display }}</a>
+                  {% else %}
+                    {{ org.display }}
+                  {% endif %}
+                  ({{ org.id }}){% if not loop.last %}, {% endif %}
+                {% endfor %}
+              </li>
+            </ul>
+          {% endif %}
+        </div>
+      {% endfor %}
+    {% else %}
+      <p><em>No time period selected yet.</em></p>
+    {% endif %}
+
+    <a href="/life_edit_start/{{ life_id }}" class="add-button">➕ Add Another Time Period</a>
+    <div class="subtitle">Re-opens the guided wizard to add a new timepoint and its related entries.</div>
+    <a href="/" class="back-link">← Back to Home</a>
+  </div>
+</body>
+</html>

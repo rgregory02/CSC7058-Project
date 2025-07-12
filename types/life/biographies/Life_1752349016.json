@@ -1,0 +1,28 @@
+{
+    "life_id": "Life_1752349016",
+    "name": "Testing",
+    "created": "2025-07-12T20:36:56.269525+01:00",
+    "entries": [],
+    "time": [
+        {
+            "label_type": "date",
+            "confidence": 17,
+            "date_value": "2025-07-08"
+        }
+    ],
+    "buildings": [
+        {
+            "id": "House_1742178822",
+            "label": "",
+            "confidence": 0.8
+        }
+    ],
+    "people": [
+        {
+            "id": "Jamie_1742346296",
+            "label": "",
+            "confidence": 0.8
+        }
+    ],
+    "finalised": true
+}
