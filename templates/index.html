@@ -43,6 +43,21 @@
       const searchInput = document.getElementById('search-box');
       const bios = document.querySelectorAll('.bio-item');
 
+      // Local timezone formatting
+      bios.forEach(bio => {
+        const utc = bio.getAttribute('data-utc');
+        if (utc) {
+          const dt = new Date(utc);
+          const localStr = dt.toLocaleString(undefined, {
+            year: "numeric", month: "short", day: "numeric",
+            hour: "2-digit", minute: "2-digit"
+          });
+          const tag = bio.querySelector('.created-time');
+          if (tag) tag.textContent = `Created: ${localStr}`;
+        }
+      });
+
+      // Live filtering
       if (searchInput) {
         searchInput.addEventListener('input', function () {
           const query = this.value.toLowerCase();
@@ -72,10 +87,10 @@
 
       <h2>📂 Existing Life Biographies</h2>
       <ul class="bio-list">
-        {% for life_id, name in life_bios %}
-          <li class="bio-item" data-name="{{ name }}">
-            <strong>{{ name }}</strong> <br>
-            <small>ID: {{ life_id }}</small><br>
+        {% for life_id, name, created in life_bios %}
+          <li class="bio-item" data-name="{{ name }}" data-utc="{{ created }}">
+            <strong>{{ name }}</strong><br>
+            <small class="created-time">Created: [loading local time...]</small><br>
             <div class="bio-actions">
               <a href="/life_view/{{ life_id }}">👁 View</a>
               <a href="/edit_life/{{ life_id }}">✏️ Edit</a>

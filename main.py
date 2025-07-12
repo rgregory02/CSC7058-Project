@@ -7,6 +7,10 @@ from flask import Flask, Response, jsonify, request, url_for, redirect, render_t
 from markupsafe import Markup, escape
 from urllib.parse import quote, unquote
 from datetime import datetime  # For readable timestamps
+try:
+    from zoneinfo import ZoneInfo  # type: ignore[import]  # Python 3.9+
+except ImportError:
+    from backports.zoneinfo import ZoneInfo  # Python 3.8 fallback
 from utils import (
     load_json_as_dict,
     save_dict_as_json,
@@ -32,32 +36,61 @@ def serve_type_images(filename):
     return send_from_directory('types', filename)
 
 
+from datetime import datetime
+
 @app.route('/')
 def index_page():
     life_bios = []
     types = []
 
-    # Load types (excluding time.json)
-    for file in sorted(os.listdir("./types")):
-        if file.endswith(".json"):
-            name = os.path.splitext(file)[0]
-            if name.lower() != "time":
-                types.append(name)
+    for file in os.listdir("./types"):
+        if file.endswith(".json") and os.path.splitext(file)[0].lower() != "time":
+            types.append(os.path.splitext(file)[0])
 
-    # Load existing life biographies
     life_dir = "./types/life/biographies"
     if os.path.exists(life_dir):
         for af in sorted(os.listdir(life_dir), reverse=True):
             if af.endswith(".json"):
+                agg_id = af[:-5]
+                data = load_json_as_dict(os.path.join(life_dir, af))
+                name = data.get("name", agg_id.replace("_", " "))
+                created_str = data.get("created")
                 try:
-                    agg_id = af[:-5]
-                    data = load_json_as_dict(os.path.join(life_dir, af))
-                    custom_name = data.get("name", agg_id.replace("_", " "))
-                    life_bios.append((agg_id, custom_name))
-                except Exception as e:
-                    print(f"Error loading {af}: {e}")
+                    # Format nicely
+                    dt = datetime.fromisoformat(created_str)
+                    display_created = dt.strftime("%d %b %Y, %H:%M")
+                except:
+                    display_created = "[unknown time]"
+                life_bios.append((agg_id, name, display_created))
 
     return render_template("index.html", types=types, life_bios=life_bios)
+
+# @app.route('/')
+# def index_page():
+#     life_bios = []
+#     types = []
+
+#     # Load types (excluding time.json)
+#     for file in sorted(os.listdir("./types")):
+#         if file.endswith(".json"):
+#             name = os.path.splitext(file)[0]
+#             if name.lower() != "time":
+#                 types.append(name)
+
+#     # Load existing life biographies
+#     life_dir = "./types/life/biographies"
+#     if os.path.exists(life_dir):
+#         for af in sorted(os.listdir(life_dir), reverse=True):
+#             if af.endswith(".json"):
+#                 try:
+#                     agg_id = af[:-5]
+#                     data = load_json_as_dict(os.path.join(life_dir, af))
+#                     custom_name = data.get("name", agg_id.replace("_", " "))
+#                     life_bios.append((agg_id, custom_name))
+#                 except Exception as e:
+#                     print(f"Error loading {af}: {e}")
+
+#     return render_template("index.html", types=types, life_bios=life_bios)
 
 @app.route("/global_search")
 def global_search():
@@ -187,7 +220,6 @@ def life_iframe_wizard():
 
 @app.route('/start_life_naming', methods=['GET', 'POST'])
 def start_life_naming():
-    # Clear previous session
     session.pop('life_name', None)
     session.pop('life_id', None)
 
@@ -196,11 +228,41 @@ def start_life_naming():
         if not name:
             return "<p>Please enter a name.</p>"
 
+        # Capture UK time on creation
+        now_uk = datetime.now(ZoneInfo("Europe/London")).isoformat()
+
         session['life_name'] = name
         session['life_id'] = f"Life_{int(time.time())}"
+
+        # Save file with timestamp
+        file_path = f"./types/life/biographies/{session['life_id']}.json"
+        save_dict_as_json(file_path, {
+            "life_id": session['life_id'],
+            "name": name,
+            "created": now_uk,
+            "entries": []
+        })
+
         return redirect("/life_iframe_wizard?step=0")
 
     return render_template("start_life_naming.html")
+
+# @app.route('/start_life_naming', methods=['GET', 'POST'])
+# def start_life_naming():
+#     # Clear previous session
+#     session.pop('life_name', None)
+#     session.pop('life_id', None)
+
+#     if request.method == 'POST':
+#         name = request.form.get("life_name", "").strip()
+#         if not name:
+#             return "<p>Please enter a name.</p>"
+
+#         session['life_name'] = name
+#         session['life_id'] = f"Life_{int(time.time())}"
+#         return redirect("/life_iframe_wizard?step=0")
+
+#     return render_template("start_life_naming.html")
 
 
 @app.route('/reset_life_session')
