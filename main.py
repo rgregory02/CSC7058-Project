@@ -77,59 +77,7 @@ def index_page():
 
     return render_template("index.html", types=types, life_bios=life_bios)
 
-# @app.route('/')
-# def index_page():
-#     life_bios = []
-#     types = []
 
-#     for file in os.listdir("./types"):
-#         if file.endswith(".json") and os.path.splitext(file)[0].lower() != "time":
-#             types.append(os.path.splitext(file)[0])
-
-#     life_dir = "./types/life/biographies"
-#     if os.path.exists(life_dir):
-#         for af in sorted(os.listdir(life_dir), reverse=True):
-#             if af.endswith(".json"):
-#                 agg_id = af[:-5]
-#                 data = load_json_as_dict(os.path.join(life_dir, af))
-#                 name = data.get("name", agg_id.replace("_", " "))
-#                 created_str = data.get("created")
-#                 try:
-#                     # Format nicely
-#                     dt = datetime.fromisoformat(created_str)
-#                     display_created = dt.strftime("%d %b %Y, %H:%M")
-#                 except:
-#                     display_created = "[unknown time]"
-#                 life_bios.append((agg_id, name, display_created))
-
-#     return render_template("index.html", types=types, life_bios=life_bios)
-
-# @app.route('/')
-# def index_page():
-#     life_bios = []
-#     types = []
-
-#     # Load types (excluding time.json)
-#     for file in sorted(os.listdir("./types")):
-#         if file.endswith(".json"):
-#             name = os.path.splitext(file)[0]
-#             if name.lower() != "time":
-#                 types.append(name)
-
-#     # Load existing life biographies
-#     life_dir = "./types/life/biographies"
-#     if os.path.exists(life_dir):
-#         for af in sorted(os.listdir(life_dir), reverse=True):
-#             if af.endswith(".json"):
-#                 try:
-#                     agg_id = af[:-5]
-#                     data = load_json_as_dict(os.path.join(life_dir, af))
-#                     custom_name = data.get("name", agg_id.replace("_", " "))
-#                     life_bios.append((agg_id, custom_name))
-#                 except Exception as e:
-#                     print(f"Error loading {af}: {e}")
-
-#     return render_template("index.html", types=types, life_bios=life_bios)
 
 @app.route("/global_search")
 def global_search():
@@ -216,92 +164,115 @@ def api_search_life_bios():
     return jsonify(matches[:10])  # Return only first 10 matches for speed
 
 
-
 @app.route('/life_iframe_wizard')
 def life_iframe_wizard():
-    # Ensure session has valid data
-    life_id = session.get("life_id")
-    life_name = session.get("life_name")
+    step = request.args.get("step", "0")
 
-    if not life_id or not life_name:
-        return redirect('/start_life_naming')  # force naming before starting wizard
+    if step == "0":
+        # Just render the confirmation screen — don't save yet
+        return render_template("life_step_name.html", life_id=session.get('life_id'))
 
-    # Step tracking
-    step = int(request.args.get("step", 0))
-    steps = ["time", "mostlike", "people", "buildings", "organisations"]
-    total = len(steps)
-
-    # Create JSON on step 0
-    if step == 0:
-        file_path = f"./types/life/biographies/{life_id}.json"
-        if not os.path.exists(file_path):
+    elif step == "1":
+        # Only now, save the draft for the first time
+        if 'life_id' not in session:
+            session['life_id'] = f"Life_{int(time.time())}"
+            now_uk = datetime.now(ZoneInfo("Europe/London")).isoformat()
+            file_path = f"./types/life/biographies/{session['life_id']}.json"
             save_dict_as_json(file_path, {
-                "life_id": life_id,
-                "name": life_name,
+                "life_id": session['life_id'],
+                "name": session.get('life_name', 'Untitled'),
+                "created": now_uk,
                 "entries": []
             })
+        return redirect(url_for('life_step_time', life_id=session.get('life_id')))
 
-    if step >= total:
+    else:
+        # Remaining steps are dynamic: subtract 2 to offset name+time
+        return redirect(url_for('life_step_dynamic', step=int(step) - 2))
+#
+
+@app.route("/life_step/dynamic/<int:step>")
+def life_step_dynamic(step):
+    # Get all types excluding reserved ones
+    type_folders = [
+        t for t in os.listdir("./types")
+        if os.path.isdir(f"./types/{t}") and t not in ["life", "time"]
+    ]
+    type_folders.sort()
+
+    # End of dynamic steps
+    if step >= len(type_folders):
         return redirect("/finalise_life_bio")
 
-    step_name = steps[step]
-    iframe_src = f"/life_step/{step_name}/{life_id}"
+    current_type = type_folders[step]
+
+    # Load biographies for dropdown
+    label_path = f"./types/{current_type}/biographies"
+    label_files = []
+    if os.path.exists(label_path):
+        label_files = [
+            os.path.splitext(f)[0]
+            for f in os.listdir(label_path)
+            if f.endswith(".json")
+        ]
+
+    # Determine if skip is needed
+    skip_allowed = len(label_files) == 0
 
     return render_template(
-        "life_iframe_wizard.html",
-        step=step,
-        step_name=step_name.capitalize(),
-        total=total,
-        iframe_src=iframe_src,
-        life_name=life_name
+        "life_step_dynamic.html",
+        current_type=current_type,
+        next_step=step + 1,
+        label_files=label_files,
+        life_id=session.get("life_id"),
+        skip_allowed=skip_allowed
     )
 
 
+@app.route("/life_step/save/<string:type_name>", methods=["POST"])
+def save_dynamic_step(type_name):
+    bio_id = request.form.get("bio_id")
+    label = request.form.get("label", "")
+    confidence = int(request.form.get("confidence", "80")) / 100.0
+    next_step = request.args.get("next", "0")
+
+    life_id = session.get("life_id")
+    if not life_id:
+        return redirect("/")
+
+    path = f"./types/life/biographies/{life_id}.json"
+    life_data = load_json_as_dict(path) if os.path.exists(path) else {}
+
+    if type_name not in life_data:
+        life_data[type_name] = []
+
+    life_data[type_name].append({
+        "id": bio_id,
+        "label": label,
+        "confidence": confidence
+    })
+
+    save_dict_as_json(path, life_data)
+    return redirect(f"/life_step/dynamic/{next_step}")
+
+#     )
+
 @app.route('/start_life_naming', methods=['GET', 'POST'])
 def start_life_naming():
-    session.pop('life_name', None)
-    session.pop('life_id', None)
-
     if request.method == 'POST':
         name = request.form.get("life_name", "").strip()
         if not name:
             return "<p>Please enter a name.</p>"
 
-        # Capture UK time on creation
-        now_uk = datetime.now(ZoneInfo("Europe/London")).isoformat()
-
+        # Just store name in session (no file yet)
         session['life_name'] = name
-        session['life_id'] = f"Life_{int(time.time())}"
+        session.pop('life_id', None)  # Clear any previous session ID
 
-        # Save file with timestamp
-        file_path = f"./types/life/biographies/{session['life_id']}.json"
-        save_dict_as_json(file_path, {
-            "life_id": session['life_id'],
-            "name": name,
-            "created": now_uk,
-            "entries": []
-        })
-
+        # Proceed to first wizard step (which will handle file creation)
         return redirect("/life_iframe_wizard?step=0")
 
     return render_template("start_life_naming.html")
 
-# @app.route('/start_life_naming', methods=['GET', 'POST'])
-# def start_life_naming():
-#     # Clear previous session
-#     session.pop('life_name', None)
-#     session.pop('life_id', None)
-
-#     if request.method == 'POST':
-#         name = request.form.get("life_name", "").strip()
-#         if not name:
-#             return "<p>Please enter a name.</p>"
-
-#         session['life_name'] = name
-#         session['life_id'] = f"Life_{int(time.time())}"
-#         return redirect("/life_iframe_wizard?step=0")
-
-#     return render_template("start_life_naming.html")
 
 
 @app.route('/reset_life_session')
@@ -338,7 +309,7 @@ def life_step_time(life_id):
             }
             life_data["time"] = [entry]
             save_dict_as_json(life_file, life_data)
-            return redirect(f"/life_step/people/{life_id}")
+            return redirect("/life_iframe_wizard?step=2")
 
         elif selected_subvalue and selected_confidence:
             entry = {
@@ -348,7 +319,7 @@ def life_step_time(life_id):
             }
             life_data["time"] = [entry]
             save_dict_as_json(life_file, life_data)
-            return redirect(f"/life_step/people/{life_id}")
+            return redirect("/life_iframe_wizard?step=2")
 
     # Load available top-level label files
     label_files = []
@@ -832,6 +803,24 @@ def life_view(aggregator_id):
     """
 
     return html
+
+
+@app.route('/cancel_life_creation')
+def cancel_life_creation():
+    life_id = session.pop('life_id', None)
+    session.pop('life_name', None)
+
+    if life_id:
+        file_path = f"./types/life/biographies/{life_id}.json"
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+    return redirect('/')
+# @app.route('/cancel_life_creation')
+# def cancel_life_creation():
+#     session.pop('life_name', None)
+#     session.pop('life_id', None)
+#     return redirect('/')
 
 def printLabel(label):
     prefix = label['label']+"="  

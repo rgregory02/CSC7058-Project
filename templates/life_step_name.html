@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Step 0: Confirm Biography Name</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f9f9f9;
+      padding: 40px;
+      text-align: center;
+    }
+    .box {
+      background: white;
+      max-width: 500px;
+      margin: 0 auto;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      margin-bottom: 20px;
+      color: #333;
+    }
+    .name-display {
+      font-size: 1.5em;
+      font-weight: bold;
+      margin: 10px 0 30px 0;
+      color: #444;
+    }
+    .btn {
+      display: inline-block;
+      padding: 10px 20px;
+      font-size: 1em;
+      margin: 10px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .btn-primary {
+      background: #4CAF50;
+      color: white;
+    }
+    .btn-secondary {
+      background: #ccc;
+      color: #333;
+    }
+    .btn-danger {
+      background: #f44336;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>Confirm Life Biography Name</h1>
+    <p>You entered:</p>
+    <div class="name-display">{{ session['life_name'] }}</div>
+
+    <p>Do you want to continue with this name?</p>
+
+    <form action="/life_iframe_wizard" method="get">
+      <input type="hidden" name="step" value="1">
+      <button class="btn btn-primary" type="submit">✅ Continue to Step 1</button>
+    </form>
+
+    <p>
+      <a href="/start_life_naming" class="btn btn-secondary">✏️ Edit Name</a>
+      <a href="/cancel_life_creation" class="btn btn-danger">❌ Cancel and Return Home</a>
+    </p>
+  </div>
+</body>
+</html>

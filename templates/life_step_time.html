@@ -3,37 +3,87 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Select Time Period</title>
+    <title>Step: Time</title>
     <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        body {
+            font-family: sans-serif;
+            background: #f2f2f2;
+            padding: 40px;
+            text-align: center;
+        }
+        .box {
+            background: white;
+            max-width: 600px;
+            margin: auto;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+        select, input[type="date"], input[type="range"] {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
+        .confidence-display {
+            font-weight: bold;
+        }
+        .add-entry-button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            padding: 5px 0;
+        }
+        .confidence-exact {
+            color: green;
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
-<div class="container">
-    <h1>Step 1: Time</h1>
+<div class="box">
+    <h1>Step: Time</h1>
     <p><strong>Name:</strong> {{ name }}</p>
     <hr>
-    <h2>🧭 Select a Time Period</h2>
+
     <form method="POST">
         <label for="label_type">Choose a time type:</label>
-        <select id="label_type" name="label_type" class="dropdown" onchange="this.form.submit()" required>
+        <select id="label_type" name="label_type" onchange="this.form.submit()" required>
             <option value="">-- Select Time Label --</option>
             {% for label, desc in label_files %}
                 <option value="{{ label }}" {% if label == selected_label_type %}selected{% endif %}>
-                    {{ label|replace('_', ' ')|title }}{% if desc %} - {{ desc }}{% endif %}
+                    {{ label|replace('_', ' ')|title }}{% if desc %} – {{ desc }}{% endif %}
                 </option>
             {% endfor %}
         </select>
 
-        <div id="calendar_input" style="display:none; margin-top:15px;">
+        <div id="calendar_input" style="display:none;">
             <label for="date_value">Pick a date:</label>
-            <input type="date" id="date_value" name="date_value" class="input-field" value="{{ selected_date or '' }}">
+            <input type="date" id="date_value" name="date_value" value="{{ selected_date or '' }}">
         </div>
 
-        <div id="subvalue_input" style="display:none; margin-top:15px;">
+        <div id="subvalue_input" style="display:none;">
             <label for="subvalue">Select a value:</label>
-            <select id="subvalue" name="subvalue" class="dropdown">
+            <select id="subvalue" name="subvalue">
                 {% for item in subfolder_labels %}
-                    <option value="{{ item }}" {% if item == selected_subvalue %}selected{% endif %}>{{ item|replace('_', ' ')|title }}</option>
+                    <option value="{{ item }}" {% if item == selected_subvalue %}selected{% endif %}>
+                        {{ item|replace('_', ' ')|title }}
+                    </option>
                 {% endfor %}
             </select>
         </div>
@@ -42,7 +92,7 @@
             <label for="confidence">Confidence:</label>
             <input type="range" id="confidence" name="confidence" min="0" max="100" value="{{ selected_confidence or 100 }}">
             <span id="confidence_display">{{ selected_confidence or 100 }}</span>%
-            <div><small id="confidence_level"></small></div>
+            <div><small id="confidence_level" class=""></small></div>
         </div>
 
         <button type="submit" class="add-entry-button">✅ Save Time Selection</button>
@@ -50,13 +100,22 @@
 
     <hr>
     <h3>Current Time Period</h3>
-    <ul>
-        {% for tag, conf in existing_entries %}
-        <li>{{ tag }} – Confidence: {{ conf }}</li>
-        {% endfor %}
-    </ul>
+    {% if existing_entries %}
+        <ul>
+            {% for tag, conf in existing_entries %}
+                <li>{{ tag }} – Confidence: 
+                    <span class="{% if conf == '100' or conf == 100 %}confidence-exact{% endif %}">
+                        {{ conf }}{% if conf == '100' or conf == 100 %} (Exact){% endif %}
+                    </span>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p><em>No time period selected yet.</em></p>
+    {% endif %}
+
     <br>
-    <a href="/life_iframe_wizard?step=1&life_id={{ life_id }}">Continue →</a>
+    <a href="/life_iframe_wizard?step=2&life_id={{ life_id }}">Continue →</a>
 </div>
 
 <script>
@@ -66,7 +125,7 @@
         document.getElementById("subvalue_input").style.display = (labelType !== "date" && labelType !== "") ? "block" : "none";
     }
 
-    toggleInputs(); // run on page load
+    toggleInputs(); // Run on page load
 
     const confidenceInput = document.getElementById("confidence");
     const confidenceDisplay = document.getElementById("confidence_display");
@@ -75,10 +134,20 @@
     function updateConfidenceDisplay() {
         const value = parseInt(confidenceInput.value);
         confidenceDisplay.textContent = value;
-        if (value <= 33) confidenceLevel.textContent = "Confidence level: Low";
-        else if (value <= 66) confidenceLevel.textContent = "Confidence level: Medium";
-        else if (value < 100) confidenceLevel.textContent = "Confidence level: High";
-        else confidenceLevel.textContent = "Confidence level: Exact";
+
+        if (value <= 33) {
+            confidenceLevel.textContent = "Confidence level: Low";
+            confidenceLevel.className = "";
+        } else if (value <= 66) {
+            confidenceLevel.textContent = "Confidence level: Medium";
+            confidenceLevel.className = "";
+        } else if (value < 100) {
+            confidenceLevel.textContent = "Confidence level: High";
+            confidenceLevel.className = "";
+        } else {
+            confidenceLevel.textContent = "Confidence level: Exact";
+            confidenceLevel.className = "confidence-exact";
+        }
     }
 
     confidenceInput.addEventListener("input", updateConfidenceDisplay);
