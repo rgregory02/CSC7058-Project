@@ -190,7 +190,6 @@ def life_iframe_wizard():
         return redirect(url_for('life_step_dynamic', step=int(step) - 2))
 
 
-
 @app.route("/life_step/dynamic/<int:step>")
 def life_step_dynamic(step):
     # Get all types excluding reserved ones
@@ -219,14 +218,105 @@ def life_step_dynamic(step):
     # Determine if skip is needed
     skip_allowed = len(label_files) == 0
 
+    # Get life name and selected time from session
+    life_name = session.get("life_name")
+    time_selection = session.get("time_selection")  # e.g. {"label": "Childhood", "confidence": 100}
+
+    # 👇 NEW: Provide prev_step for back button logic
+    prev_step = step - 1 if step > 0 else None
+
     return render_template(
         "life_step_dynamic.html",
         current_type=current_type,
         next_step=step + 1,
+        prev_step=prev_step,  # 👈 add this
         label_files=label_files,
         life_id=session.get("life_id"),
-        skip_allowed=skip_allowed
+        skip_allowed=skip_allowed,
+        life_name=life_name,
+        time_selection=time_selection
     )
+
+# @app.route("/life_step/dynamic/<int:step>")
+# def life_step_dynamic(step):
+#     # Get all types excluding reserved ones
+#     type_folders = [
+#         t for t in os.listdir("./types")
+#         if os.path.isdir(f"./types/{t}") and t not in ["life", "time"]
+#     ]
+#     type_folders.sort()
+
+#     # End of dynamic steps
+#     if step >= len(type_folders):
+#         return redirect("/finalise_life_bio")
+
+#     current_type = type_folders[step]
+
+#     # Load biographies for dropdown
+#     label_path = f"./types/{current_type}/biographies"
+#     label_files = []
+#     if os.path.exists(label_path):
+#         label_files = [
+#             os.path.splitext(f)[0]
+#             for f in os.listdir(label_path)
+#             if f.endswith(".json")
+#         ]
+
+#     # Determine if skip is needed
+#     skip_allowed = len(label_files) == 0
+
+#     # NEW: Get life name and selected time from session
+#     life_name = session.get("life_name")
+#     time_selection = session.get("time_selection")  # should be a dict like {"label": "Childhood", "confidence": 100}
+
+#     return render_template(
+#         "life_step_dynamic.html",
+#         current_type=current_type,
+#         next_step=step + 1,
+#         label_files=label_files,
+#         life_id=session.get("life_id"),
+#         skip_allowed=skip_allowed,
+#         life_name=life_name,
+#         time_selection=time_selection
+#     )
+
+
+# @app.route("/life_step/dynamic/<int:step>")
+# def life_step_dynamic(step):
+#     # Get all types excluding reserved ones
+#     type_folders = [
+#         t for t in os.listdir("./types")
+#         if os.path.isdir(f"./types/{t}") and t not in ["life", "time"]
+#     ]
+#     type_folders.sort()
+
+#     # End of dynamic steps
+#     if step >= len(type_folders):
+#         return redirect("/finalise_life_bio")
+
+#     current_type = type_folders[step]
+
+#     # Load biographies for dropdown
+#     label_path = f"./types/{current_type}/biographies"
+#     label_files = []
+#     if os.path.exists(label_path):
+#         label_files = [
+#             os.path.splitext(f)[0]
+#             for f in os.listdir(label_path)
+#             if f.endswith(".json")
+#         ]
+
+#     # Determine if skip is needed
+#     skip_allowed = len(label_files) == 0
+
+#     return render_template(
+#         "life_step_dynamic.html",
+#         current_type=current_type,
+#         next_step=step + 1,
+#         label_files=label_files,
+#         life_id=session.get("life_id"),
+#         skip_allowed=skip_allowed
+#     )
 
 
 @app.route("/life_step/save/<string:type_name>", methods=["POST"])
@@ -284,6 +374,7 @@ def reset_life_session():
     session.pop('life_id', None)
     return redirect('/start_life_naming')
 
+
 @app.route("/life_step/time/<life_id>", methods=["GET", "POST"])
 def life_step_time(life_id):
     labels_folder = "./types/time/labels"
@@ -296,35 +387,48 @@ def life_step_time(life_id):
     life_data = load_json_as_dict(life_file)
     name = life_data.get("name", "[Unknown]")
 
-    # Get form values
-    selected_label_type = request.form.get("label_type")
-    selected_subvalue = request.form.get("subvalue")
-    selected_date = request.form.get("date_value")
+    # Get form values (support GET for label_type selection)
+    selected_label_type = request.form.get("label_type") or request.args.get("label_type", "").strip()
+    selected_subvalue = request.form.get("subvalue", "").strip()
+    selected_date = request.form.get("date_value", "").strip()
     selected_confidence = request.form.get("confidence")
 
-    # Form submission logic
     if request.method == "POST":
-        if selected_label_type == "date" and selected_date and selected_confidence:
-            entry = {
+        try:
+            confidence_value = int(selected_confidence)
+        except (TypeError, ValueError):
+            confidence_value = None
+
+        if confidence_value is not None:
+            time_entry = {
                 "label_type": selected_label_type,
-                "confidence": selected_confidence,
-                "date_value": selected_date
+                "confidence": confidence_value
             }
-            life_data["time"] = [entry]
+
+            # Store chosen time label and confidence in both file and session
+            if selected_label_type == "date" and selected_date:
+                time_entry["date_value"] = selected_date
+                session["time_selection"] = {
+                    "label": selected_date,
+                    "confidence": confidence_value
+                }
+            elif selected_subvalue:
+                time_entry["subvalue"] = selected_subvalue
+                session["time_selection"] = {
+                    "label": selected_subvalue,
+                    "confidence": confidence_value
+                }
+
+            # Save to life file
+            life_data["time"] = [time_entry]
             save_dict_as_json(life_file, life_data)
+
+            # Persist name to session
+            session["life_name"] = name
+
             return redirect("/life_iframe_wizard?step=2")
 
-        elif selected_subvalue and selected_confidence:
-            entry = {
-                "label_type": selected_label_type,
-                "subvalue": selected_subvalue,
-                "confidence": selected_confidence
-            }
-            life_data["time"] = [entry]
-            save_dict_as_json(life_file, life_data)
-            return redirect("/life_iframe_wizard?step=2")
-
-    # Load available top-level label files
+    # Load available top-level time labels
     label_files = []
     if os.path.exists(labels_folder):
         for file in os.listdir(labels_folder):
@@ -338,9 +442,8 @@ def life_step_time(life_id):
                         label_files.append((label, desc))
                 except Exception as e:
                     print(f"Error loading {file}: {e}")
-                    continue
 
-    # Load suboptions if label has a folder
+    # Load suboptions if label has a subfolder
     subfolder_labels = []
     if selected_label_type and selected_label_type != "date":
         subfolder_path = os.path.join(labels_folder, selected_label_type)
@@ -351,7 +454,7 @@ def life_step_time(life_id):
                 if f.endswith(".json")
             ]
 
-    # Display existing time entry
+    # Load existing time entry (for summary display)
     existing_entry = life_data.get("time", [])
     display_list = []
     for entry in existing_entry:
@@ -371,6 +474,189 @@ def life_step_time(life_id):
         subfolder_labels=subfolder_labels,
         existing_entries=display_list
     )
+
+# @app.route("/life_step/time/<life_id>", methods=["GET", "POST"])
+# def life_step_time(life_id):
+#     labels_folder = "./types/time/labels"
+#     life_folder = "./types/life/biographies"
+#     os.makedirs(labels_folder, exist_ok=True)
+#     os.makedirs(life_folder, exist_ok=True)
+
+#     # Load life data
+#     life_file = os.path.join(life_folder, f"{life_id}.json")
+#     life_data = load_json_as_dict(life_file)
+#     name = life_data.get("name", "[Unknown]")
+
+#     # Get form values
+#     selected_label_type = request.form.get("label_type")
+#     selected_subvalue = request.form.get("subvalue")
+#     selected_date = request.form.get("date_value")
+#     selected_confidence = request.form.get("confidence")
+
+#     if request.method == "POST":
+#         if selected_confidence:
+#             time_entry = {
+#                 "label_type": selected_label_type,
+#                 "confidence": int(selected_confidence)
+#             }
+
+#             if selected_label_type == "date" and selected_date:
+#                 time_entry["date_value"] = selected_date
+#                 session["time_selection"] = {
+#                     "label": selected_date,
+#                     "confidence": int(selected_confidence)
+#                 }
+
+#             elif selected_subvalue:
+#                 time_entry["subvalue"] = selected_subvalue
+#                 session["time_selection"] = {
+#                     "label": selected_subvalue,
+#                     "confidence": int(selected_confidence)
+#                 }
+
+#             # Save to life JSON
+#             life_data["time"] = [time_entry]
+#             save_dict_as_json(life_file, life_data)
+
+#             # Also store name for reuse in steps
+#             session["life_name"] = name
+
+#             return redirect("/life_iframe_wizard?step=2")
+
+#     # Load label options
+#     label_files = []
+#     if os.path.exists(labels_folder):
+#         for file in os.listdir(labels_folder):
+#             full_path = os.path.join(labels_folder, file)
+#             if file.endswith(".json") and os.path.isfile(full_path):
+#                 try:
+#                     with open(full_path) as f:
+#                         data = json.load(f)
+#                         label = os.path.splitext(file)[0]
+#                         desc = data.get("description", "")
+#                         label_files.append((label, desc))
+#                 except Exception as e:
+#                     print(f"Error loading {file}: {e}")
+
+#     # Load suboptions if label has a folder
+#     subfolder_labels = []
+#     if selected_label_type and selected_label_type != "date":
+#         subfolder_path = os.path.join(labels_folder, selected_label_type)
+#         if os.path.isdir(subfolder_path):
+#             subfolder_labels = [
+#                 os.path.splitext(f)[0]
+#                 for f in os.listdir(subfolder_path)
+#                 if f.endswith(".json")
+#             ]
+
+#     # Display existing time entry
+#     existing_entry = life_data.get("time", [])
+#     display_list = []
+#     for entry in existing_entry:
+#         tag = entry.get("subvalue") or entry.get("date_value") or "[unspecified]"
+#         conf = entry.get("confidence", "unknown")
+#         display_list.append((tag, conf))
+
+#     return render_template(
+#         "life_step_time.html",
+#         life_id=life_id,
+#         name=name,
+#         label_files=label_files,
+#         selected_label_type=selected_label_type,
+#         selected_subvalue=selected_subvalue,
+#         selected_date=selected_date,
+#         selected_confidence=selected_confidence,
+#         subfolder_labels=subfolder_labels,
+#         existing_entries=display_list
+#     )
+
+# @app.route("/life_step/time/<life_id>", methods=["GET", "POST"])
+# def life_step_time(life_id):
+#     labels_folder = "./types/time/labels"
+#     life_folder = "./types/life/biographies"
+#     os.makedirs(labels_folder, exist_ok=True)
+#     os.makedirs(life_folder, exist_ok=True)
+
+#     # Load life data
+#     life_file = os.path.join(life_folder, f"{life_id}.json")
+#     life_data = load_json_as_dict(life_file)
+#     name = life_data.get("name", "[Unknown]")
+
+#     # Get form values
+#     selected_label_type = request.form.get("label_type")
+#     selected_subvalue = request.form.get("subvalue")
+#     selected_date = request.form.get("date_value")
+#     selected_confidence = request.form.get("confidence")
+
+#     # Form submission logic
+#     if request.method == "POST":
+#         if selected_label_type == "date" and selected_date and selected_confidence:
+#             entry = {
+#                 "label_type": selected_label_type,
+#                 "confidence": selected_confidence,
+#                 "date_value": selected_date
+#             }
+#             life_data["time"] = [entry]
+#             save_dict_as_json(life_file, life_data)
+#             return redirect("/life_iframe_wizard?step=2")
+
+#         elif selected_subvalue and selected_confidence:
+#             entry = {
+#                 "label_type": selected_label_type,
+#                 "subvalue": selected_subvalue,
+#                 "confidence": selected_confidence
+#             }
+#             life_data["time"] = [entry]
+#             save_dict_as_json(life_file, life_data)
+#             return redirect("/life_iframe_wizard?step=2")
+
+#     # Load available top-level label files
+#     label_files = []
+#     if os.path.exists(labels_folder):
+#         for file in os.listdir(labels_folder):
+#             full_path = os.path.join(labels_folder, file)
+#             if file.endswith(".json") and os.path.isfile(full_path):
+#                 try:
+#                     with open(full_path) as f:
+#                         data = json.load(f)
+#                         label = os.path.splitext(file)[0]
+#                         desc = data.get("description", "")
+#                         label_files.append((label, desc))
+#                 except Exception as e:
+#                     print(f"Error loading {file}: {e}")
+#                     continue
+
+#     # Load suboptions if label has a folder
+#     subfolder_labels = []
+#     if selected_label_type and selected_label_type != "date":
+#         subfolder_path = os.path.join(labels_folder, selected_label_type)
+#         if os.path.isdir(subfolder_path):
+#             subfolder_labels = [
+#                 os.path.splitext(f)[0]
+#                 for f in os.listdir(subfolder_path)
+#                 if f.endswith(".json")
+#             ]
+
+#     # Display existing time entry
+#     existing_entry = life_data.get("time", [])
+#     display_list = []
+#     for entry in existing_entry:
+#         tag = entry.get("subvalue") or entry.get("date_value") or "[unspecified]"
+#         conf = entry.get("confidence", "unknown")
+#         display_list.append((tag, conf))
+
+#     return render_template(
+#         "life_step_time.html",
+#         life_id=life_id,
+#         name=name,
+#         label_files=label_files,
+#         selected_label_type=selected_label_type,
+#         selected_subvalue=selected_subvalue,
+#         selected_date=selected_date,
+#         selected_confidence=selected_confidence,
+#         subfolder_labels=subfolder_labels,
+#         existing_entries=display_list
+#     )
 
 
 

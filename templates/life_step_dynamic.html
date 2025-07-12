@@ -9,7 +9,9 @@
       background: white; max-width: 600px; margin: auto;
       padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
-    h1 { margin-bottom: 20px; }
+    h1 { margin-bottom: 10px; }
+    h2 { font-size: 1.1em; color: #555; margin-top: 0; }
+    .meta { margin-bottom: 20px; color: #333; font-size: 0.95em; }
     select, input[type="text"], input[type="range"] {
       margin-top: 10px; margin-bottom: 20px; width: 100%; padding: 10px;
     }
@@ -19,14 +21,49 @@
       padding: 10px 20px; border: none; border-radius: 5px;
       cursor: pointer; font-size: 1em; margin-top: 10px;
     }
-    .skip-button {
-      background-color: #888;
+    .skip-button { background-color: #888; }
+    .nav-buttons {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 30px;
     }
+    .btn {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      cursor: pointer;
+      text-decoration: none;
+      color: white;
+    }
+    .btn:hover { opacity: 0.9; }
+    .btn-grey { background-color: #6c757d; }
+    .btn-red { background-color: #dc3545; }
   </style>
 </head>
 <body>
   <div class="box">
     <h1>Step: {{ current_type|capitalize }}</h1>
+
+    {% if life_name %}
+      <div class="meta"><strong>Name:</strong> {{ life_name }}</div>
+    {% endif %}
+
+    {% if time_selection %}
+      <div class="meta">
+        <strong>Time Period:</strong> {{ time_selection.label|replace('_', ' ')|title }}<br>
+        <strong>Confidence:</strong> {{ time_selection.confidence }}%
+        {% if time_selection.confidence == 100 %}
+          <span style="color: green; font-weight: bold;">(Exact)</span>
+        {% elif time_selection.confidence >= 67 %}
+          <span style="color: green;">(High)</span>
+        {% elif time_selection.confidence >= 34 %}
+          <span style="color: orange;">(Medium)</span>
+        {% else %}
+          <span style="color: red;">(Low)</span>
+        {% endif %}
+      </div>
+    {% endif %}
 
     {% if skip_allowed %}
       <p>No available {{ current_type }} to select.</p>
@@ -46,92 +83,50 @@
         <input type="text" name="label" placeholder="e.g., mentor, location"><br>
 
         <label for="confidence">Confidence:</label><br>
-        <input type="range" id="confidence" name="confidence" min="0" max="100" value="80"
-               oninput="document.getElementById('confVal').innerText = this.value + '%'">
-        <div class="confidence-display">Confidence: <span id="confVal">80%</span></div>
+        <input type="range" id="confidence" name="confidence" min="0" max="100"
+               value="{{ confidence|default(80) }}"
+               oninput="updateConfidenceDisplay()">
+        <div class="confidence-display">
+          <span id="confVal">80%</span>
+          <div id="confLevel" style="font-size: 0.9em;"></div>
+        </div>
 
         <button type="submit">Save and Continue</button>
       </form>
     {% endif %}
+
+    <div class="nav-buttons">
+      {% if prev_step is not none %}
+        <a href="/life_step/dynamic/{{ prev_step }}" class="btn btn-grey">⬅️ Back</a>
+      {% else %}
+        <a href="/life_iframe_wizard?step=1" class="btn btn-grey">⬅️ Back</a>
+      {% endif %}
+      <a href="/cancel_life_creation" class="btn btn-red">❌ Cancel</a>
+    </div>
   </div>
+
+  <script>
+    function updateConfidenceDisplay() {
+      const val = document.getElementById("confidence").value;
+      document.getElementById("confVal").innerText = val + "%";
+
+      const level = document.getElementById("confLevel");
+      if (val == 100) {
+        level.innerText = "Confidence level: Exact";
+        level.style.color = "green";
+      } else if (val >= 67) {
+        level.innerText = "Confidence level: High";
+        level.style.color = "green";
+      } else if (val >= 34) {
+        level.innerText = "Confidence level: Medium";
+        level.style.color = "orange";
+      } else {
+        level.innerText = "Confidence level: Low";
+        level.style.color = "red";
+      }
+    }
+
+    updateConfidenceDisplay();
+  </script>
 </body>
 </html>
-
-
-<!-- <!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Step: {{ current_type|capitalize }}</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      background: #f2f2f2;
-      padding: 40px;
-      text-align: center;
-    }
-    .box {
-      background: white;
-      max-width: 600px;
-      margin: auto;
-      padding: 30px;
-      border-radius: 10px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    }
-    h1 {
-      margin-bottom: 20px;
-    }
-    select, input[type="text"], input[type="range"] {
-      margin-top: 10px;
-      margin-bottom: 20px;
-      width: 100%;
-      padding: 10px;
-      font-size: 1em;
-    }
-    .confidence-display {
-      font-weight: bold;
-      margin-bottom: 20px;
-    }
-    button {
-      background-color: #4CAF50;
-      color: white;
-      padding: 10px 20px;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      font-size: 1em;
-    }
-  </style>
-</head>
-<body>
-  <div class="box">
-    <h1>Step: {{ current_type|capitalize }}</h1>
-   <form method="post" action="/life_step/save/{{ current_type }}?next={{ next_step }}">
-  {% if label_files|length == 0 %}
-    <p>No entries available for <strong>{{ current_type }}</strong>. Please add some biographies to the folder: <br>
-    <code>/types/{{ current_type }}/biographies/</code></p>
-    <a href="/life_iframe_wizard?step={{ next_step }}">
-      <button type="button" class="btn btn-primary">Skip to Next Step</button>
-    </a>
-  {% else %}
-    <label for="bio_id">Select from {{ current_type|capitalize }}:</label><br>
-    <select name="bio_id" required>
-      {% for bio in label_files %}
-        <option value="{{ bio }}">{{ bio.replace('_', ' ') }}</option>
-      {% endfor %}
-    </select><br>
-
-    <label for="label">Label (optional):</label>
-    <input type="text" name="label" placeholder="e.g., mentor, location"><br>
-
-    <label for="confidence">Confidence:</label><br>
-    <input type="range" id="confidence" name="confidence" min="0" max="100" value="80"
-           oninput="document.getElementById('confVal').innerText = this.value + '%'">
-    <div class="confidence-display">Confidence: <span id="confVal">80%</span></div>
-
-    <button type="submit">Save and Continue</button>
-  {% endif %}
-</form>
-  </div>
-</body>
-</html> -->
