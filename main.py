@@ -163,13 +163,12 @@ def api_search_life_bios():
 
     return jsonify(matches[:10])  # Return only first 10 matches for speed
 
-
 @app.route('/life_iframe_wizard')
 def life_iframe_wizard():
     step = request.args.get("step", "0")
     life_id = request.args.get("life_id") or session.get("life_id")
 
-    # Restore from query param if passed
+    # Restore life_id from query/session and preload data
     if life_id:
         session["life_id"] = life_id
         file_path = f"./types/life/biographies/{life_id}.json"
@@ -179,12 +178,15 @@ def life_iframe_wizard():
         else:
             return f"Life ID {life_id} not found", 404
 
-    # Step 0 – Name confirmation (for new only)
+    print(f"[Wizard Step] {step} – Life ID: {session.get('life_id')}")
+
     if step == "0":
+        # New name entry — reset time in progress
+        session.pop("time_step_in_progress", None)
         return render_template("life_step_name.html", life_id=life_id)
 
-    # Step 1 – Create JSON file if not already saved
     elif step == "1":
+        # Create draft file if not already saved
         if not life_id and 'life_name' in session:
             session['life_id'] = f"Life_{int(time.time())}"
             life_id = session['life_id']
@@ -200,26 +202,21 @@ def life_iframe_wizard():
             return redirect(url_for('life_iframe_wizard', step="0"))
         return redirect(url_for('life_step_time', life_id=life_id))
 
-    # Final step
     elif step == "final":
         if not life_id:
             return redirect(url_for('life_iframe_wizard', step="0"))
         return redirect(url_for('life_step_finalise', life_id=life_id))
 
-    # Step 2+ – Dynamic Steps (people, organisations, etc.)
     else:
-        if not life_id:
-            return redirect(url_for('life_iframe_wizard', step="0"))
-
+        # Dynamic step (people, organisations, etc.)
         try:
-            # Read dynamic types from /types directory (excluding life/time)
             dynamic_types = sorted([
                 t for t in os.listdir("./types")
                 if os.path.isdir(f"./types/{t}") and t not in ["life", "time"]
             ])
             step_index = int(step) - 2
             if 0 <= step_index < len(dynamic_types):
-                return redirect(url_for('life_step_dynamic', step=step_index, life_id=life_id))
+                return redirect(url_for('life_step_dynamic', step=step_index))
         except Exception as e:
             print(f"[Wizard Error] {e}")
 
@@ -228,32 +225,27 @@ def life_iframe_wizard():
 
 @app.route("/life_step/dynamic/<int:step>", methods=["GET", "POST"])
 def life_step_dynamic(step):
-    # Get current life_id from session
     life_id = session.get("life_id")
     if not life_id:
         return redirect(url_for("life_iframe_wizard", step="0"))
 
-    # Load life JSON file
     life_file = f"./types/life/biographies/{life_id}.json"
     if not os.path.exists(life_file):
         return f"Life file {life_id} not found", 404
 
     life_data = load_json_as_dict(life_file)
 
-    # List of valid dynamic types (excluding reserved)
     type_folders = sorted([
         t for t in os.listdir("./types")
         if os.path.isdir(f"./types/{t}") and t not in ["life", "time"]
     ])
 
-    # Final step reached — redirect to finalise
     if step >= len(type_folders):
         return redirect(url_for("finalise_life_bio"))
 
     current_type = type_folders[step]
     label_path = f"./types/{current_type}/biographies"
 
-    # Load available biography labels for this type
     label_files = []
     if os.path.exists(label_path):
         label_files = [
@@ -262,11 +254,12 @@ def life_step_dynamic(step):
             if f.endswith(".json")
         ]
 
+    print(f"[DEBUG] Step {step} – Type: {current_type} – Labels: {label_files}")
+
     skip_allowed = len(label_files) == 0
     prev_step = step - 1 if step > 0 else None
     next_step = step + 1
 
-    # Handle form submission
     if request.method == "POST":
         selected_id = request.form.get("selected_id")
         confidence = request.form.get("confidence")
@@ -282,25 +275,20 @@ def life_step_dynamic(step):
                 "confidence": confidence_val
             }
 
-            # Append to latest entry in life_data
             if life_data.get("entries"):
                 latest = life_data["entries"][-1]
                 latest.setdefault(current_type, [])
                 latest[current_type].append(new_entry)
 
-                # Save updated JSON
                 save_dict_as_json(life_file, life_data)
 
-        # Redirect to next step
         return redirect(url_for("life_step_dynamic", step=next_step))
 
-    # Preload existing labels for this type if already saved
     existing_labels = []
     if life_data.get("entries"):
         latest = life_data["entries"][-1]
         existing_labels = latest.get(current_type, [])
 
-    # Render the form for the current type
     return render_template(
         "life_step_dynamic.html",
         current_type=current_type,
@@ -352,7 +340,6 @@ def start_life_naming():
     # 🖼️ Display the name entry form
     return render_template("start_life_naming.html")
 
-
 @app.route("/life_step/time/<life_id>", methods=["GET", "POST"])
 def life_step_time(life_id):
     labels_folder = "./types/time/labels"
@@ -361,6 +348,9 @@ def life_step_time(life_id):
     os.makedirs(life_folder, exist_ok=True)
 
     life_file = os.path.join(life_folder, f"{life_id}.json")
+    if not os.path.exists(life_file):
+        return f"Life biography {life_id} not found.", 404
+
     life_data = load_json_as_dict(life_file)
     name = life_data.get("name", "[Unknown]")
 
@@ -375,49 +365,49 @@ def life_step_time(life_id):
         except (TypeError, ValueError):
             confidence_value = None
 
-        if confidence_value is not None and (
-            (selected_label_type == "date" and selected_date) or
-            (selected_label_type != "date" and selected_subvalue)
-        ):
-            # Build time entry
+        # Only proceed if confidence + a date or sublabel is set
+        valid_entry = (
+            confidence_value is not None and
+            (
+                (selected_label_type == "date" and selected_date) or
+                (selected_label_type != "date" and selected_subvalue)
+            )
+        )
+
+        if valid_entry:
             time_entry = {
                 "label_type": selected_label_type,
                 "confidence": confidence_value
             }
+
             if selected_label_type == "date":
                 time_entry["date_value"] = selected_date
-                session["time_selection"] = {
-                    "label": selected_date,
-                    "confidence": confidence_value
-                }
+                session["time_selection"] = {"label": selected_date, "confidence": confidence_value}
             else:
                 time_entry["subvalue"] = selected_subvalue
-                session["time_selection"] = {
-                    "label": selected_subvalue,
-                    "confidence": confidence_value
-                }
+                session["time_selection"] = {"label": selected_subvalue, "confidence": confidence_value}
 
-            # Determine if we should overwrite or append
+            # Save to JSON (overwrite or append depending on wizard state)
             if session.get("time_step_in_progress"):
-                # Overwrite the most recent entry
                 if life_data.get("time"):
                     life_data["time"][-1] = time_entry
                 if life_data.get("entries"):
                     life_data["entries"][-1]["time"] = time_entry
             else:
-                # Append new entry
                 life_data.setdefault("time", []).append(time_entry)
                 life_data.setdefault("entries", []).append({ "time": time_entry })
-                session["time_step_in_progress"] = True  # Now a new time point is "in progress"
+                session["time_step_in_progress"] = True
 
-            # Save and continue
             save_dict_as_json(life_file, life_data)
             session["life_name"] = name
             session["life_id"] = life_id
 
+            print(f"[DEBUG] Saved new time entry: {time_entry}")
             return redirect("/life_iframe_wizard?step=2")
+        else:
+            print("[WARN] Invalid time entry submission — missing confidence or value")
 
-    # Load label files
+    # Load top-level label options (e.g. date, life_stage)
     label_files = []
     if os.path.exists(labels_folder):
         for file in os.listdir(labels_folder):
@@ -430,9 +420,9 @@ def life_step_time(life_id):
                         desc = data.get("description", "")
                         label_files.append((label, desc))
                 except Exception as e:
-                    print(f"Error loading {file}: {e}")
+                    print(f"[ERROR] Failed to load label {file}: {e}")
 
-    # Load suboptions
+    # Load sublabels if applicable
     subfolder_labels = []
     if selected_label_type and selected_label_type != "date":
         subfolder_path = os.path.join(labels_folder, selected_label_type)
@@ -442,8 +432,10 @@ def life_step_time(life_id):
                 for f in os.listdir(subfolder_path)
                 if f.endswith(".json")
             ]
+        else:
+            print(f"[WARN] No subfolder found for label type '{selected_label_type}'")
 
-    # Display entries
+    # Build list of existing time entries
     existing_entries = life_data.get("time", [])
     display_list = []
     for entry in existing_entries:
@@ -463,6 +455,142 @@ def life_step_time(life_id):
         subfolder_labels=subfolder_labels,
         existing_entries=display_list
     )
+
+@app.route("/life_add_timepoint/<life_id>")
+def life_add_timepoint(life_id):
+    """
+    Resets session state so the next time period starts fresh.
+    """
+    session["time_step_in_progress"] = False  # Start a new timepoint
+    session["time_selection"] = None  # Optional: clear previous label preview
+    session["life_id"] = life_id  # Ensure life_id remains in session
+    return redirect(url_for("life_step_time", life_id=life_id))
+
+@app.route("/life_delete_entry/<life_id>/<int:entry_index>")
+def life_delete_entry(life_id, entry_index):
+    file_path = f"./types/life/biographies/{life_id}.json"
+    life_data = load_json_as_dict(file_path)
+    if 0 <= entry_index < len(life_data.get("entries", [])):
+        life_data["entries"].pop(entry_index)
+        save_dict_as_json(file_path, life_data)
+    return redirect(url_for("life_view", life_id=life_id))
+
+@app.route("/life_edit_timepoint/<life_id>/<int:entry_index>")
+def life_edit_timepoint(life_id, entry_index):
+    # Load the file and entry, then redirect to step 1 preloaded
+    # Optional: Implement pre-population logic here
+    return redirect(url_for("life_step_time", life_id=life_id))
+
+# @app.route("/life_step/time/<life_id>", methods=["GET", "POST"])
+# def life_step_time(life_id):
+#     labels_folder = "./types/time/labels"
+#     life_folder = "./types/life/biographies"
+#     os.makedirs(labels_folder, exist_ok=True)
+#     os.makedirs(life_folder, exist_ok=True)
+
+#     life_file = os.path.join(life_folder, f"{life_id}.json")
+#     life_data = load_json_as_dict(life_file)
+#     name = life_data.get("name", "[Unknown]")
+
+#     selected_label_type = request.form.get("label_type") or request.args.get("label_type", "").strip()
+#     selected_subvalue = request.form.get("subvalue", "").strip()
+#     selected_date = request.form.get("date_value", "").strip()
+#     selected_confidence = request.form.get("confidence")
+
+#     if request.method == "POST":
+#         try:
+#             confidence_value = int(selected_confidence)
+#         except (TypeError, ValueError):
+#             confidence_value = None
+
+#         if confidence_value is not None and (
+#             (selected_label_type == "date" and selected_date) or
+#             (selected_label_type != "date" and selected_subvalue)
+#         ):
+#             # Build time entry
+#             time_entry = {
+#                 "label_type": selected_label_type,
+#                 "confidence": confidence_value
+#             }
+#             if selected_label_type == "date":
+#                 time_entry["date_value"] = selected_date
+#                 session["time_selection"] = {
+#                     "label": selected_date,
+#                     "confidence": confidence_value
+#                 }
+#             else:
+#                 time_entry["subvalue"] = selected_subvalue
+#                 session["time_selection"] = {
+#                     "label": selected_subvalue,
+#                     "confidence": confidence_value
+#                 }
+
+#             # Determine if we should overwrite or append
+#             if session.get("time_step_in_progress"):
+#                 # Overwrite the most recent entry
+#                 if life_data.get("time"):
+#                     life_data["time"][-1] = time_entry
+#                 if life_data.get("entries"):
+#                     life_data["entries"][-1]["time"] = time_entry
+#             else:
+#                 # Append new entry
+#                 life_data.setdefault("time", []).append(time_entry)
+#                 life_data.setdefault("entries", []).append({ "time": time_entry })
+#                 session["time_step_in_progress"] = True  # Now a new time point is "in progress"
+
+#             # Save and continue
+#             save_dict_as_json(life_file, life_data)
+#             session["life_name"] = name
+#             session["life_id"] = life_id
+
+#             return redirect("/life_iframe_wizard?step=2")
+
+#     # Load label files
+#     label_files = []
+#     if os.path.exists(labels_folder):
+#         for file in os.listdir(labels_folder):
+#             full_path = os.path.join(labels_folder, file)
+#             if file.endswith(".json") and os.path.isfile(full_path):
+#                 try:
+#                     with open(full_path) as f:
+#                         data = json.load(f)
+#                         label = os.path.splitext(file)[0]
+#                         desc = data.get("description", "")
+#                         label_files.append((label, desc))
+#                 except Exception as e:
+#                     print(f"Error loading {file}: {e}")
+
+#     # Load suboptions
+#     subfolder_labels = []
+#     if selected_label_type and selected_label_type != "date":
+#         subfolder_path = os.path.join(labels_folder, selected_label_type)
+#         if os.path.isdir(subfolder_path):
+#             subfolder_labels = [
+#                 os.path.splitext(f)[0]
+#                 for f in os.listdir(subfolder_path)
+#                 if f.endswith(".json")
+#             ]
+
+#     # Display entries
+#     existing_entries = life_data.get("time", [])
+#     display_list = []
+#     for entry in existing_entries:
+#         tag = entry.get("subvalue") or entry.get("date_value") or "[unspecified]"
+#         conf = entry.get("confidence", "unknown")
+#         display_list.append((tag, conf))
+
+#     return render_template(
+#         "life_step_time.html",
+#         life_id=life_id,
+#         name=name,
+#         label_files=label_files,
+#         selected_label_type=selected_label_type,
+#         selected_subvalue=selected_subvalue,
+#         selected_date=selected_date,
+#         selected_confidence=selected_confidence,
+#         subfolder_labels=subfolder_labels,
+#         existing_entries=display_list
+#     )
 
 
 @app.route('/iframe_select_time')
@@ -3805,5 +3933,5 @@ def events_add():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001, debug=True)
+    app.run(host="0.0.0.0", debug=True)
 

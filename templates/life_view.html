@@ -8,64 +8,43 @@
     body {
       background: #f6f6f6;
       font-family: sans-serif;
-      text-align: center;
-      padding: 60px;
+      padding: 40px;
     }
     .card {
       background: white;
-      max-width: 800px;
+      max-width: 960px;
       margin: auto;
       padding: 30px;
       border-radius: 12px;
       box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1);
     }
     h1 {
-      font-size: 1.6em;
-      margin-bottom: 10px;
-    }
-    p {
-      margin-bottom: 10px;
-      color: #555;
-    }
-    ul {
-      list-style-type: none;
-      padding: 0;
-    }
-    li {
-      margin-bottom: 10px;
-    }
-    a {
-      text-decoration: none;
-      color: #007bff;
-    }
-    a:hover {
-      text-decoration: underline;
+      font-size: 1.8em;
+      margin-bottom: 15px;
+      text-align: center;
     }
     .section-title {
-      margin-top: 25px;
-      font-size: 1.2em;
+      margin-top: 40px;
+      font-size: 1.4em;
       color: #333;
+      border-bottom: 1px solid #ccc;
+      padding-bottom: 5px;
     }
-    .emoji {
-      margin-right: 6px;
+    .entry-block {
+      background-color: #fdfdfd;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
     }
-    .back-link {
-      margin-top: 20px;
-      display: inline-block;
-      color: #333;
-      font-weight: bold;
+    .entry-block strong {
+      color: #222;
     }
-    .add-button {
-      display: inline-block;
-      margin-top: 20px;
-      padding: 10px 18px;
-      background-color: #4CAF50;
-      color: white;
-      border-radius: 6px;
-      text-decoration: none;
+    .entry-links {
+      margin-top: 10px;
     }
-    .add-button:hover {
-      background-color: #45a049;
+    .entry-links li {
+      margin-bottom: 6px;
     }
     .confidence-tag {
       font-size: 0.9em;
@@ -73,103 +52,158 @@
     .confidence-high { color: green; }
     .confidence-medium { color: orange; }
     .confidence-low { color: red; }
+    .action-buttons {
+      margin-top: 30px;
+      text-align: center;
+    }
+    .btn {
+      display: inline-block;
+      margin: 10px;
+      padding: 10px 20px;
+      background-color: #4CAF50;
+      color: white;
+      border-radius: 6px;
+      text-decoration: none;
+    }
+    .btn-secondary {
+      background-color: #555;
+    }
+    .btn:hover {
+      opacity: 0.9;
+    }
     .subtitle {
       font-size: 0.9em;
       color: #777;
+      text-align: center;
       margin-top: -5px;
-      margin-bottom: 15px;
     }
-    .entry-block {
-      background-color: #fdfdfd;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 12px;
-      text-align: left;
+    .group-title {
+      font-size: 1.2em;
+      font-weight: bold;
+      margin-top: 30px;
+      margin-bottom: 10px;
+      border-left: 5px solid #4CAF50;
+      padding-left: 10px;
+      background-color: #f1f1f1;
     }
-    .entry-block strong {
-      color: #222;
+    .toggle-confidence {
+      margin: 10px auto;
+      display: block;
+      font-size: 0.9em;
+      text-align: center;
+      color: #007bff;
+      cursor: pointer;
     }
-    .entry-links {
-      margin-top: 6px;
+    .delete-btn {
+      float: right;
+      color: red;
+      cursor: pointer;
+      font-size: 0.9em;
+    }
+    .print-btn {
+      float: left;
       margin-left: 10px;
     }
-    .entry-links li {
-      font-size: 0.95em;
-    }
   </style>
+  <script>
+    function toggleConfidence() {
+      var tags = document.querySelectorAll('.confidence-tag');
+      tags.forEach(tag => {
+        tag.style.display = (tag.style.display === 'none') ? 'inline' : 'none';
+      });
+    }
+
+    function printPage() {
+      window.print();
+    }
+
+    function confirmDelete(index) {
+      if (confirm('Are you sure you want to delete this time period?')) {
+        window.location.href = '/life_delete_entry/{{ life_id }}/' + index;
+      }
+    }
+  </script>
 </head>
 <body>
   <div class="card">
     <h1>Viewing Life: {{ life_name }}</h1>
     <p><strong>ID:</strong> {{ life_id }}</p>
 
+    <span class="toggle-confidence" onclick="toggleConfidence()">👁️ Toggle Confidence Display</span>
+    <button class="btn print-btn" onclick="printPage()">🖨️ Print Summary</button>
+
     {% if entries %}
-      <div class="section-title">🕰️ Time Periods ({{ entries|length }})</div>
+      {% set decade_groups = {} %}
       {% for entry in entries %}
-        <div class="entry-block">
-          <strong>{{ entry.time.date_value or entry.time.subvalue or "[unspecified]" }}</strong> –
-          <span class="confidence-tag 
-            {% if entry.time.confidence == 100 %}confidence-high
-            {% elif entry.time.confidence >= 67 %}confidence-high
-            {% elif entry.time.confidence >= 34 %}confidence-medium
-            {% else %}confidence-low{% endif %}">
-            Confidence: {{ entry.time.confidence }}%{% if entry.time.confidence == 100 %} (Exact){% endif %}
-          </span>
+        {% set label = entry.time.date_value or entry.time.subvalue %}
+        {% set decade = "Unknown" %}
+        {% if entry.time.date_value and '-' in entry.time.date_value %}
+          {% set year = entry.time.date_value.split('-')[0]|int %}
+          {% set decade = ((year // 10) * 10)|string + "s" %}
+        {% elif entry.time.subvalue %}
+          {% set decade = entry.time.subvalue %}
+        {% endif %}
+        {% set _ = decade_groups.setdefault(decade, []).append(entry) %}
+      {% endfor %}
 
-          {% if entry.people %}
-            <ul class="entry-links">
-              <li><strong>People:</strong>
-                {% for person in entry.people %}
-                  {% if person.link %}
-                    <a href="{{ person.link }}">{{ person.display }}</a>
-                  {% else %}
-                    {{ person.display }}
-                  {% endif %}
-                  ({{ person.id }}){% if not loop.last %}, {% endif %}
-                {% endfor %}
-              </li>
-            </ul>
-          {% endif %}
+      {% for decade, group in decade_groups.items() %}
+        <div class="group-title">{{ decade }}</div>
+        {% for entry in group %}
+          <div class="entry-block">
+            <strong>{{ entry.time.date_value or entry.time.subvalue or "[unspecified]" }}</strong>
+            –
+            <span class="confidence-tag 
+              {% if entry.time.confidence == 100 %}confidence-high
+              {% elif entry.time.confidence >= 67 %}confidence-high
+              {% elif entry.time.confidence >= 34 %}confidence-medium
+              {% else %}confidence-low{% endif %}">
+              Confidence: {{ entry.time.confidence }}%{% if entry.time.confidence == 100 %} (Exact){% endif %}
+            </span>
 
-          {% if entry.buildings %}
-            <ul class="entry-links">
-              <li><strong>Buildings:</strong>
-                {% for building in entry.buildings %}
-                  {% if building.link %}
-                    <a href="{{ building.link }}">{{ building.display }}</a>
-                  {% else %}
-                    {{ building.display }}
-                  {% endif %}
-                  ({{ building.id }}){% if not loop.last %}, {% endif %}
-                {% endfor %}
-              </li>
-            </ul>
-          {% endif %}
+            <span class="delete-btn" onclick="confirmDelete({{ loop.index0 }})">🗑️ Delete</span>
+            <a href="/life_edit_timepoint/{{ life_id }}/{{ loop.index0 }}" style="float:right; margin-right:10px; font-size:0.9em;">✏️ Edit</a>
 
-          {% if entry.organisations %}
-            <ul class="entry-links">
-              <li><strong>Organisations:</strong>
-                {% for org in entry.organisations %}
-                  {% if org.link %}
-                    <a href="{{ org.link }}">{{ org.display }}</a>
-                  {% else %}
-                    {{ org.display }}
-                  {% endif %}
-                  ({{ org.id }}){% if not loop.last %}, {% endif %}
-                {% endfor %}
-              </li>
-            </ul>
-          {% endif %}
-        </div>
+            {% if entry.people %}
+              <ul class="entry-links">
+                <li><strong>People:</strong>
+                  {% for person in entry.people %}
+                    {{ person.display }} ({{ person.id }}){% if not loop.last %}, {% endif %}
+                  {% endfor %}
+                </li>
+              </ul>
+            {% endif %}
+
+            {% if entry.buildings %}
+              <ul class="entry-links">
+                <li><strong>Buildings:</strong>
+                  {% for building in entry.buildings %}
+                    {{ building.display }} ({{ building.id }}){% if not loop.last %}, {% endif %}
+                  {% endfor %}
+                </li>
+              </ul>
+            {% endif %}
+
+            {% if entry.organisations %}
+              <ul class="entry-links">
+                <li><strong>Organisations:</strong>
+                  {% for org in entry.organisations %}
+                    {{ org.display }} ({{ org.id }}){% if not loop.last %}, {% endif %}
+                  {% endfor %}
+                </li>
+              </ul>
+            {% endif %}
+          </div>
+        {% endfor %}
       {% endfor %}
     {% else %}
-      <p><em>No time period selected yet.</em></p>
+      <p><em>No time periods added yet.</em></p>
     {% endif %}
 
-    <a href="/life_edit_start/{{ life_id }}" class="add-button">➕ Add Another Time Period</a>
-    <div class="subtitle">Re-opens the guided wizard to add a new timepoint and its related entries.</div>
-    <a href="/" class="back-link">← Back to Home</a>
+    <div class="action-buttons">
+      <a href="{{ url_for('life_add_timepoint', life_id=life_id) }}" class="btn">➕ Add Another Time Period</a>
+      <a href="/" class="btn btn-secondary">← Back to Home</a>
+    </div>
+    <div class="subtitle">Use the edit or delete icons to manage existing timepoints.</div>
   </div>
 </body>
 </html>

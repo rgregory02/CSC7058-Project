@@ -109,9 +109,9 @@
         },
         {
             "time": {
-                "label_type": "life_stage",
-                "confidence": 0,
-                "subvalue": "forties"
+                "label_type": "date",
+                "confidence": 100,
+                "date_value": "2025-07-18"
             },
             "buildings": [
                 {
@@ -121,6 +121,10 @@
                 {
                     "id": "House_1742178822",
                     "confidence": 51
+                },
+                {
+                    "id": "House_1742178822",
+                    "confidence": 80
                 }
             ],
             "people": [
@@ -131,6 +135,10 @@
                 {
                     "id": "Kelly_1741776384",
                     "confidence": 49
+                },
+                {
+                    "id": "Jamie_1742346296",
+                    "confidence": 80
                 }
             ]
         }
@@ -157,9 +165,9 @@
             "date_value": "2025-07-07"
         },
         {
-            "label_type": "life_stage",
-            "confidence": 0,
-            "subvalue": "forties"
+            "label_type": "date",
+            "confidence": 100,
+            "date_value": "2025-07-18"
         }
     ],
     "finalised": true

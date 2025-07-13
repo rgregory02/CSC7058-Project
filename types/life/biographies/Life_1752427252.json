@@ -1,0 +1,66 @@
+{
+    "life_id": "Life_1752427252",
+    "name": "RG",
+    "created": "2025-07-13T18:20:52.530711+01:00",
+    "entries": [
+        {
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 37,
+                "subvalue": "forties"
+            },
+            "buildings": [
+                {
+                    "id": "House_1742178822",
+                    "confidence": 43
+                }
+            ],
+            "people": [
+                {
+                    "id": "Tom",
+                    "confidence": 39
+                }
+            ]
+        },
+        {
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 100,
+                "subvalue": "twenties"
+            },
+            "buildings": [
+                {
+                    "id": "House_1742178822",
+                    "confidence": 80
+                },
+                {
+                    "id": "House_1742178822",
+                    "confidence": 80
+                }
+            ],
+            "people": [
+                {
+                    "id": "Kelly_1742152921",
+                    "confidence": 80
+                },
+                {
+                    "id": "JackAgain123_1741781119",
+                    "confidence": 45
+                }
+            ]
+        }
+    ],
+    "time": [
+        {
+            "label_type": "life_stage",
+            "confidence": 37,
+            "subvalue": "forties"
+        },
+        {
+            "label_type": "life_stage",
+            "confidence": 100,
+            "subvalue": "twenties"
+        }
+    ],
+    "finalised": true
+}

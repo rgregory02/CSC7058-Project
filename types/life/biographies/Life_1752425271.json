@@ -1,0 +1,42 @@
+{
+    "life_id": "Life_1752425271",
+    "name": "Zelda",
+    "created": "2025-07-13T17:47:51.047235+01:00",
+    "entries": [
+        {
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 31,
+                "subvalue": "thirties"
+            },
+            "buildings": [
+                {
+                    "id": "House_1742178822",
+                    "confidence": 80
+                },
+                {
+                    "id": "House_1742178822",
+                    "confidence": 44
+                }
+            ],
+            "people": [
+                {
+                    "id": "Tom",
+                    "confidence": 37
+                },
+                {
+                    "id": "Kelly_1742152921",
+                    "confidence": 80
+                }
+            ]
+        }
+    ],
+    "time": [
+        {
+            "label_type": "life_stage",
+            "confidence": 31,
+            "subvalue": "thirties"
+        }
+    ],
+    "finalised": true
+}
