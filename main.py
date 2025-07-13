@@ -481,117 +481,69 @@ def life_edit_timepoint(life_id, entry_index):
     # Optional: Implement pre-population logic here
     return redirect(url_for("life_step_time", life_id=life_id))
 
-# @app.route("/life_step/time/<life_id>", methods=["GET", "POST"])
-# def life_step_time(life_id):
-#     labels_folder = "./types/time/labels"
-#     life_folder = "./types/life/biographies"
-#     os.makedirs(labels_folder, exist_ok=True)
-#     os.makedirs(life_folder, exist_ok=True)
+@app.route("/archive_life/<life_id>")
+def archive_life(life_id):
+    active_path = f"./types/life/biographies/{life_id}.json"
+    archive_path = f"./types/life/biographies/archived/{life_id}.json"
 
-#     life_file = os.path.join(life_folder, f"{life_id}.json")
-#     life_data = load_json_as_dict(life_file)
-#     name = life_data.get("name", "[Unknown]")
+    if not os.path.exists(active_path):
+        return "Biography not found.", 404
 
-#     selected_label_type = request.form.get("label_type") or request.args.get("label_type", "").strip()
-#     selected_subvalue = request.form.get("subvalue", "").strip()
-#     selected_date = request.form.get("date_value", "").strip()
-#     selected_confidence = request.form.get("confidence")
+    os.makedirs(os.path.dirname(archive_path), exist_ok=True)
+    os.rename(active_path, archive_path)
 
-#     if request.method == "POST":
-#         try:
-#             confidence_value = int(selected_confidence)
-#         except (TypeError, ValueError):
-#             confidence_value = None
+    return redirect("/")
 
-#         if confidence_value is not None and (
-#             (selected_label_type == "date" and selected_date) or
-#             (selected_label_type != "date" and selected_subvalue)
-#         ):
-#             # Build time entry
-#             time_entry = {
-#                 "label_type": selected_label_type,
-#                 "confidence": confidence_value
-#             }
-#             if selected_label_type == "date":
-#                 time_entry["date_value"] = selected_date
-#                 session["time_selection"] = {
-#                     "label": selected_date,
-#                     "confidence": confidence_value
-#                 }
-#             else:
-#                 time_entry["subvalue"] = selected_subvalue
-#                 session["time_selection"] = {
-#                     "label": selected_subvalue,
-#                     "confidence": confidence_value
-#                 }
+@app.route("/archived_lives")
+def view_archived_lives():
+    archived_folder = "./types/life/biographies/archived"
+    lives = []
 
-#             # Determine if we should overwrite or append
-#             if session.get("time_step_in_progress"):
-#                 # Overwrite the most recent entry
-#                 if life_data.get("time"):
-#                     life_data["time"][-1] = time_entry
-#                 if life_data.get("entries"):
-#                     life_data["entries"][-1]["time"] = time_entry
-#             else:
-#                 # Append new entry
-#                 life_data.setdefault("time", []).append(time_entry)
-#                 life_data.setdefault("entries", []).append({ "time": time_entry })
-#                 session["time_step_in_progress"] = True  # Now a new time point is "in progress"
+    if os.path.exists(archived_folder):
+        for file in os.listdir(archived_folder):
+            if file.endswith(".json"):
+                path = os.path.join(archived_folder, file)
+                try:
+                    with open(path) as f:
+                        data = json.load(f)
+                        life_id = os.path.splitext(file)[0]
+                        name = data.get("name", "[Unnamed]")
+                        created = data.get("created")
+                        lives.append((life_id, name, created))
+                except Exception as e:
+                    print(f"[ERROR] Couldn't load archived bio {file}: {e}")
 
-#             # Save and continue
-#             save_dict_as_json(life_file, life_data)
-#             session["life_name"] = name
-#             session["life_id"] = life_id
+    return render_template("archived_lives.html", archived_lives=lives)
 
-#             return redirect("/life_iframe_wizard?step=2")
+@app.route("/life_view_archived/<life_id>")
+def view_archived_life(life_id):
+    archive_path = f"./types/life/biographies/archived/{life_id}.json"
+    if not os.path.exists(archive_path):
+        return "Archived biography not found.", 404
 
-#     # Load label files
-#     label_files = []
-#     if os.path.exists(labels_folder):
-#         for file in os.listdir(labels_folder):
-#             full_path = os.path.join(labels_folder, file)
-#             if file.endswith(".json") and os.path.isfile(full_path):
-#                 try:
-#                     with open(full_path) as f:
-#                         data = json.load(f)
-#                         label = os.path.splitext(file)[0]
-#                         desc = data.get("description", "")
-#                         label_files.append((label, desc))
-#                 except Exception as e:
-#                     print(f"Error loading {file}: {e}")
+    try:
+        with open(archive_path) as f:
+            data = json.load(f)
+    except Exception as e:
+        return f"Error loading archived biography: {e}", 500
 
-#     # Load suboptions
-#     subfolder_labels = []
-#     if selected_label_type and selected_label_type != "date":
-#         subfolder_path = os.path.join(labels_folder, selected_label_type)
-#         if os.path.isdir(subfolder_path):
-#             subfolder_labels = [
-#                 os.path.splitext(f)[0]
-#                 for f in os.listdir(subfolder_path)
-#                 if f.endswith(".json")
-#             ]
+    entries = data.get("entries", [])
+    return render_template("life_view_archived.html", life_name=data.get("name", "Unnamed"), life_id=life_id, entries=entries)
 
-#     # Display entries
-#     existing_entries = life_data.get("time", [])
-#     display_list = []
-#     for entry in existing_entries:
-#         tag = entry.get("subvalue") or entry.get("date_value") or "[unspecified]"
-#         conf = entry.get("confidence", "unknown")
-#         display_list.append((tag, conf))
+@app.route("/restore_life/<life_id>")
+def restore_archived_life(life_id):
+    archive_path = f"./types/life/biographies/archived/{life_id}.json"
+    active_path = f"./types/life/biographies/{life_id}.json"
 
-#     return render_template(
-#         "life_step_time.html",
-#         life_id=life_id,
-#         name=name,
-#         label_files=label_files,
-#         selected_label_type=selected_label_type,
-#         selected_subvalue=selected_subvalue,
-#         selected_date=selected_date,
-#         selected_confidence=selected_confidence,
-#         subfolder_labels=subfolder_labels,
-#         existing_entries=display_list
-#     )
+    if not os.path.exists(archive_path):
+        return "Archived biography not found.", 404
 
+    try:
+        os.rename(archive_path, active_path)
+    except Exception as e:
+        return f"Failed to restore biography: {e}", 500
+
+    return redirect("/")
 
 @app.route('/iframe_select_time')
 def iframe_select_time():

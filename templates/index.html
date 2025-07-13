@@ -41,6 +41,18 @@
       color: #888;
       font-style: italic;
     }
+    .btn-archived {
+      background-color: #555;
+      color: white;
+      border-radius: 6px;
+      padding: 10px 16px;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 0.95em;
+    }
+    .btn-archived:hover {
+      background-color: #444;
+    }
   </style>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -88,6 +100,10 @@
     <p>Start from scratch using an interactive, step-by-step wizard:</p>
     <a href="/start_life_naming" class="btn-primary">🧭 Start Wizard</a>
 
+    <p style="margin-top: 10px;">
+      <a href="/archived_lives" class="btn-archived">📁 View Archived Biographies</a>
+    </p>
+
     {% if life_bios %}
       <div class="search-box">
         <label for="search-box"><strong>🔍 Filter Life Biographies:</strong></label><br>
@@ -102,7 +118,7 @@
             <small class="created-time loading">Created: Unknown</small><br>
             <div class="bio-actions">
               <a href="/life_view/{{ life_id }}">👁 View</a>
-              <a href="/edit_life/{{ life_id }}">✏️ Edit</a>
+              <a href="/life_view/{{ life_id }}">✏️ Edit</a>
               <a href="/archive_life/{{ life_id }}" onclick="return confirm('Archive this bio?')">🗃 Archive</a>
             </div>
           </li>

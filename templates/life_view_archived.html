@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Viewing Life: {{ life_name }}</title>
+  <title>Archived Life: {{ life_name }}</title>
   <link rel="stylesheet" href="/static/styles.css">
   <style>
     body {
@@ -23,12 +23,14 @@
       margin-bottom: 15px;
       text-align: center;
     }
-    .section-title {
-      margin-top: 40px;
-      font-size: 1.4em;
-      color: #333;
-      border-bottom: 1px solid #ccc;
-      padding-bottom: 5px;
+    .group-title {
+      font-size: 1.2em;
+      font-weight: bold;
+      margin-top: 30px;
+      margin-bottom: 10px;
+      border-left: 5px solid #4CAF50;
+      padding-left: 10px;
+      background-color: #f1f1f1;
     }
     .entry-block {
       background-color: #fdfdfd;
@@ -36,7 +38,6 @@
       border-radius: 8px;
       padding: 16px;
       margin-bottom: 12px;
-      position: relative;
     }
     .entry-block strong {
       color: #222;
@@ -78,15 +79,6 @@
       text-align: center;
       margin-top: -5px;
     }
-    .group-title {
-      font-size: 1.2em;
-      font-weight: bold;
-      margin-top: 30px;
-      margin-bottom: 10px;
-      border-left: 5px solid #4CAF50;
-      padding-left: 10px;
-      background-color: #f1f1f1;
-    }
     .toggle-confidence {
       margin: 10px auto;
       display: block;
@@ -94,18 +86,6 @@
       text-align: center;
       color: #007bff;
       cursor: pointer;
-    }
-    .delete-btn {
-      float: right;
-      color: red;
-      cursor: pointer;
-      font-size: 0.9em;
-      margin-left: 10px;
-    }
-    .edit-btn {
-      float: right;
-      font-size: 0.9em;
-      margin-right: 10px;
     }
     .print-btn {
       float: left;
@@ -123,17 +103,11 @@
     function printPage() {
       window.print();
     }
-
-    function confirmDelete(index) {
-      if (confirm('Are you sure you want to delete this time period?')) {
-        window.location.href = '/life_delete_entry/{{ life_id }}/' + parseInt(index);
-      }
-    }
   </script>
 </head>
 <body>
   <div class="card">
-    <h1>Viewing Life: {{ life_name }}</h1>
+    <h1>Archived Life: {{ life_name }}</h1>
     <p><strong>ID:</strong> {{ life_id }}</p>
 
     <span class="toggle-confidence" onclick="toggleConfidence()">👁️ Toggle Confidence Display</span>
@@ -166,9 +140,6 @@
               {% else %}confidence-low{% endif %}">
               Confidence: {{ entry.time.confidence }}%{% if entry.time.confidence == 100 %} (Exact){% endif %}
             </span>
-
-            <span class="delete-btn" onclick="confirmDelete('{{ loop.index0 }}')">🗑️ Delete</span>
-            <a class="edit-btn" href="/life_edit_timepoint/{{ life_id }}/{{ loop.index0 }}">✏️ Edit</a>
 
             {% if entry.people %}
               <ul class="entry-links">
@@ -207,10 +178,10 @@
     {% endif %}
 
     <div class="action-buttons">
-      <a href="{{ url_for('life_add_timepoint', life_id=life_id) }}" class="btn">➕ Add Another Time Period</a>
+      <a href="/restore_life/{{ life_id }}" class="btn">🔄 Restore to Active</a>
       <a href="/" class="btn btn-secondary">← Back to Home</a>
     </div>
-    <div class="subtitle">Use the ✏️ or 🗑️ icons to manage timepoints. Use the toggle above to show/hide confidence scores.</div>
+    <div class="subtitle">This biography is read-only and cannot be edited.</div>
   </div>
 </body>
 </html>
