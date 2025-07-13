@@ -12,7 +12,7 @@
     }
     .box {
       background: white;
-      max-width: 600px;
+      max-width: 700px;
       margin: auto;
       padding: 30px;
       border-radius: 10px;
@@ -33,15 +33,6 @@
     .confidence-display {
       font-weight: bold;
       margin-bottom: 20px;
-    }
-    .existing-entry {
-      font-size: 0.9em;
-      color: #444;
-      background: #f0f0f0;
-      border-radius: 5px;
-      padding: 6px;
-      margin: 4px auto;
-      max-width: 80%;
     }
     .button {
       padding: 10px 20px;
@@ -73,6 +64,16 @@
       color: white;
       display: inline-block;
     }
+    .group-block {
+      margin-bottom: 30px;
+      text-align: left;
+    }
+    .preview-img {
+      max-width: 100%;
+      max-height: 200px;
+      margin: 10px 0;
+      border-radius: 6px;
+    }
   </style>
 </head>
 <body>
@@ -99,15 +100,6 @@
       </div>
     {% endif %}
 
-    {% if existing_labels %}
-      <div class="meta"><strong>Already linked:</strong></div>
-      {% for label in existing_labels %}
-        <div class="existing-entry">
-          {{ label.id|replace('_', ' ') }} – Confidence: {{ label.confidence }}%
-        </div>
-      {% endfor %}
-    {% endif %}
-
     {% if skip_allowed %}
       <p>No available {{ current_type }} to select.</p>
       <form method="get" action="/life_step/dynamic/{{ next_step }}">
@@ -115,20 +107,39 @@
       </form>
     {% else %}
       <form method="post">
-        <label for="selected_id">Select from {{ current_type|capitalize }}:</label>
-        <select name="selected_id" id="selected_id" required>
-          {% for file in label_files %}
-            <option value="{{ file }}">{{ file.replace('_', ' ') }}</option>
-          {% endfor %}
-        </select>
+        {% for group in label_groups_list %}
+          <div class="group-block">
+            <label for="selected_id_{{ group.key }}"><strong>{{ group.label }}:</strong></label>
+            <select name="selected_id_{{ group.key }}" id="selected_id_{{ group.key }}" onchange="updateImagePreview('{{ group.key }}')">
+              <option value="">-- None Selected --</option>
+              {% for opt in group.options %}
+                <option value="{{ opt.id }}" data-img="{{ opt.image if opt.image }}">{{ opt.display }}</option>
+              {% endfor %}
+            </select>
 
-        <label for="confidence">Confidence:</label>
-        <input type="range" id="confidence" name="confidence" min="0" max="100" value="80" oninput="updateConfidenceDisplay()">
+            <div id="preview_{{ group.key }}"></div>
 
-        <div class="confidence-display">
-          <span id="confVal">80%</span>
-          <div id="confLevel" style="font-size: 0.9em;"></div>
-        </div>
+            <label for="confidence_{{ group.key }}">Confidence:</label>
+            <input type="range" id="confidence_{{ group.key }}" name="confidence_{{ group.key }}" min="0" max="100" value="80" oninput="updateConfidenceDisplay('{{ group.key }}')">
+
+            <div class="confidence-display">
+              <span id="confVal_{{ group.key }}">80%</span>
+              <div id="confLevel_{{ group.key }}" style="font-size: 0.9em;"></div>
+            </div>
+          </div>
+        {% endfor %}
+
+        {% if biography_options %}
+          <div class="group-block">
+            <label for="selected_id_biography"><strong>{{ current_type|capitalize }} Biography:</strong></label>
+            <select name="selected_id_biography" id="selected_id_biography">
+              <option value="">-- None Selected --</option>
+              {% for bio in biography_options %}
+                <option value="{{ bio.id }}">{{ bio.display }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        {% endif %}
 
         <button type="submit" class="button save-button">✅ Save and Continue</button>
       </form>
@@ -145,11 +156,12 @@
   </div>
 
   <script>
-    function updateConfidenceDisplay() {
-      const val = parseInt(document.getElementById("confidence").value || "80");
-      document.getElementById("confVal").innerText = val + "%";
+    function updateConfidenceDisplay(key) {
+      const range = document.getElementById("confidence_" + key);
+      const val = parseInt(range?.value || "80");
+      document.getElementById("confVal_" + key).innerText = val + "%";
 
-      const level = document.getElementById("confLevel");
+      const level = document.getElementById("confLevel_" + key);
       if (val === 100) {
         level.innerText = "Confidence level: Exact";
         level.style.color = "green";
@@ -165,7 +177,29 @@
       }
     }
 
-    updateConfidenceDisplay();
+    function updateImagePreview(key) {
+      const select = document.getElementById("selected_id_" + key);
+      const previewDiv = document.getElementById("preview_" + key);
+      const selectedOption = select?.options[select.selectedIndex];
+      const imagePath = selectedOption?.getAttribute("data-img");
+
+      previewDiv.innerHTML = "";
+      if (imagePath) {
+        const img = document.createElement("img");
+        img.src = imagePath;
+        img.alt = "Preview";
+        img.className = "preview-img";
+        previewDiv.appendChild(img);
+      }
+    }
+
+    window.onload = function () {
+      const labelKeys = {{ label_groups_list | map(attribute='key') | list | tojson | safe }};
+      for (let i = 0; i < labelKeys.length; i++) {
+        updateConfidenceDisplay(labelKeys[i]);
+        updateImagePreview(labelKeys[i]);
+      }
+    };
   </script>
 </body>
 </html>

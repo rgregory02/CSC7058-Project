@@ -223,86 +223,6 @@ def life_iframe_wizard():
         return redirect(url_for('life_iframe_wizard', step="0"))
 
 
-@app.route("/life_step/dynamic/<int:step>", methods=["GET", "POST"])
-def life_step_dynamic(step):
-    life_id = session.get("life_id")
-    if not life_id:
-        return redirect(url_for("life_iframe_wizard", step="0"))
-
-    life_file = f"./types/life/biographies/{life_id}.json"
-    if not os.path.exists(life_file):
-        return f"Life file {life_id} not found", 404
-
-    life_data = load_json_as_dict(life_file)
-
-    type_folders = sorted([
-        t for t in os.listdir("./types")
-        if os.path.isdir(f"./types/{t}") and t not in ["life", "time"]
-    ])
-
-    if step >= len(type_folders):
-        return redirect(url_for("finalise_life_bio"))
-
-    current_type = type_folders[step]
-    label_path = f"./types/{current_type}/biographies"
-
-    label_files = []
-    if os.path.exists(label_path):
-        label_files = [
-            os.path.splitext(f)[0]
-            for f in os.listdir(label_path)
-            if f.endswith(".json")
-        ]
-
-    print(f"[DEBUG] Step {step} – Type: {current_type} – Labels: {label_files}")
-
-    skip_allowed = len(label_files) == 0
-    prev_step = step - 1 if step > 0 else None
-    next_step = step + 1
-
-    if request.method == "POST":
-        selected_id = request.form.get("selected_id")
-        confidence = request.form.get("confidence")
-
-        if selected_id:
-            try:
-                confidence_val = int(confidence)
-            except (ValueError, TypeError):
-                confidence_val = 100
-
-            new_entry = {
-                "id": selected_id,
-                "confidence": confidence_val
-            }
-
-            if life_data.get("entries"):
-                latest = life_data["entries"][-1]
-                latest.setdefault(current_type, [])
-                latest[current_type].append(new_entry)
-
-                save_dict_as_json(life_file, life_data)
-
-        return redirect(url_for("life_step_dynamic", step=next_step))
-
-    existing_labels = []
-    if life_data.get("entries"):
-        latest = life_data["entries"][-1]
-        existing_labels = latest.get(current_type, [])
-
-    return render_template(
-        "life_step_dynamic.html",
-        current_type=current_type,
-        label_files=label_files,
-        existing_labels=existing_labels,
-        life_id=life_id,
-        skip_allowed=skip_allowed,
-        life_name=life_data.get("name", life_id),
-        time_selection=session.get("time_selection"),
-        next_step=next_step,
-        prev_step=prev_step
-    )
-
-
 @app.route("/life_edit_start/<life_id>")
 def life_edit_start(life_id):
     """
@@ -455,6 +375,139 @@ def life_step_time(life_id):
         subfolder_labels=subfolder_labels,
         existing_entries=display_list
     )
+
+@app.route("/life_step/dynamic/<int:step>", methods=["GET", "POST"])
+def life_step_dynamic(step):
+    life_id = session.get("life_id")
+    if not life_id:
+        return redirect(url_for("life_iframe_wizard", step="0"))
+
+    life_file = f"./types/life/biographies/{life_id}.json"
+    if not os.path.exists(life_file):
+        return f"Life file {life_id} not found", 404
+
+    life_data = load_json_as_dict(life_file)
+
+    type_folders = sorted([
+        t for t in os.listdir("./types")
+        if os.path.isdir(f"./types/{t}") and t not in ["life", "time"]
+    ])
+
+    if step >= len(type_folders):
+        return redirect(url_for("finalise_life_bio"))
+
+    current_type = type_folders[step]
+    label_base_path = f"./types/{current_type}/labels"
+    bio_path = f"./types/{current_type}/biographies"
+
+    biography_options = []
+    if os.path.exists(bio_path):
+        for f in os.listdir(bio_path):
+            if f.endswith(".json"):
+                bio_id = f[:-5]
+                display_name = bio_id.replace("_", " ")
+                biography_options.append({"id": bio_id, "display": display_name})
+
+    label_groups = {}
+    label_groups_list = []
+    seen_keys = set()
+
+    if os.path.exists(label_base_path):
+        for file in os.listdir(label_base_path):
+            key = os.path.splitext(file)[0]
+            if not key or key == "undefined" or key in seen_keys:
+                continue
+            seen_keys.add(key)
+
+            values = []
+
+            full_path = os.path.join(label_base_path, file)
+            if file.endswith(".json") and os.path.isfile(full_path):
+                try:
+                    with open(full_path, "r") as f:
+                        label_data = json.load(f)
+                        values.extend(label_data.get("values", []))
+                except Exception as e:
+                    print(f"[ERROR] Failed to load {file}: {e}")
+
+            folder_path = os.path.join(label_base_path, key)
+            if os.path.isdir(folder_path):
+                for entry in os.listdir(folder_path):
+                    if entry.endswith(".json"):
+                        base = entry[:-5]
+                        json_path = os.path.join(folder_path, entry)
+                        img_path = os.path.join(folder_path, f"{base}.jpg")
+                        try:
+                            data = load_json_as_dict(json_path)
+                            label = {
+                                "id": base,
+                                "display": data.get("properties", {}).get("name", base)
+                            }
+                            if os.path.exists(img_path):
+                                label["image"] = f"/types/{current_type}/labels/{key}/{base}.jpg"
+                            values.append(label)
+                        except Exception as e:
+                            print(f"[ERROR] Reading label {entry}: {e}")
+
+            if isinstance(key, str) and values:
+                label_dict = {
+                    "key": key,
+                    "label": key.replace("_", " ").title(),
+                    "options": values
+                }
+                label_groups[key] = label_dict
+                label_groups_list.append(label_dict)
+
+    # ✅ POST block must be inside the function
+    if request.method == "POST":
+        new_entries = []
+
+        selected_bio_id = request.form.get("selected_id_biography")
+        if selected_bio_id:
+            new_entries.append({
+                "id": selected_bio_id,
+                "confidence": 100,
+                "source": "biography"
+            })
+
+        for key in label_groups:
+            selected_id = request.form.get(f"selected_id_{key}")
+            confidence = int(request.form.get(f"confidence_{key}", 80))
+            if selected_id:
+                new_entries.append({
+                    "id": selected_id,
+                    "confidence": confidence
+                })
+
+        if new_entries and life_data.get("entries"):
+            latest = life_data["entries"][-1]
+            latest.setdefault(current_type, [])
+            latest[current_type].extend(new_entries)
+            save_dict_as_json(life_file, life_data)
+
+        return redirect(url_for("life_step_dynamic", step=step + 1))
+
+    # Final render
+    existing_labels = []
+    if life_data.get("entries"):
+        latest = life_data["entries"][-1]
+        existing_labels = latest.get(current_type, [])
+
+    return render_template(
+        "life_step_dynamic.html",
+        current_type=current_type,
+        biography_options=biography_options,
+        label_groups=label_groups,
+        label_groups_list=label_groups_list,
+        existing_labels=existing_labels,
+        life_id=life_id,
+        skip_allowed=(len(label_groups) == 0 and len(biography_options) == 0),
+        life_name=life_data.get("name", life_id),
+        time_selection=session.get("time_selection"),
+        next_step=step + 1,
+        prev_step=step - 1 if step > 0 else None
+    )
+
 
 @app.route("/life_add_timepoint/<life_id>")
 def life_add_timepoint(life_id):

@@ -1,0 +1,34 @@
+{
+    "life_id": "Life_1752429945",
+    "name": "Penguin",
+    "created": "2025-07-13T19:05:45.866569+01:00",
+    "entries": [
+        {
+            "time": {
+                "label_type": "date",
+                "confidence": 100,
+                "date_value": "2025-07-08"
+            },
+            "buildings": [
+                {
+                    "id": "House_1742178822",
+                    "confidence": 68,
+                    "display": "House_1742178822"
+                },
+                {
+                    "id": "House_1742178822",
+                    "confidence": 80,
+                    "display": "House_1742178822"
+                }
+            ]
+        }
+    ],
+    "time": [
+        {
+            "label_type": "date",
+            "confidence": 100,
+            "date_value": "2025-07-08"
+        }
+    ],
+    "finalised": true
+}

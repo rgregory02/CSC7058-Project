@@ -1,0 +1,21 @@
+{
+    "life_id": "Life_1752442650",
+    "name": "Tester",
+    "created": "2025-07-13T22:37:30.241351+01:00",
+    "entries": [
+        {
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 100,
+                "subvalue": "forties"
+            }
+        }
+    ],
+    "time": [
+        {
+            "label_type": "life_stage",
+            "confidence": 100,
+            "subvalue": "forties"
+        }
+    ]
+}

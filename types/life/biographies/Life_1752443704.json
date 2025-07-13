@@ -1,0 +1,44 @@
+{
+    "life_id": "Life_1752443704",
+    "name": "Santa",
+    "created": "2025-07-13T22:55:04.838495+01:00",
+    "entries": [
+        {
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 100,
+                "subvalue": "forties"
+            },
+            "buildings": [
+                {
+                    "id": "House_1742178822",
+                    "confidence": 100,
+                    "source": "biography"
+                }
+            ],
+            "people": [
+                {
+                    "id": "Kirsty",
+                    "confidence": 100,
+                    "source": "biography"
+                },
+                {
+                    "id": "teacher",
+                    "confidence": 25
+                },
+                {
+                    "id": "0",
+                    "confidence": 31
+                }
+            ]
+        }
+    ],
+    "time": [
+        {
+            "label_type": "life_stage",
+            "confidence": 100,
+            "subvalue": "forties"
+        }
+    ],
+    "finalised": true
+}
