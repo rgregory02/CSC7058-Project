@@ -7,6 +7,7 @@ __pycache__/
 
 # VS Code settings
 .vscode/
+venv39/
 
 # Environment / config files
 .env
