@@ -20,7 +20,7 @@ Includes a working example using Florence Nightingale to demonstrate multi-phase
 2. Create a virtual environment (`venv39` or similar)  
 3. Run `pip install -r requirements.txt`  
 4. Launch the app with `python main.py`  
-5. Open your browser at [http://127.0.0.1:5001](http://127.0.0.1:5001)  
+5. Open your browser at [http://127.0.0.1:5000](http://127.0.0.1:5000)  
 
 > ℹ️ Note: The app may run on `localhost:5001` instead of the default 5000 if set manually.
 
