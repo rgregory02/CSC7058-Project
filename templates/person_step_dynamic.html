@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Viewing Person: {{ person_name }}</title>
+  <title>{{ current_type|title }} – Step</title>
   <link rel="stylesheet" href="/static/styles.css">
   <style>
     body {
-      background: #f6f6f6;
+      background: #f4f4f4;
       font-family: sans-serif;
       padding: 40px;
     }
@@ -18,209 +18,120 @@
       border-radius: 12px;
       box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1);
     }
-    h1 {
-      font-size: 1.8em;
-      margin-bottom: 15px;
+    h1, h2 {
       text-align: center;
     }
-    .section-title {
-      margin-top: 40px;
-      font-size: 1.4em;
-      color: #333;
-      border-bottom: 1px solid #ccc;
-      padding-bottom: 5px;
+    .label-group {
+      margin: 30px 0;
     }
-    .entry-block {
-      background-color: #fdfdfd;
-      border: 1px solid #ddd;
+    .label-options {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .label-card {
+      background: #f9f9f9;
+      border: 1px solid #ccc;
       border-radius: 8px;
-      padding: 16px;
-      margin-bottom: 12px;
-      position: relative;
+      padding: 10px;
+      width: 180px;
+      cursor: pointer;
+      text-align: center;
     }
-    .entry-block strong {
-      color: #222;
+    .label-card.selected {
+      background: #dff0d8;
+      border-color: #4caf50;
     }
-    .entry-links {
+    .label-card img {
+      max-width: 100%;
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+    .form-footer {
+      margin-top: 40px;
+      text-align: center;
+    }
+    .confidence-input {
       margin-top: 10px;
-    }
-    .entry-links li {
-      margin-bottom: 6px;
-    }
-    .confidence-tag {
       font-size: 0.9em;
     }
-    .confidence-high { color: green; }
-    .confidence-medium { color: orange; }
-    .confidence-low { color: red; }
-    .action-buttons {
-      margin-top: 30px;
-      text-align: center;
-    }
     .btn {
-      display: inline-block;
-      margin: 10px;
       padding: 10px 20px;
-      background-color: #4CAF50;
+      background: #4caf50;
       color: white;
       border-radius: 6px;
       text-decoration: none;
+      margin: 10px;
+      display: inline-block;
     }
     .btn-secondary {
-      background-color: #555;
-    }
-    .btn:hover {
-      opacity: 0.9;
-    }
-    .subtitle {
-      font-size: 0.9em;
-      color: #777;
-      text-align: center;
-      margin-top: -5px;
-    }
-    .group-title {
-      font-size: 1.2em;
-      font-weight: bold;
-      margin-top: 30px;
-      margin-bottom: 10px;
-      border-left: 5px solid #4CAF50;
-      padding-left: 10px;
-      background-color: #f1f1f1;
-    }
-    .toggle-confidence {
-      margin: 10px auto;
-      display: block;
-      font-size: 0.9em;
-      text-align: center;
-      color: #007bff;
-      cursor: pointer;
-    }
-    .delete-btn {
-      float: right;
-      color: red;
-      cursor: pointer;
-      font-size: 0.9em;
-      margin-left: 10px;
-    }
-    .edit-btn {
-      float: right;
-      font-size: 0.9em;
-      margin-right: 10px;
-    }
-    .print-btn {
-      float: left;
-      margin-left: 10px;
+      background: #666;
     }
   </style>
   <script>
-    function toggleConfidence() {
-      var tags = document.querySelectorAll('.confidence-tag');
-      tags.forEach(tag => {
-        tag.style.display = (tag.style.display === 'none') ? 'inline' : 'none';
+    function selectCard(group, id) {
+      document.querySelectorAll(`[name="selected_id_${group}"]`).forEach(el => {
+        el.value = '';
       });
-    }
-
-    function printPage() {
-      window.print();
-    }
-
-    function confirmDelete(index) {
-      if (confirm('Are you sure you want to delete this time period?')) {
-        window.location.href = '/person_delete_entry/{{ person_id }}/' + parseInt(index);
-      }
+      document.querySelectorAll(`.label-card[data-group="${group}"]`).forEach(card => {
+        card.classList.remove('selected');
+      });
+      document.getElementById(`selected_${group}`).value = id;
+      document.getElementById(`card_${group}_${id}`).classList.add('selected');
     }
   </script>
 </head>
 <body>
   <div class="card">
-    <h1>Viewing Person: {{ person_name }}</h1>
-    <p><strong>ID:</strong> {{ person_id }}</p>
+    <h1>{{ current_type|title }} Step</h1>
+    <p style="text-align: center;">For: <strong>{{ person_name }}</strong></p>
 
-    <span class="toggle-confidence" onclick="toggleConfidence()">👁️ Toggle Confidence Display</span>
-    <button class="btn print-btn" onclick="printPage()">🖨️ Print Summary</button>
+    <form method="post">
+      {% if biography_options %}
+        <div class="label-group">
+          <h2>Choose a Biography</h2>
+          <select name="selected_id_biography">
+            <option value="">— Select —</option>
+            {% for bio in biography_options %}
+              <option value="{{ bio.id }}">{{ bio.display }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      {% endif %}
 
-    {% if entries %}
-      {% set decade_groups = {} %}
-      {% for entry in entries %}
-        {% set label = entry.time.date_value or entry.time.subvalue %}
-        {% set decade = "Unknown" %}
-        {% if entry.time.date_value and '-' in entry.time.date_value %}
-          {% set year = entry.time.date_value.split('-')[0]|int %}
-          {% set decade = ((year // 10) * 10)|string + "s" %}
-        {% elif entry.time.subvalue %}
-          {% set decade = entry.time.subvalue %}
-        {% endif %}
-        {% set _ = decade_groups.setdefault(decade, []).append(entry) %}
-      {% endfor %}
+      {% for group in label_groups_list %}
+        <div class="label-group">
+          <h2>{{ group.label }}</h2>
+          <input type="hidden" name="selected_id_{{ group.key }}" id="selected_{{ group.key }}">
 
-      {% for decade, group in decade_groups.items() %}
-        <div class="group-title">{{ decade }}</div>
-        {% for entry in group %}
-          <div class="entry-block">
-            <strong>{{ entry.time.date_value or entry.time.subvalue or "[unspecified]" }}</strong>
-            –
-            <span class="confidence-tag 
-              {% if entry.time.confidence == 100 %}confidence-high
-              {% elif entry.time.confidence >= 67 %}confidence-high
-              {% elif entry.time.confidence >= 34 %}confidence-medium
-              {% else %}confidence-low{% endif %}">
-              Confidence: {{ entry.time.confidence }}%{% if entry.time.confidence == 100 %} (Exact){% endif %}
-            </span>
-
-            <span class="delete-btn" onclick="confirmDelete('{{ loop.index0 }}')">🗑️ Delete</span>
-            <a class="edit-btn" href="/person_edit_timepoint/{{ person_id }}/{{ loop.index0 }}">✏️ Edit</a>
-
-            {% if entry.people %}
-              <ul class="entry-links">
-                <li><strong>People:</strong>
-                  {% for person in entry.people %}
-                    {{ person.display }} ({{ person.id }}){% if not loop.last %}, {% endif %}
-                  {% endfor %}
-                </li>
-              </ul>
-            {% endif %}
-
-            {% if entry.person %}
-              <ul class="entry-links">
-                <li><strong>Person Labels:</strong>
-                  {% for label in entry.person %}
-                    {{ label.id }} – Confidence: {{ label.confidence }}{% if not loop.last %}, {% endif %}
-                  {% endfor %}
-                </li>
-              </ul>
-            {% endif %}
-
-            {% if entry.buildings %}
-              <ul class="entry-links">
-                <li><strong>Buildings:</strong>
-                  {% for building in entry.buildings %}
-                    {{ building.display }} ({{ building.id }}){% if not loop.last %}, {% endif %}
-                  {% endfor %}
-                </li>
-              </ul>
-            {% endif %}
-
-            {% if entry.organisations %}
-              <ul class="entry-links">
-                <li><strong>Organisations:</strong>
-                  {% for org in entry.organisations %}
-                    {{ org.display }} ({{ org.id }}){% if not loop.last %}, {% endif %}
-                  {% endfor %}
-                </li>
-              </ul>
-            {% endif %}
+          <div class="label-options">
+            {% for option in group.options %}
+              <div class="label-card"
+                   id="card_{{ group.key }}_{{ option.id }}"
+                   data-group="{{ group.key }}"
+                   onclick="selectCard('{{ group.key }}', '{{ option.id }}')">
+                {% if option.image %}
+                  <img src="{{ option.image }}" alt="{{ option.display }}">
+                {% endif %}
+                <div>{{ option.display }}</div>
+              </div>
+            {% endfor %}
           </div>
-        {% endfor %}
-      {% endfor %}
-    {% else %}
-      <p><em>No time periods added yet.</em></p>
-    {% endif %}
 
-    <div class="action-buttons">
-      <a href="{{ url_for('person_add_timepoint', person_id=person_id) }}" class="btn">➕ Add Another Time Period</a>
-      <a href="/" class="btn btn-secondary">← Back to Home</a>
-    </div>
-    <div class="subtitle">Use the ✏️ or 🗑️ icons to manage timepoints. Use the toggle above to show/hide confidence scores.</div>
+          <div class="confidence-input">
+            Confidence:
+            <input type="range" name="confidence_{{ group.key }}" min="0" max="100" value="80">
+          </div>
+        </div>
+      {% endfor %}
+
+      <div class="form-footer">
+        {% if prev_step is not none %}
+          <a href="{{ url_for('person_step_dynamic', step=prev_step) }}" class="btn btn-secondary">← Previous</a>
+        {% endif %}
+        <button type="submit" class="btn">Save and Continue →</button>
+      </div>
+    </form>
   </div>
 </body>
 </html>

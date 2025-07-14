@@ -1,0 +1,37 @@
+{
+    "person_id": "Person_1752535926",
+    "name": "TeddybEAR",
+    "created": "2025-07-15T00:32:06.525801+01:00",
+    "entries": [
+        {
+            "time": {
+                "confidence": 100,
+                "date_value": "",
+                "label": "forties",
+                "label_type": "life_stage",
+                "subvalue": "forties"
+            },
+            "person": [
+                {
+                    "id": "Person_1752510868",
+                    "confidence": 100,
+                    "source": "biography"
+                },
+                {
+                    "id": "Person_1752533938",
+                    "confidence": 100,
+                    "source": "biography"
+                },
+                {
+                    "id": "plumber",
+                    "confidence": 30
+                },
+                {
+                    "id": "1",
+                    "confidence": 33
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}

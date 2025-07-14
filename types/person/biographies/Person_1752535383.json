@@ -1,0 +1,16 @@
+{
+    "person_id": "Person_1752535383",
+    "name": "TeddybEAR",
+    "created": "2025-07-15T00:23:03.358778+01:00",
+    "entries": [
+        {
+            "time": {
+                "confidence": 100,
+                "date_value": "2025-06-30",
+                "label": "2025-06-30",
+                "label_type": "date",
+                "subvalue": ""
+            }
+        }
+    ]
+}
