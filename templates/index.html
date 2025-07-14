@@ -96,30 +96,30 @@
     <h1>📘 Biography System</h1>
     <p>Explore structured biographies and build rich life stories from real data.</p>
 
-    <h2>🌍 Create a New Life Biography</h2>
+    <h2>🧍 Create a New Person Biography</h2>
     <p>Start from scratch using an interactive, step-by-step wizard:</p>
-    <a href="/start_life_naming" class="btn-primary">🧭 Start Wizard</a>
+    <a href="/start_person_naming" class="btn-primary">🧭 Start Wizard</a>
 
     <p style="margin-top: 10px;">
-      <a href="/archived_lives" class="btn-archived">📁 View Archived Biographies</a>
+      <a href="/archived_people" class="btn-archived">📁 View Archived Biographies</a>
     </p>
 
-    {% if life_bios %}
+    {% if person_bios %}
       <div class="search-box">
-        <label for="search-box"><strong>🔍 Filter Life Biographies:</strong></label><br>
+        <label for="search-box"><strong>🔍 Filter People:</strong></label><br>
         <input type="text" id="search-box" placeholder="Type to filter..." />
       </div>
 
-      <h2>📂 Existing Life Biographies</h2>
+      <h2>📂 Existing People</h2>
       <ul class="bio-list">
-        {% for life_id, name, created in life_bios %}
+        {% for person_id, name, created in person_bios %}
           <li class="bio-item" data-name="{{ name }}"{% if created %} data-utc="{{ created }}"{% endif %}>
             <strong>{{ name }}</strong><br>
             <small class="created-time loading">Created: Unknown</small><br>
             <div class="bio-actions">
-              <a href="/life_view/{{ life_id }}">👁 View</a>
-              <a href="/life_view/{{ life_id }}">✏️ Edit</a>
-              <a href="/archive_life/{{ life_id }}" onclick="return confirm('Archive this bio?')">🗃 Archive</a>
+              <a href="/person_view/{{ person_id }}">👁 View</a>
+              <a href="/person_view/{{ person_id }}">✏️ Edit</a>
+              <a href="/archive_person/{{ person_id }}" onclick="return confirm('Archive this bio?')">🗃 Archive</a>
             </div>
           </li>
         {% endfor %}
@@ -137,3 +137,143 @@
   </div>
 </body>
 </html>
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Biography System</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="icon" href="/static/favicon.ico" type="image/x-icon" />
+  <style>
+    .container { max-width: 900px; margin: 0 auto; padding: 2rem; }
+    h1, h2 { margin-bottom: 0.5rem; }
+    .type-container { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1.5rem; }
+    .type-button {
+      padding: 8px 12px; background: #f0f0f0; border-radius: 6px;
+      font-weight: bold; text-decoration: none; color: #333;
+    }
+    .type-button:hover { background: #e0e0e0; }
+    .btn-primary {
+      background-color: #007bff; color: white; border-radius: 6px;
+      padding: 10px 16px; text-decoration: none; display: inline-block;
+    }
+    .btn-primary:hover { background-color: #0056b3; }
+    ul.bio-list { list-style: none; padding: 0; }
+    ul.bio-list li {
+      margin-bottom: 0.8rem;
+      padding: 0.6rem 1rem;
+      background: #f9f9f9;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+    }
+    .bio-actions a {
+      margin-right: 10px;
+      text-decoration: none;
+      color: #007bff;
+    }
+    .bio-actions a:hover { text-decoration: underline; }
+    .search-box {
+      margin: 1rem 0;
+    }
+    .created-time.loading {
+      color: #888;
+      font-style: italic;
+    }
+    .btn-archived {
+      background-color: #555;
+      color: white;
+      border-radius: 6px;
+      padding: 10px 16px;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 0.95em;
+    }
+    .btn-archived:hover {
+      background-color: #444;
+    }
+  </style>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const searchInput = document.getElementById('search-box');
+      const bios = document.querySelectorAll('.bio-item');
+
+      // Format UTC to local time
+      bios.forEach(bio => {
+        const utc = bio.getAttribute('data-utc');
+        const tag = bio.querySelector('.created-time');
+        if (utc && tag) {
+          const dt = new Date(utc);
+          if (!isNaN(dt)) {
+            const localStr = dt.toLocaleString(undefined, {
+              year: "numeric", month: "short", day: "numeric",
+              hour: "2-digit", minute: "2-digit"
+            });
+            tag.textContent = `Created: ${localStr}`;
+          } else {
+            tag.textContent = `Created: Unknown`;
+          }
+          tag.classList.remove("loading");
+        }
+      });
+
+      // Live filtering
+      if (searchInput) {
+        searchInput.addEventListener('input', function () {
+          const query = this.value.toLowerCase();
+          bios.forEach(item => {
+            const name = item.getAttribute('data-name').toLowerCase();
+            item.style.display = name.includes(query) ? 'block' : 'none';
+          });
+        });
+      }
+    });
+  </script>
+</head>
+<body>
+  <div class="container">
+    <h1>📘 Biography System</h1>
+    <p>Explore structured biographies and build rich life stories from real data.</p>
+
+    <h2>🌍 Create a New Person Biography</h2>
+    <p>Start from scratch using an interactive, step-by-step wizard:</p>
+    <a href="/start_life_naming" class="btn-primary">🧭 Start Wizard</a>
+
+    <p style="margin-top: 10px;">
+      <a href="/archived_lives" class="btn-archived">📁 View Archived Biographies</a>
+    </p>
+
+    {% if person_bios %}
+      <div class="search-box">
+        <label for="search-box"><strong>🔍 Filter Life Biographies:</strong></label><br>
+        <input type="text" id="search-box" placeholder="Type to filter..." />
+      </div>
+
+      <h2>📂 Existing Life Biographies</h2>
+      <ul class="bio-list">
+        {% for life_id, name, created in person_bios %}
+          <li class="bio-item" data-name="{{ name }}"{% if created %} data-utc="{{ created }}"{% endif %}>
+            <strong>{{ name }}</strong><br>
+            <small class="created-time loading">Created: Unknown</small><br>
+            <div class="bio-actions">
+              <a href="/person_view/{{ life_id }}">👁 View</a>
+              <a href="/person_view/{{ life_id }}">✏️ Edit</a>
+              <a href="/archive_life/{{ life_id }}" onclick="return confirm('Archive this bio?')">🗃 Archive</a>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p><em>No biographies created yet.</em></p>
+    {% endif %}
+
+    <h2>📚 Browse by Type</h2>
+    <div class="type-container">
+      {% for t in types %}
+        <a href="/type/{{ t }}" class="type-button">{{ t.replace("_", " ")|capitalize }}</a>
+      {% endfor %}
+    </div>
+  </div>
+</body>
+</html> -->

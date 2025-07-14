@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Step {{ step + 1 }} of {{ total }}</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <h2>Step {{ step + 1 }}: {{ step_name }}</h2>
+        <p><strong>Name:</strong> {{ person_name }}</p>
+
+        <iframe src="{{ iframe_src }}" width="100%" height="500" style="border:1px solid #ccc;"></iframe>
+
+        <br><br>
+        <a class="continue-button" href="/person_iframe_wizard?step={{ step + 1 }}">Continue →</a>
+    </div>
+</body>
+</html>
