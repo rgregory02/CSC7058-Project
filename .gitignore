@@ -18,3 +18,5 @@ venv39/
 
 # Node or package folders (if ever used)
 node_modules/
+
+main_before_life_route_update.py
