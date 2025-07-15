@@ -1,43 +1,49 @@
 {
-    "person_id": "Person_1752537458",
+    "person_id": "Person_1752610416",
     "name": "Teddy",
-    "created": "2025-07-15T00:57:38.045804+01:00",
+    "created": "2025-07-15T21:13:36.053459+01:00",
     "entries": [
         {
             "time": {
                 "confidence": 100,
-                "date_value": "2025-07-03",
-                "label": "2025-07-03",
+                "date_value": "2025-07-09",
+                "label": "2025-07-09",
                 "label_type": "date",
                 "subvalue": ""
             },
+            "created": "2025-07-15T21:13:41.283520",
             "person": [
                 {
                     "id": "plumber",
-                    "confidence": 100
+                    "confidence": 100,
+                    "label_type": "onet_occupation"
                 },
                 {
-                    "id": "0",
-                    "confidence": 100
+                    "id": "1",
+                    "confidence": 100,
+                    "label_type": "celebea_face_hq"
                 }
             ]
         },
         {
             "time": {
-                "confidence": 57,
+                "confidence": 100,
                 "date_value": "",
                 "label": "forties",
                 "label_type": "life_stage",
                 "subvalue": "forties"
             },
+            "created": "2025-07-15T21:23:50.518035",
             "person": [
                 {
                     "id": "teacher",
-                    "confidence": 1
+                    "confidence": 100,
+                    "label_type": "onet_occupation"
                 },
                 {
                     "id": "0",
-                    "confidence": 1
+                    "confidence": 100,
+                    "label_type": "celebea_face_hq"
                 }
             ]
         }

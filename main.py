@@ -697,6 +697,20 @@ def person_delete_entry(person_id, entry_index):
 
     return redirect(url_for("person_view", person_id=person_id))
 
+@app.route("/person_unarchive_entry/<person_id>/<int:entry_index>")
+def person_unarchive_entry(person_id, entry_index):
+    file_path = f"./types/person/biographies/{person_id}.json"
+    person_data = load_json_as_dict(file_path)
+
+    entries = person_data.get("entries", [])
+    if 0 <= entry_index < len(entries):
+        entry = entries[entry_index]
+        if entry.get("status") == "archived":
+            entry.pop("status", None)  # Remove the 'archived' flag
+            save_dict_as_json(file_path, person_data)
+
+    return redirect(url_for("person_view", person_id=person_id))
+
 @app.route("/person_undo_archive/<person_id>/<int:entry_index>")
 def person_undo_archive(person_id, entry_index):
     file_path = f"./types/person/biographies/{person_id}.json"
@@ -1051,8 +1065,10 @@ def finalise_person_bio():
         person_name=person_name
     )
 
+
 @app.route('/person_view/<person_id>')
 def person_view(person_id):
+    from flask import request
     type_name = "person"
     person_file = f"./types/{type_name}/biographies/{person_id}.json"
 
@@ -1063,16 +1079,17 @@ def person_view(person_id):
     person_name = person_data.get("name", f"Person {person_id}")
     show_archived = request.args.get("show_archived", "false").lower() == "true"
 
-    entries = []
-    for raw_entry in person_data.get("entries", []):
-        # Skip archived entries unless toggle is on
-        if not show_archived and raw_entry.get("status") == "archived":
-            continue
+    all_entries = person_data.get("entries", [])
 
+    entries = []
+    archived_entries = []
+
+    for i, raw_entry in enumerate(all_entries):
         entry_obj = {
             "time": raw_entry.get("time", {}),
             "created": raw_entry.get("created"),
-            "status": raw_entry.get("status", None)
+            "status": raw_entry.get("status", None),
+            "original_index": i
         }
 
         for key, value in raw_entry.items():
@@ -1080,15 +1097,109 @@ def person_view(person_id):
                 continue
             entry_obj[key] = resolve_entities(key, value)
 
-        entries.append(entry_obj)
+        if raw_entry.get("status") == "archived":
+            archived_entries.append(entry_obj)
+        else:
+            entries.append(entry_obj)
+
+    # ✅ Add these:
+    print(f"Show archived flag: {show_archived}")
+    print(f"Archived entries for {person_id}: {len(archived_entries)}")
 
     return render_template(
         "person_view.html",
         person_id=person_id,
         person_name=person_name,
         entries=entries,
+        archived_entries=archived_entries,
         show_archived=show_archived
     )
+
+# @app.route('/person_view/<person_id>')
+# def person_view(person_id):
+#     from flask import request
+#     type_name = "person"
+#     person_file = f"./types/{type_name}/biographies/{person_id}.json"
+
+#     if not os.path.exists(person_file):
+#         return f"<h1>Person {person_id} Not Found</h1>", 404
+
+#     person_data = load_json_as_dict(person_file)
+#     person_name = person_data.get("name", f"Person {person_id}")
+#     show_archived = request.args.get("show_archived", "false").lower() == "true"
+
+#     all_entries = person_data.get("entries", [])
+
+#     # Separate into active and archived
+#     entries = []
+#     archived_entries = []
+
+#     for i, raw_entry in enumerate(all_entries):
+#         entry_obj = {
+#             "time": raw_entry.get("time", {}),
+#             "created": raw_entry.get("created"),
+#             "status": raw_entry.get("status", None),
+#             "original_index": i  # ✅ Needed for unarchive
+#         }
+
+#         for key, value in raw_entry.items():
+#             if key in ["time", "created", "status"] or not isinstance(value, list):
+#                 continue
+#             entry_obj[key] = resolve_entities(key, value)
+
+#         if raw_entry.get("status") == "archived":
+#             archived_entries.append(entry_obj)
+#         else:
+#             entries.append(entry_obj)
+
+#     # Optionally show archived entries in a separate section
+#     return render_template(
+#         "person_view.html",
+#         person_id=person_id,
+#         person_name=person_name,
+#         entries=entries,
+#         archived_entries=archived_entries,
+#         show_archived=show_archived
+#     )
+
+# @app.route('/person_view/<person_id>')
+# def person_view(person_id):
+#     type_name = "person"
+#     person_file = f"./types/{type_name}/biographies/{person_id}.json"
+
+#     if not os.path.exists(person_file):
+#         return f"<h1>Person {person_id} Not Found</h1>", 404
+
+#     person_data = load_json_as_dict(person_file)
+#     person_name = person_data.get("name", f"Person {person_id}")
+#     show_archived = request.args.get("show_archived", "false").lower() == "true"
+
+#     entries = []
+#     for raw_entry in person_data.get("entries", []):
+#         # Skip archived entries unless toggle is on
+#         if not show_archived and raw_entry.get("status") == "archived":
+#             continue
+
+#         entry_obj = {
+#             "time": raw_entry.get("time", {}),
+#             "created": raw_entry.get("created"),
+#             "status": raw_entry.get("status", None)
+#         }
+
+#         for key, value in raw_entry.items():
+#             if key in ["time", "created", "status"] or not isinstance(value, list):
+#                 continue
+#             entry_obj[key] = resolve_entities(key, value)
+
+#         entries.append(entry_obj)
+
+#     return render_template(
+#         "person_view.html",
+#         person_id=person_id,
+#         person_name=person_name,
+#         entries=entries,
+#         show_archived=show_archived
+#     )
 def resolve_entities(entry_type, entity_list):
     resolved = []
     for item in entity_list:
