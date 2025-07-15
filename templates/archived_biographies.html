@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Archived Biographies</title>
+  <title>Archived Biographies – Person</title>
   <link rel="stylesheet" href="/static/styles.css">
   <link rel="icon" href="/static/favicon.ico" type="image/x-icon" />
   <style>
@@ -64,17 +64,17 @@
 </head>
 <body>
   <div class="container">
-    <h1>📁 Archived Life Biographies</h1>
+    <h1>📁 Archived Person Biographies</h1>
 
-    {% if archived_lives %}
+    {% if archived_people %}
       <ul class="archived-list">
-        {% for life_id, name, created in archived_lives %}
-          <li class="archived-item" data-name="{{ name }}"{% if created %} data-utc="{{ created }}"{% endif %}>
-            <strong>{{ name }}</strong><br>
+        {% for person_id, name, created in archived_people %}
+          <li class="archived-item" data-name="{{ name or '[Unnamed Person]' }}"{% if created %} data-utc="{{ created }}"{% endif %}>
+            <strong>{{ name or "[Unnamed Person]" }}</strong><br>
             <small class="created-time loading">Created: Unknown</small><br>
             <div class="archived-actions">
-              <a href="/person_view_archived/{{ life_id }}">👁 View</a>
-              <a href="/restore_life/{{ life_id }}" onclick="return confirm('Restore this biography?')">♻️ Restore</a>
+              <a href="/person_view_archived/{{ person_id }}" aria-label="View biography for {{ name }}">👁 View</a>
+              <a href="/restore_person/{{ person_id }}" onclick="return confirm('Restore this biography?')" aria-label="Restore biography for {{ name }}">♻️ Restore</a>
             </div>
           </li>
         {% endfor %}
