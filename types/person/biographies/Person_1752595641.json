@@ -1,0 +1,30 @@
+{
+    "person_id": "Person_1752595641",
+    "name": "Teddy",
+    "created": "2025-07-15T17:07:21.495504+01:00",
+    "entries": [
+        {
+            "time": {
+                "confidence": 100,
+                "date_value": "",
+                "label": "forties",
+                "label_type": "life_stage",
+                "subvalue": "forties"
+            },
+            "created": "2025-07-15T17:07:24.742243",
+            "person": [
+                {
+                    "id": "plumber",
+                    "confidence": 100,
+                    "label_type": "onet_occupation"
+                },
+                {
+                    "id": "0",
+                    "confidence": 100,
+                    "label_type": "celebea_face_hq"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}

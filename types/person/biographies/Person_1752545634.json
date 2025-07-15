@@ -5,25 +5,6 @@
     "entries": [
         {
             "time": {
-                "confidence": 42,
-                "date_value": "",
-                "label": "thirties",
-                "label_type": "life_stage",
-                "subvalue": "thirties"
-            },
-            "person": [
-                {
-                    "id": "plumber",
-                    "confidence": 29
-                },
-                {
-                    "id": "0",
-                    "confidence": 29
-                }
-            ]
-        },
-        {
-            "time": {
                 "confidence": 25,
                 "date_value": "2025-07-04",
                 "label": "2025-07-04",

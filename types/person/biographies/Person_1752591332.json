@@ -1,0 +1,52 @@
+{
+    "person_id": "Person_1752591332",
+    "name": "Starbucks",
+    "created": "2025-07-15T15:55:32.571949+01:00",
+    "entries": [
+        {
+            "time": {
+                "confidence": 33,
+                "date_value": "2025-07-12",
+                "label": "2025-07-12",
+                "label_type": "date",
+                "subvalue": ""
+            },
+            "created": "2025-07-15T15:55:39.515566",
+            "person": [
+                {
+                    "id": "plumber",
+                    "confidence": 23,
+                    "label_type": "onet_occupation"
+                },
+                {
+                    "id": "0",
+                    "confidence": 48,
+                    "label_type": "celebea_face_hq"
+                }
+            ]
+        },
+        {
+            "time": {
+                "confidence": 50,
+                "date_value": "2025-07-03",
+                "label": "2025-07-03",
+                "label_type": "date",
+                "subvalue": ""
+            },
+            "created": "2025-07-15T16:19:44.923265",
+            "person": [
+                {
+                    "id": "plumber",
+                    "confidence": 28,
+                    "label_type": "onet_occupation"
+                },
+                {
+                    "id": "0",
+                    "confidence": 27,
+                    "label_type": "celebea_face_hq"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}
