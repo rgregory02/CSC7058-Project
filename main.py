@@ -688,12 +688,29 @@ def person_delete_entry(person_id, entry_index):
     file_path = f"./types/person/biographies/{person_id}.json"
     person_data = load_json_as_dict(file_path)
 
-    if 0 <= entry_index < len(person_data.get("entries", [])):
-        person_data["entries"].pop(entry_index)
+    entries = person_data.get("entries", [])
+
+    if 0 <= entry_index < len(entries):
+        # Add or update 'status' field
+        entries[entry_index]["status"] = "archived"
         save_dict_as_json(file_path, person_data)
 
-    return redirect(url_for("person_view", aggregator_id=person_id))
+    return redirect(url_for("person_view", person_id=person_id))
 
+@app.route("/person_undo_archive/<person_id>/<int:entry_index>")
+def person_undo_archive(person_id, entry_index):
+    file_path = f"./types/person/biographies/{person_id}.json"
+    person_data = load_json_as_dict(file_path)
+
+    entries = person_data.get("entries", [])
+
+    if 0 <= entry_index < len(entries):
+        # Remove the 'status' field
+        if "status" in entries[entry_index]:
+            del entries[entry_index]["status"]
+            save_dict_as_json(file_path, person_data)
+
+    return redirect(url_for("person_view", person_id=person_id))
 
 @app.route("/person_edit_timepoint/<person_id>/<int:entry_index>")
 def person_edit_timepoint(person_id, entry_index):
@@ -1044,17 +1061,22 @@ def person_view(person_id):
 
     person_data = load_json_as_dict(person_file)
     person_name = person_data.get("name", f"Person {person_id}")
+    show_archived = request.args.get("show_archived", "false").lower() == "true"
 
-    # Build enriched entries
     entries = []
     for raw_entry in person_data.get("entries", []):
+        # Skip archived entries unless toggle is on
+        if not show_archived and raw_entry.get("status") == "archived":
+            continue
+
         entry_obj = {
             "time": raw_entry.get("time", {}),
-            "created": raw_entry.get("created", None)
+            "created": raw_entry.get("created"),
+            "status": raw_entry.get("status", None)
         }
 
         for key, value in raw_entry.items():
-            if key in ["time", "created"] or not isinstance(value, list):
+            if key in ["time", "created", "status"] or not isinstance(value, list):
                 continue
             entry_obj[key] = resolve_entities(key, value)
 
@@ -1064,7 +1086,8 @@ def person_view(person_id):
         "person_view.html",
         person_id=person_id,
         person_name=person_name,
-        entries=entries
+        entries=entries,
+        show_archived=show_archived
     )
 def resolve_entities(entry_type, entity_list):
     resolved = []

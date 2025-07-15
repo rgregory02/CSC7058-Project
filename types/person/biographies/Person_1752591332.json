@@ -5,28 +5,6 @@
     "entries": [
         {
             "time": {
-                "confidence": 33,
-                "date_value": "2025-07-12",
-                "label": "2025-07-12",
-                "label_type": "date",
-                "subvalue": ""
-            },
-            "created": "2025-07-15T15:55:39.515566",
-            "person": [
-                {
-                    "id": "plumber",
-                    "confidence": 23,
-                    "label_type": "onet_occupation"
-                },
-                {
-                    "id": "0",
-                    "confidence": 48,
-                    "label_type": "celebea_face_hq"
-                }
-            ]
-        },
-        {
-            "time": {
                 "confidence": 50,
                 "date_value": "2025-07-03",
                 "label": "2025-07-03",
@@ -46,6 +24,29 @@
                     "label_type": "celebea_face_hq"
                 }
             ]
+        },
+        {
+            "time": {
+                "confidence": 40,
+                "date_value": "2025-07-13",
+                "label": "2025-07-13",
+                "label_type": "date",
+                "subvalue": ""
+            },
+            "created": "2025-07-15T18:59:56.483196",
+            "person": [
+                {
+                    "id": "plumber",
+                    "confidence": 35,
+                    "label_type": "onet_occupation"
+                },
+                {
+                    "id": "1",
+                    "confidence": 34,
+                    "label_type": "celebea_face_hq"
+                }
+            ],
+            "status": "archived"
         }
     ],
     "finalised": true

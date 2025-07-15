@@ -69,6 +69,330 @@
       font-style: italic;
     }
 
+    .confidence-high {
+      color: green;
+    }
+
+    .confidence-medium {
+      color: orange;
+    }
+
+    .confidence-low {
+      color: red;
+    }
+
+    .entry-actions {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+    }
+
+    .entry-actions a {
+      margin-left: 12px;
+      font-size: 0.9em;
+    }
+
+    .entry-actions .delete-btn {
+      color: red;
+    }
+
+    .entry-actions .edit-btn {
+      color: #007bff;
+    }
+
+    .btn {
+      display: inline-block;
+      margin: 10px;
+      padding: 10px 20px;
+      background-color: #4CAF50;
+      color: white;
+      border-radius: 6px;
+      text-decoration: none;
+    }
+
+    .btn-secondary {
+      background-color: #555;
+    }
+
+    .btn:hover {
+      opacity: 0.9;
+    }
+
+    .print-btn {
+      margin-top: 10px;
+      margin-bottom: 20px;
+    }
+
+    .toggle-confidence {
+      text-align: center;
+      margin: 10px;
+      color: #007bff;
+      cursor: pointer;
+    }
+
+    .label-info {
+      margin-top: 24px;
+      padding: 12px;
+      border-top: 1px dashed #ccc;
+    }
+
+    .label-info>strong {
+      display: block;
+      margin-bottom: 10px;
+    }
+
+    .label-info img {
+      display: block;
+      margin: 10px auto;
+      max-height: 100px;
+      border-radius: 6px;
+    }
+
+    .label-info em {
+      display: block;
+      margin-top: 4px;
+      color: #444;
+      font-style: italic;
+    }
+
+    .label-info ul {
+      list-style: none;
+      padding-left: 0;
+      margin-top: 10px;
+    }
+
+    .label-info ul li {
+      font-size: 0.95em;
+      margin: 4px 0;
+    }
+
+    .timestamp {
+      font-size: 0.85em;
+      color: #777;
+      margin-top: 8px;
+    }
+  </style>
+  <script>
+    function toggleConfidence() {
+      const tags = document.querySelectorAll('.confidence-tag');
+      tags.forEach(tag => {
+        tag.style.display = (tag.style.display === 'none') ? 'inline' : 'none';
+      });
+    }
+    function printPage() {
+      window.print();
+    }
+    function confirmDelete(index) {
+      if (confirm('Are you sure you want to archive this time period?')) {
+        window.location.href = '/person_delete_entry/{{ person_id }}/' + parseInt(index);
+      }
+    }
+  </script>
+</head>
+
+<body>
+  <div class="card">
+    <h1>Viewing Person: {{ person_name }}</h1>
+    <div class="subtitle">ID: {{ person_id }}</div>
+
+    <div style="text-align: center;">
+      <div class="toggle-confidence" onclick="toggleConfidence()">👁️ Toggle Confidence Display</div>
+      <button class="btn print-btn" onclick="printPage()">🖨️ Print Summary</button>
+    </div>
+
+    <div style="text-align:center; margin-bottom: 10px;">
+      {% if show_archived %}
+      <a href="{{ url_for('person_view', person_id=person_id) }}" class="btn btn-secondary">Hide Archived Entries</a>
+      {% else %}
+      <a href="{{ url_for('person_view', person_id=person_id, show_archived='true') }}" class="btn btn-secondary">Show
+        Archived Entries</a>
+      {% endif %}
+    </div>
+
+    {% if entries %}
+    {% set decade_groups = {} %}
+    {% for entry in entries if entry.status != 'archived' %}
+    {% set label = entry.time.date_value or entry.time.subvalue %}
+    {% set decade = "Unknown" %}
+    {% if entry.time.date_value and '-' in entry.time.date_value %}
+    {% set year = entry.time.date_value.split('-')[0]|int %}
+    {% set decade = ((year // 10) * 10)|string + "s" %}
+    {% elif entry.time.subvalue %}
+    {% set decade = entry.time.subvalue %}
+    {% endif %}
+    {% set _ = decade_groups.setdefault(decade, []).append(entry) %}
+    {% endfor %}
+
+    {% for decade, group in decade_groups.items() %}
+    <div class="group-title">{{ decade|title }}</div>
+    {% for entry in group %}
+    <div class="entry-block">
+      <div class="entry-header">
+        <div class="entry-date">
+          {% if entry.time.date_value %}
+          {{ entry.time.date_value|uk_date }}
+          {% else %}
+          {{ entry.time.subvalue | title }}
+          {% endif %}
+          <span class="confidence-tag 
+                  {% if entry.time.confidence == 100 or entry.time.confidence >= 67 %}confidence-high
+                  {% elif entry.time.confidence >= 34 %}confidence-medium
+                  {% else %}confidence-low{% endif %}">
+            – Confidence: {{ entry.time.confidence }}%
+          </span>
+          {% if entry.created %}
+          <div class="timestamp">Entry created: {{ entry.created|uk_datetime }}</div>
+          {% endif %}
+        </div>
+        <div class="entry-actions">
+          <a class="edit-btn" href="/person_edit_timepoint/{{ person_id }}/{{ loop.index0 }}">✏️ Edit</a>
+          <a class="delete-btn" onclick="confirmDelete('{{ loop.index0 }}')">🗑️ Archive</a>
+        </div>
+      </div>
+
+      {% for key, value in entry.items() %}
+      {% if key != "time" and key != "created" and key != "status" and value %}
+      {% for item in value %}
+      {% if item is mapping %}
+      <div class="label-info">
+        {% if item.label_type %}
+        <strong>{{ item.label_type.replace("_", " ")|title }}</strong>
+        {% elif item.label %}
+        <strong>{{ item.label.replace("_", " ")|title }}</strong>
+        {% else %}
+        <strong>Label</strong>
+        {% endif %}
+
+        {% if item.display %}<div style="margin-bottom: 6px;">{{ item.display }}</div>{% endif %}
+        {% if item.confidence is defined %}
+        <div
+          class="confidence-tag {% if item.confidence == 100 or item.confidence >= 67 %}confidence-high{% elif item.confidence >= 34 %}confidence-medium{% else %}confidence-low{% endif %}">
+          – Confidence: {{ item.confidence }}%
+        </div>
+        {% endif %}
+        {% if item.image_url %}<div><img src="{{ item.image_url }}" alt="{{ item.display }}"></div>{% endif %}
+        {% if item.description %}<em>{{ item.description }}</em>{% endif %}
+        {% if item.properties %}
+        <ul>
+          {% for prop, val in item.properties.items() %}
+          <li><strong>{{ prop.replace('_', ' ').title() }}:</strong> {{ val.value if val is mapping else val }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+      {% endif %}
+      {% endfor %}
+      {% endif %}
+      {% endfor %}
+    </div>
+    {% endfor %}
+    {% endfor %}
+    {% set archived = entries | selectattr("status", "equalto", "archived") | list %}
+    {% if archived %}
+    <div class="group-title">Archived Entries</div>
+    {% for entry in archived %}
+    <div class="entry-block">
+      <div class="entry-header">
+        <div class="entry-date">
+          {% if entry.time.date_value %}
+          {{ entry.time.date_value|uk_date }}
+          {% else %}
+          {{ entry.time.subvalue | title }}
+          {% endif %}
+          <div class="timestamp">[Archived]</div>
+        </div>
+        <div class="entry-actions">
+          <a class="edit-btn" href="/person_undo_archive/{{ person_id }}/{{ loop.index0 }}">↩️ Undo</a>
+        </div>
+      </div>
+      <!-- Optional: Show label data if desired -->
+    </div>
+    {% endfor %}
+    {% endif %}
+    {% else %}
+    <p><em>No time periods added yet.</em></p>
+    {% endif %}
+
+    <div class="action-buttons" style="text-align:center; margin-top: 30px;">
+      <a href="{{ url_for('person_add_timepoint', person_id=person_id) }}" class="btn">➕ Add Another Time Period</a>
+      <a href="/" class="btn btn-secondary">← Back to Home</a>
+    </div>
+    <div class="subtitle">Use the ✏️ or 🗑️ icons to manage timepoints. Use the toggle above to show/hide confidence
+      scores.</div>
+  </div>
+</body>
+
+</html><!-- <!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Viewing Person: {{ person_name }}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    body {
+      background: #f5f5f5;
+      font-family: sans-serif;
+      padding: 40px;
+    }
+
+    .card {
+      background: white;
+      max-width: 960px;
+      margin: auto;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    h1 {
+      font-size: 2em;
+      margin-bottom: 5px;
+      text-align: center;
+    }
+
+    .subtitle {
+      text-align: center;
+      font-size: 0.9em;
+      color: #555;
+    }
+
+    .group-title {
+      font-size: 1.6em;
+      font-weight: bold;
+      margin-top: 30px;
+      margin-bottom: 16px;
+      padding-left: 10px;
+      border-left: 5px solid #007bff;
+      background-color: #f0f8ff;
+      text-transform: capitalize;
+    }
+
+    .entry-block {
+      background-color: #fafafa;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 20px;
+      position: relative;
+    }
+
+    .entry-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .entry-date {
+      font-weight: bold;
+      font-size: 1.1em;
+    }
+
+    .confidence-tag {
+      font-size: 0.9em;
+      font-style: italic;
+    }
+
     .confidence-high { color: green; }
     .confidence-medium { color: orange; }
     .confidence-low { color: red; }
@@ -287,4 +611,4 @@
     <div class="subtitle">Use the ✏️ or 🗑️ icons to manage timepoints. Use the toggle above to show/hide confidence scores.</div>
   </div>
 </body>
-</html>
+</html> -->
