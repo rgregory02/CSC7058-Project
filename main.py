@@ -679,14 +679,13 @@ def person_step_dynamic(step):
         print("[WARN] No time selection in session, redirecting to time step")
         return redirect(url_for("person_step_time", person_id=person_id))
 
-    # ✅ Save time selection ONLY at step 0 and only once
+    # ✅ Save time selection at step 0 every time
     if step == 0 and session.get("time_step_in_progress") and session.get("time_selection"):
-        if not person_data["entries"] or "time" not in person_data["entries"][-1]:
-            person_data["entries"].append({
-                "time": session["time_selection"]
-            })
-            save_dict_as_json(person_file, person_data)
-            print("[DEBUG] Time entry written to JSON from session.")
+        person_data["entries"].append({
+            "time": session["time_selection"]
+        })
+        save_dict_as_json(person_file, person_data)
+        print("[DEBUG] New time entry written to JSON from session.")
         session["time_step_in_progress"] = False
 
     # Load current type folder
@@ -802,6 +801,148 @@ def person_step_dynamic(step):
         next_step=step + 1,
         prev_step=step - 1 if step > 0 else None
     )
+
+# @app.route("/person_step/dynamic/<int:step>", methods=["GET", "POST"])
+# def person_step_dynamic(step):
+#     person_id = session.get("person_id")
+#     if not person_id:
+#         return redirect(url_for("person_iframe_wizard", step="0"))
+
+#     person_file = f"./types/person/biographies/{person_id}.json"
+#     if not os.path.exists(person_file):
+#         return f"Person file {person_id} not found", 404
+
+#     person_data = load_json_as_dict(person_file)
+#     person_data.setdefault("entries", [])
+
+#     # 🚫 Prevent jumping to step 0 without a valid time selection
+#     if step == 0 and not session.get("time_selection"):
+#         print("[WARN] No time selection in session, redirecting to time step")
+#         return redirect(url_for("person_step_time", person_id=person_id))
+
+#     # ✅ Save time selection ONLY at step 0 and only once
+#     if step == 0 and session.get("time_step_in_progress") and session.get("time_selection"):
+#         if not person_data["entries"] or "time" not in person_data["entries"][-1]:
+#             person_data["entries"].append({
+#                 "time": session["time_selection"]
+#             })
+#             save_dict_as_json(person_file, person_data)
+#             print("[DEBUG] Time entry written to JSON from session.")
+#         session["time_step_in_progress"] = False
+
+#     # Load current type folder
+#     type_folders = sorted([
+#         t for t in os.listdir("./types")
+#         if os.path.isdir(f"./types/{t}") and t != "time"
+#     ])
+
+#     if step >= len(type_folders):
+#         return redirect(url_for("finalise_person_bio"))
+
+#     current_type = type_folders[step]
+#     label_base_path = f"./types/{current_type}/labels"
+#     bio_path = f"./types/{current_type}/biographies"
+
+#     # Load biography options
+#     biography_options = []
+#     if os.path.exists(bio_path):
+#         for f in os.listdir(bio_path):
+#             if f.endswith(".json"):
+#                 bio_id = f[:-5]
+#                 display_name = bio_id.replace("_", " ")
+#                 biography_options.append({"id": bio_id, "display": display_name})
+
+#     # Load label groups from subfolders only
+#     label_groups = {}
+#     label_groups_list = []
+#     seen_keys = set()
+
+#     if os.path.exists(label_base_path):
+#         for file in os.listdir(label_base_path):
+#             key = os.path.splitext(file)[0]
+#             if not key or key == "undefined" or key in seen_keys:
+#                 continue
+#             seen_keys.add(key)
+
+#             values = []
+#             folder_path = os.path.join(label_base_path, key)
+#             if os.path.isdir(folder_path):
+#                 for entry in os.listdir(folder_path):
+#                     if entry.endswith(".json"):
+#                         base = entry[:-5]
+#                         json_path = os.path.join(folder_path, entry)
+#                         img_path = os.path.join(folder_path, f"{base}.jpg")
+#                         try:
+#                             data = load_json_as_dict(json_path)
+#                             label = {
+#                                 "id": base,
+#                                 "display": data.get("properties", {}).get("name", base)
+#                             }
+#                             if os.path.exists(img_path):
+#                                 label["image"] = f"/types/{current_type}/labels/{key}/{base}.jpg"
+#                             values.append(label)
+#                         except Exception as e:
+#                             print(f"[ERROR] Reading label {entry}: {e}")
+
+#             if values:
+#                 label_dict = {
+#                     "key": key,
+#                     "label": key.replace("_", " ").title(),
+#                     "options": values
+#                 }
+#                 label_groups[key] = label_dict
+#                 label_groups_list.append(label_dict)
+
+#     # ✅ Handle POST submission
+#     if request.method == "POST":
+#         new_entries = []
+
+#         selected_bio_id = request.form.get("selected_id_biography")
+#         if selected_bio_id:
+#             new_entries.append({
+#                 "id": selected_bio_id,
+#                 "confidence": 100,
+#                 "source": "biography"
+#             })
+
+#         for group in label_groups_list:
+#             key = group["key"]
+#             selected_id = request.form.get(f"selected_id_{key}")
+#             confidence = int(request.form.get(f"confidence_{key}", 80))
+#             if selected_id:
+#                 new_entries.append({
+#                     "id": selected_id,
+#                     "confidence": confidence
+#                 })
+
+#         if new_entries and person_data.get("entries"):
+#             latest = person_data["entries"][-1]
+#             latest.setdefault(current_type, [])
+#             latest[current_type].extend(new_entries)
+#             save_dict_as_json(person_file, person_data)
+
+#         return redirect(url_for("person_step_dynamic", step=step + 1))
+
+#     # Final render
+#     existing_labels = []
+#     if person_data.get("entries"):
+#         latest = person_data["entries"][-1]
+#         existing_labels = latest.get(current_type, [])
+
+#     return render_template(
+#         "person_step_dynamic.html",
+#         current_type=current_type,
+#         biography_options=biography_options,
+#         label_groups=label_groups,
+#         label_groups_list=label_groups_list,
+#         existing_labels=existing_labels,
+#         person_id=person_id,
+#         skip_allowed=(len(label_groups_list) == 0 and len(biography_options) == 0),
+#         person_name=person_data.get("name", person_id),
+#         time_selection=session.get("time_selection"),
+#         next_step=step + 1,
+#         prev_step=step - 1 if step > 0 else None
+#     )
 
 # @app.route("/person_step/dynamic/<int:step>", methods=["GET", "POST"])
 # def person_step_dynamic(step):

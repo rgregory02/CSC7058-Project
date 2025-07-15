@@ -169,6 +169,415 @@
                   <li><strong>{{ key.replace("_", " ").title() }}:</strong>
                     {% for item in value %}
                       {% if item.link %}
+                        <a href="{{ item.link }}">{{ item.display or item.id }}</a> ({{ item.id }})
+                      {% else %}
+                        {{ item.display or item.id }} ({{ item.id }})
+                      {% endif %}
+                      {% if item.confidence %}
+                        <span class="confidence-tag {% if item.confidence == 100 %}confidence-high{% elif item.confidence >= 67 %}confidence-high{% elif item.confidence >= 34 %}confidence-medium{% else %}confidence-low{% endif %}">
+                          – Confidence: {{ item.confidence }}%
+                        </span>
+                      {% endif %}
+                      {% if not loop.last %}, {% endif %}
+                    {% endfor %}
+                  </li>
+                </ul>
+              {% endif %}
+            {% endfor %}
+          </div>
+        {% endfor %}
+      {% endfor %}
+    {% else %}
+      <p><em>No time periods added yet.</em></p>
+    {% endif %}
+
+    <div class="action-buttons">
+      <a href="{{ url_for('person_add_timepoint', person_id=person_id) }}" class="btn">➕ Add Another Time Period</a>
+      <a href="/" class="btn btn-secondary">← Back to Home</a>
+    </div>
+    <div class="subtitle">Use the ✏️ or 🗑️ icons to manage timepoints. Use the toggle above to show/hide confidence scores.</div>
+  </div>
+</body>
+</html>
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Viewing Person: {{ person_name }}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    body {
+      background: #f6f6f6;
+      font-family: sans-serif;
+      padding: 40px;
+    }
+    .card {
+      background: white;
+      max-width: 960px;
+      margin: auto;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1);
+    }
+    h1 {
+      font-size: 1.8em;
+      margin-bottom: 15px;
+      text-align: center;
+    }
+    .group-title {
+      font-size: 1.2em;
+      font-weight: bold;
+      margin-top: 30px;
+      margin-bottom: 10px;
+      border-left: 5px solid #4CAF50;
+      padding-left: 10px;
+      background-color: #f1f1f1;
+    }
+    .entry-block {
+      background-color: #fdfdfd;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+      position: relative;
+    }
+    .entry-block strong {
+      color: #222;
+    }
+    .entry-links {
+      margin-top: 10px;
+    }
+    .entry-links li {
+      margin-bottom: 6px;
+    }
+    .confidence-tag {
+      font-size: 0.9em;
+    }
+    .confidence-high { color: green; }
+    .confidence-medium { color: orange; }
+    .confidence-low { color: red; }
+    .action-buttons {
+      margin-top: 30px;
+      text-align: center;
+    }
+    .btn {
+      display: inline-block;
+      margin: 10px;
+      padding: 10px 20px;
+      background-color: #4CAF50;
+      color: white;
+      border-radius: 6px;
+      text-decoration: none;
+    }
+    .btn-secondary {
+      background-color: #555;
+    }
+    .btn:hover {
+      opacity: 0.9;
+    }
+    .subtitle {
+      font-size: 0.9em;
+      color: #777;
+      text-align: center;
+      margin-top: -5px;
+    }
+    .toggle-confidence {
+      margin: 10px auto;
+      display: block;
+      font-size: 0.9em;
+      text-align: center;
+      color: #007bff;
+      cursor: pointer;
+    }
+    .delete-btn {
+      float: right;
+      color: red;
+      cursor: pointer;
+      font-size: 0.9em;
+      margin-left: 10px;
+    }
+    .edit-btn {
+      float: right;
+      font-size: 0.9em;
+      margin-right: 10px;
+    }
+    .print-btn {
+      float: left;
+      margin-left: 10px;
+    }
+  </style>
+  <script>
+    function toggleConfidence() {
+      var tags = document.querySelectorAll('.confidence-tag');
+      tags.forEach(tag => {
+        tag.style.display = (tag.style.display === 'none') ? 'inline' : 'none';
+      });
+    }
+
+    function printPage() {
+      window.print();
+    }
+
+    function confirmDelete(index) {
+      if (confirm('Are you sure you want to delete this time period?')) {
+        window.location.href = '/person_delete_entry/{{ person_id }}/' + parseInt(index);
+      }
+    }
+  </script>
+</head>
+<body>
+  <div class="card">
+    <h1>Viewing Person: {{ person_name }}</h1>
+    <p><strong>ID:</strong> {{ person_id }}</p>
+
+    <span class="toggle-confidence" onclick="toggleConfidence()">👁️ Toggle Confidence Display</span>
+    <button class="btn print-btn" onclick="printPage()">🖨️ Print Summary</button>
+
+    {% if entries %}
+      {% set decade_groups = {} %}
+      {% for entry in entries %}
+        {% set label = entry.time.date_value or entry.time.subvalue %}
+        {% set decade = "Unknown" %}
+        {% if entry.time.date_value and '-' in entry.time.date_value %}
+          {% set year = entry.time.date_value.split('-')[0]|int %}
+          {% set decade = ((year // 10) * 10)|string + "s" %}
+        {% elif entry.time.subvalue %}
+          {% set decade = entry.time.subvalue %}
+        {% endif %}
+        {% set _ = decade_groups.setdefault(decade, []).append(entry) %}
+      {% endfor %}
+
+      {% for decade, group in decade_groups.items() %}
+        <div class="group-title">{{ decade }}</div>
+        {% for entry in group %}
+          <div class="entry-block">
+            <strong>{{ entry.time.date_value or entry.time.subvalue or "[unspecified]" }}</strong>
+            –
+            <span class="confidence-tag 
+              {% if entry.time.confidence == 100 %}confidence-high
+              {% elif entry.time.confidence >= 67 %}confidence-high
+              {% elif entry.time.confidence >= 34 %}confidence-medium
+              {% else %}confidence-low{% endif %}">
+              {% if entry.time.confidence == 100 %}💯 Exact{% elif entry.time.confidence >= 67 %}✅ High{% elif entry.time.confidence >= 34 %}⚠️ Medium{% else %}❗ Low{% endif %} – Confidence: {{ entry.time.confidence }}%
+            </span>
+
+            <span class="delete-btn" onclick="confirmDelete('{{ loop.index0 }}')">🗑️ Delete</span>
+            <a class="edit-btn" href="/person_edit_timepoint/{{ person_id }}/{{ loop.index0 }}">✏️ Edit</a>
+
+            {% for key, value in entry.items() %}
+              {% if key != "time" and value %}
+                <ul class="entry-links">
+                  <li><strong>{{ key.replace("_", " ").title() }}:</strong>
+                    {% for item in value %}
+                      <span>
+                        {% if item.link %}
+                          <a href="{{ item.link }}">{{ item.display or item.id }}</a>
+                        {% else %}
+                          {{ item.display or item.id }}
+                        {% endif %}
+                        ({{ item.id }})
+                        {% if item.confidence is defined %}
+                          <span class="confidence-tag 
+                            {% if item.confidence == 100 %}confidence-high
+                            {% elif item.confidence >= 67 %}confidence-high
+                            {% elif item.confidence >= 34 %}confidence-medium
+                            {% else %}confidence-low{% endif %}">
+                            {% if item.confidence == 100 %}💯 Exact{% elif item.confidence >= 67 %}✅ High{% elif item.confidence >= 34 %}⚠️ Medium{% else %}❗ Low{% endif %} – Confidence: {{ item.confidence }}%
+                          </span>
+                        {% endif %}
+                      </span>
+                      {% if not loop.last %}, {% endif %}
+                    {% endfor %}
+                  </li>
+                </ul>
+              {% endif %}
+            {% endfor %}
+          </div>
+        {% endfor %}
+      {% endfor %}
+    {% else %}
+      <p><em>No time periods added yet.</em></p>
+    {% endif %}
+
+    <div class="action-buttons">
+      <a href="{{ url_for('person_add_timepoint', person_id=person_id) }}" class="btn">➕ Add Another Time Period</a>
+      <a href="/" class="btn btn-secondary">← Back to Home</a>
+    </div>
+    <div class="subtitle">Use the ✏️ or 🗑️ icons to manage timepoints. Use the toggle above to show/hide confidence scores.</div>
+  </div>
+</body>
+</html><!-- <!DOCTYPE html> -->
+<!-- <html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Viewing Person: {{ person_name }}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    body {
+      background: #f6f6f6;
+      font-family: sans-serif;
+      padding: 40px;
+    }
+    .card {
+      background: white;
+      max-width: 960px;
+      margin: auto;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1);
+    }
+    h1 {
+      font-size: 1.8em;
+      margin-bottom: 15px;
+      text-align: center;
+    }
+    .group-title {
+      font-size: 1.2em;
+      font-weight: bold;
+      margin-top: 30px;
+      margin-bottom: 10px;
+      border-left: 5px solid #4CAF50;
+      padding-left: 10px;
+      background-color: #f1f1f1;
+    }
+    .entry-block {
+      background-color: #fdfdfd;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+      position: relative;
+    }
+    .entry-block strong {
+      color: #222;
+    }
+    .entry-links {
+      margin-top: 10px;
+    }
+    .entry-links li {
+      margin-bottom: 6px;
+    }
+    .confidence-tag {
+      font-size: 0.9em;
+    }
+    .confidence-high { color: green; }
+    .confidence-medium { color: orange; }
+    .confidence-low { color: red; }
+    .action-buttons {
+      margin-top: 30px;
+      text-align: center;
+    }
+    .btn {
+      display: inline-block;
+      margin: 10px;
+      padding: 10px 20px;
+      background-color: #4CAF50;
+      color: white;
+      border-radius: 6px;
+      text-decoration: none;
+    }
+    .btn-secondary {
+      background-color: #555;
+    }
+    .btn:hover {
+      opacity: 0.9;
+    }
+    .subtitle {
+      font-size: 0.9em;
+      color: #777;
+      text-align: center;
+      margin-top: -5px;
+    }
+    .toggle-confidence {
+      margin: 10px auto;
+      display: block;
+      font-size: 0.9em;
+      text-align: center;
+      color: #007bff;
+      cursor: pointer;
+    }
+    .delete-btn {
+      float: right;
+      color: red;
+      cursor: pointer;
+      font-size: 0.9em;
+      margin-left: 10px;
+    }
+    .edit-btn {
+      float: right;
+      font-size: 0.9em;
+      margin-right: 10px;
+    }
+    .print-btn {
+      float: left;
+      margin-left: 10px;
+    }
+  </style>
+  <script>
+    function toggleConfidence() {
+      var tags = document.querySelectorAll('.confidence-tag');
+      tags.forEach(tag => {
+        tag.style.display = (tag.style.display === 'none') ? 'inline' : 'none';
+      });
+    }
+
+    function printPage() {
+      window.print();
+    }
+
+    function confirmDelete(index) {
+      if (confirm('Are you sure you want to delete this time period?')) {
+        window.location.href = '/person_delete_entry/{{ person_id }}/' + parseInt(index);
+      }
+    }
+  </script>
+</head>
+<body>
+  <div class="card">
+    <h1>Viewing Person: {{ person_name }}</h1>
+    <p><strong>ID:</strong> {{ person_id }}</p>
+
+    <span class="toggle-confidence" onclick="toggleConfidence()">👁️ Toggle Confidence Display</span>
+    <button class="btn print-btn" onclick="printPage()">🖨️ Print Summary</button>
+
+    {% if entries %}
+      {% set decade_groups = {} %}
+      {% for entry in entries %}
+        {% set label = entry.time.date_value or entry.time.subvalue %}
+        {% set decade = "Unknown" %}
+        {% if entry.time.date_value and '-' in entry.time.date_value %}
+          {% set year = entry.time.date_value.split('-')[0]|int %}
+          {% set decade = ((year // 10) * 10)|string + "s" %}
+        {% elif entry.time.subvalue %}
+          {% set decade = entry.time.subvalue %}
+        {% endif %}
+        {% set _ = decade_groups.setdefault(decade, []).append(entry) %}
+      {% endfor %}
+
+      {% for decade, group in decade_groups.items() %}
+        <div class="group-title">{{ decade }}</div>
+        {% for entry in group %}
+          <div class="entry-block">
+            <strong>{{ entry.time.date_value or entry.time.subvalue or "[unspecified]" }}</strong>
+            –
+            <span class="confidence-tag 
+              {% if entry.time.confidence == 100 %}confidence-high
+              {% elif entry.time.confidence >= 67 %}confidence-high
+              {% elif entry.time.confidence >= 34 %}confidence-medium
+              {% else %}confidence-low{% endif %}">
+              Confidence: {{ entry.time.confidence }}%{% if entry.time.confidence == 100 %} (Exact){% endif %}
+            </span>
+
+            <span class="delete-btn" onclick="confirmDelete('{{ loop.index0 }}')">🗑️ Delete</span>
+            <a class="edit-btn" href="/person_edit_timepoint/{{ person_id }}/{{ loop.index0 }}">✏️ Edit</a>
+
+            {% for key, value in entry.items() %}
+              {% if key != "time" and value %}
+                <ul class="entry-links">
+                  <li><strong>{{ key.replace("_", " ").title() }}:</strong>
+                    {% for item in value %}
+                      {% if item.link %}
                         <a href="{{ item.link }}">{{ item.display }}</a> ({{ item.id }})
                       {% else %}
                         {{ item.display }} ({{ item.id }})
@@ -193,4 +602,4 @@
     <div class="subtitle">Use the ✏️ or 🗑️ icons to manage timepoints. Use the toggle above to show/hide confidence scores.</div>
   </div>
 </body>
-</html>
+</html> -->

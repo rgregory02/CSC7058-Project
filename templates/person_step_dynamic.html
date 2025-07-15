@@ -2,139 +2,357 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>{{ current_type|title }} – Step</title>
+  <title>Select Labels for {{ current_type }}</title>
   <link rel="stylesheet" href="/static/styles.css">
   <style>
     body {
-      background: #f4f4f4;
       font-family: sans-serif;
+      background: #f2f2f2;
       padding: 40px;
+      text-align: center;
     }
-    .card {
+    .box {
       background: white;
       max-width: 960px;
       margin: auto;
       padding: 30px;
-      border-radius: 12px;
-      box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1);
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
-    h1, h2 {
-      text-align: center;
+    h1 {
+      margin-bottom: 20px;
+      color: #333;
     }
     .label-group {
-      margin: 30px 0;
+      margin-bottom: 40px;
+      text-align: left;
+    }
+    .label-title {
+      font-weight: bold;
+      font-size: 1.1em;
+      margin-bottom: 10px;
     }
     .label-options {
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
+      gap: 15px;
     }
-    .label-card {
+    .label-button {
+      border: 2px solid #ccc;
+      padding: 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      width: 180px;
+      background-color: #fafafa;
+      transition: 0.2s;
+    }
+    .label-button.selected {
+      border-color: #4CAF50;
+      background-color: #eaffea;
+    }
+    .label-button img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 6px;
+    }
+    .label-description {
+      font-size: 0.85em;
+      color: #666;
+      margin-top: 5px;
+    }
+    .confidence-slider {
+      margin-top: 10px;
+    }
+    .confidence-display {
+      font-size: 0.9em;
+      margin-top: 4px;
+    }
+    .add-entry-button {
+      background-color: #4CAF50;
+      color: white;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1em;
+    }
+    .entry-block {
       background: #f9f9f9;
       border: 1px solid #ccc;
-      border-radius: 8px;
       padding: 10px;
-      width: 180px;
-      cursor: pointer;
-      text-align: center;
+      margin-bottom: 10px;
+      border-radius: 8px;
     }
-    .label-card.selected {
-      background: #dff0d8;
-      border-color: #4caf50;
-    }
-    .label-card img {
-      max-width: 100%;
-      border-radius: 6px;
-      margin-bottom: 8px;
-    }
-    .form-footer {
-      margin-top: 40px;
-      text-align: center;
-    }
-    .confidence-input {
-      margin-top: 10px;
-      font-size: 0.9em;
-    }
-    .btn {
-      padding: 10px 20px;
-      background: #4caf50;
-      color: white;
-      border-radius: 6px;
-      text-decoration: none;
-      margin: 10px;
+    .continue-link {
+      margin-top: 20px;
       display: inline-block;
-    }
-    .btn-secondary {
-      background: #666;
+      font-weight: bold;
+      color: #4B0082;
+      text-decoration: underline;
     }
   </style>
-  <script>
-    function selectCard(group, id) {
-      document.querySelectorAll(`[name="selected_id_${group}"]`).forEach(el => {
-        el.value = '';
-      });
-      document.querySelectorAll(`.label-card[data-group="${group}"]`).forEach(card => {
-        card.classList.remove('selected');
-      });
-      document.getElementById(`selected_${group}`).value = id;
-      document.getElementById(`card_${group}_${id}`).classList.add('selected');
-    }
-  </script>
 </head>
 <body>
-  <div class="card">
-    <h1>{{ current_type|title }} Step</h1>
-    <p style="text-align: center;">For: <strong>{{ person_name }}</strong></p>
+<div class="box">
+  <h1>Select {{ current_type|replace('_', ' ')|title }}</h1>
+  <form method="POST">
 
-    <form method="post">
-      {% if biography_options %}
-        <div class="label-group">
-          <h2>Choose a Biography</h2>
-          <select name="selected_id_biography">
-            <option value="">— Select —</option>
-            {% for bio in biography_options %}
-              <option value="{{ bio.id }}">{{ bio.display }}</option>
-            {% endfor %}
-          </select>
+    {% for group in label_groups_list %}
+      <div class="label-group">
+        <div class="label-title">{{ group.label }}</div>
+        <div class="label-options">
+          {% for item in group.options %}
+            <label class="label-button">
+              <input type="radio" name="selected_id_{{ group.key }}" value="{{ item.id }}" style="display:none">
+              {% if item.image %}
+                <img src="{{ item.image }}" alt="{{ item.display }}">
+              {% endif %}
+              <div><strong>{{ item.display }}</strong></div>
+              {% if item.description %}
+                <div class="label-description">{{ item.description }}</div>
+              {% endif %}
+            </label>
+          {% endfor %}
         </div>
-      {% endif %}
 
-      {% for group in label_groups_list %}
-        <div class="label-group">
-          <h2>{{ group.label }}</h2>
-          <input type="hidden" name="selected_id_{{ group.key }}" id="selected_{{ group.key }}">
-
-          <div class="label-options">
-            {% for option in group.options %}
-              <div class="label-card"
-                   id="card_{{ group.key }}_{{ option.id }}"
-                   data-group="{{ group.key }}"
-                   onclick="selectCard('{{ group.key }}', '{{ option.id }}')">
-                {% if option.image %}
-                  <img src="{{ option.image }}" alt="{{ option.display }}">
-                {% endif %}
-                <div>{{ option.display }}</div>
-              </div>
-            {% endfor %}
+        <div class="confidence-slider">
+          <label for="confidence_{{ group.key }}">🎯 Confidence:</label>
+          <input type="range" name="confidence_{{ group.key }}" id="confidence_{{ group.key }}" min="0" max="100" value="100"
+                 oninput="updateConfidence('{{ group.key }}')">
+          <div class="confidence-display">
+            <span id="confidence_display_{{ group.key }}">100%</span>
+            <span id="confidence_level_{{ group.key }}">(Exact)</span>
           </div>
+        </div>
+      </div>
+    {% endfor %}
 
-          <div class="confidence-input">
-            Confidence:
-            <input type="range" name="confidence_{{ group.key }}" min="0" max="100" value="80">
-          </div>
+    <button type="submit" class="add-entry-button">✅ Save Selections</button>
+  </form>
+
+  {% if existing_labels %}
+    <hr>
+    <h2>Current Selections</h2>
+    <div class="entry-block">
+      {% for label in existing_labels %}
+        <div>
+          <strong>{{ label.id }}</strong> –
+          <span class="{% if label.confidence == 100 %}confidence-exact{% elif label.confidence >= 67 %}confidence-high{% elif label.confidence >= 34 %}confidence-medium{% else %}confidence-low{% endif %}">
+            Confidence: {{ label.confidence }}{% if label.confidence == 100 %} (Exact){% endif %}
+          </span>
         </div>
       {% endfor %}
+    </div>
+  {% endif %}
 
-      <div class="form-footer">
-        {% if prev_step is not none %}
-          <a href="{{ url_for('person_step_dynamic', step=prev_step) }}" class="btn btn-secondary">← Previous</a>
-        {% endif %}
-        <button type="submit" class="btn">Save and Continue →</button>
-      </div>
-    </form>
-  </div>
+  {% if skip_allowed %}
+    <a href="{{ url_for('person_step_dynamic', step=next_step) }}" class="continue-link">Skip this step →</a>
+  {% endif %}
+</div>
+
+<script>
+  function updateConfidence(key) {
+    const slider = document.getElementById("confidence_" + key);
+    const value = parseInt(slider.value || 0);
+    document.getElementById("confidence_display_" + key).textContent = value + "%";
+    const level = document.getElementById("confidence_level_" + key);
+    if (value === 100) {
+      level.textContent = "(Exact)";
+      level.style.color = "green";
+    } else if (value >= 67) {
+      level.textContent = "(High)";
+      level.style.color = "green";
+    } else if (value >= 34) {
+      level.textContent = "(Medium)";
+      level.style.color = "orange";
+    } else {
+      level.textContent = "(Low)";
+      level.style.color = "red";
+    }
+  }
+  document.addEventListener("DOMContentLoaded", function () {
+    const sliders = document.querySelectorAll("input[type=range]");
+    sliders.forEach(slider => updateConfidence(slider.id.replace("confidence_", "")));
+
+    const buttons = document.querySelectorAll(".label-button");
+    buttons.forEach(button => {
+      button.addEventListener("click", function () {
+        const group = button.querySelector("input[type=radio]").name;
+        buttons.forEach(btn => {
+          if (btn.querySelector("input[type=radio]").name === group) {
+            btn.classList.remove("selected");
+          }
+        });
+        button.classList.add("selected");
+        button.querySelector("input[type=radio]").checked = true;
+      });
+    });
+  });
+</script>
 </body>
 </html>
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Select Labels for {{ current_type }}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f2f2f2;
+      padding: 40px;
+      text-align: center;
+    }
+    .box {
+      background: white;
+      max-width: 800px;
+      margin: auto;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 { margin-bottom: 20px; color: #333; }
+
+    select, input[type="range"] {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+      margin-bottom: 15px;
+    }
+
+    .label-group {
+      margin-bottom: 30px;
+      text-align: left;
+    }
+
+    .add-entry-button {
+      background-color: #4CAF50;
+      color: white;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1em;
+    }
+
+    .confidence-exact { color: green; font-weight: bold; }
+    .confidence-high { color: green; }
+    .confidence-medium { color: orange; }
+    .confidence-low { color: red; }
+
+    .label-title {
+      font-weight: bold;
+      margin-top: 10px;
+    }
+
+    .entry-block {
+      background: #f9f9f9;
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 8px;
+    }
+
+    .continue-link {
+      margin-top: 20px;
+      display: inline-block;
+      font-weight: bold;
+      color: #4B0082;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+<div class="box">
+  <h1>Select {{ current_type|replace('_', ' ')|title }}</h1>
+  <form method="POST">
+
+    {% if biography_options %}
+      <div class="label-group">
+        <label class="label-title" for="selected_id_biography">Select from existing biographies:</label>
+        <select name="selected_id_biography" id="selected_id_biography">
+          <option value="">-- Select Biography --</option>
+          {% for bio in biography_options %}
+            <option value="{{ bio.id }}">{{ bio.display }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    {% endif %}
+
+    {% for group in label_groups_list %}
+      <div class="label-group">
+        <label class="label-title" for="selected_id_{{ group.key }}">{{ group.label }}</label>
+        <select name="selected_id_{{ group.key }}" id="selected_id_{{ group.key }}">
+          <option value="">-- Select {{ group.label }} --</option>
+          {% for item in group.options %}
+            <option value="{{ item.id }}">{{ item.display }}</option>
+          {% endfor %}
+        </select>
+
+        <label for="confidence_{{ group.key }}">🎯 Confidence:</label>
+        <input type="range" name="confidence_{{ group.key }}" id="confidence_{{ group.key }}" min="0" max="100" value="100"
+               oninput="updateConfidence('{{ group.key }}')">
+        <div>
+          <span id="confidence_display_{{ group.key }}">100%</span>
+        </div>
+        <div><small id="confidence_level_{{ group.key }}"></small></div>
+      </div>
+    {% endfor %}
+
+    <button type="submit" class="add-entry-button">✅ Save Selections</button>
+  </form>
+
+  {% if existing_labels %}
+    <hr>
+    <h2>Current Selections</h2>
+    <div class="entry-block">
+      {% for label in existing_labels %}
+        <div>
+          <strong>{{ label.id }}</strong> –
+          <span class="{% if label.confidence == 100 %}confidence-exact{% elif label.confidence >= 67 %}confidence-high{% elif label.confidence >= 34 %}confidence-medium{% else %}confidence-low{% endif %}">
+            Confidence: {{ label.confidence }}{% if label.confidence == 100 %} (Exact){% endif %}
+          </span>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if skip_allowed %}
+    <a href="{{ url_for('person_step_dynamic', step=next_step) }}" class="continue-link">Skip this step →</a>
+  {% endif %}
+</div>
+
+<script>
+  function updateConfidence(key) {
+    const slider = document.getElementById("confidence_" + key);
+    const value = parseInt(slider.value || 0);
+    document.getElementById("confidence_display_" + key).textContent = value + "%";
+
+    const level = document.getElementById("confidence_level_" + key);
+    if (value === 100) {
+      level.textContent = "Confidence level: Exact";
+      level.style.color = "green";
+    } else if (value >= 67) {
+      level.textContent = "Confidence level: High";
+      level.style.color = "green";
+    } else if (value >= 34) {
+      level.textContent = "Confidence level: Medium";
+      level.style.color = "orange";
+    } else {
+      level.textContent = "Confidence level: Low";
+      level.style.color = "red";
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    const sliders = document.querySelectorAll("input[type=range]");
+    sliders.forEach(slider => updateConfidence(slider.id.replace("confidence_", "")));
+  });
+</script>
+</body>
+</html> -->
 
 <!-- <!DOCTYPE html>
 <html>
