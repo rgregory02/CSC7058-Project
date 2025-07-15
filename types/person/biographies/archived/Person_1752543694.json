@@ -1,0 +1,90 @@
+{
+    "person_id": "Person_1752543694",
+    "name": "Zelda",
+    "created": "2025-07-15T02:41:34.256092+01:00",
+    "entries": [
+        {
+            "time": {
+                "confidence": 28,
+                "date_value": "2025-07-03",
+                "label": "2025-07-03",
+                "label_type": "date",
+                "subvalue": ""
+            },
+            "person": [
+                {
+                    "id": "plumber",
+                    "confidence": 100
+                },
+                {
+                    "id": "1",
+                    "confidence": 44
+                }
+            ]
+        },
+        {
+            "time": {
+                "confidence": 26,
+                "date_value": "2025-07-05",
+                "label": "2025-07-05",
+                "label_type": "date",
+                "subvalue": ""
+            },
+            "person": [
+                {
+                    "id": "plumber",
+                    "confidence": 100
+                },
+                {
+                    "id": "1",
+                    "confidence": 100
+                }
+            ]
+        },
+        {
+            "time": {
+                "confidence": 49,
+                "date_value": "",
+                "label": "forties",
+                "label_type": "life_stage",
+                "subvalue": "forties"
+            },
+            "person": [
+                {
+                    "id": "plumber",
+                    "confidence": 100
+                },
+                {
+                    "id": "0",
+                    "confidence": 16
+                }
+            ]
+        }
+    ],
+    "finalised": true,
+    "_recently_deleted": [
+        {
+            "index": 0,
+            "entry": {
+                "time": {
+                    "confidence": 43,
+                    "date_value": "",
+                    "label": "thirties",
+                    "label_type": "life_stage",
+                    "subvalue": "thirties"
+                },
+                "person": [
+                    {
+                        "id": "plumber",
+                        "confidence": 100
+                    },
+                    {
+                        "id": "0",
+                        "confidence": 30
+                    }
+                ]
+            },
+            "timestamp": "2025-07-15T01:44:50.940330"
+        }
+    ]
+}

@@ -1,0 +1,46 @@
+{
+    "person_id": "Person_1752545634",
+    "name": "Zelda",
+    "created": "2025-07-15T03:13:54.385702+01:00",
+    "entries": [
+        {
+            "time": {
+                "confidence": 42,
+                "date_value": "",
+                "label": "thirties",
+                "label_type": "life_stage",
+                "subvalue": "thirties"
+            },
+            "person": [
+                {
+                    "id": "plumber",
+                    "confidence": 29
+                },
+                {
+                    "id": "0",
+                    "confidence": 29
+                }
+            ]
+        },
+        {
+            "time": {
+                "confidence": 25,
+                "date_value": "2025-07-04",
+                "label": "2025-07-04",
+                "label_type": "date",
+                "subvalue": ""
+            },
+            "person": [
+                {
+                    "id": "plumber",
+                    "confidence": 100
+                },
+                {
+                    "id": "1",
+                    "confidence": 91
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}

@@ -570,6 +570,18 @@ def view_archived_people():
     # ✅ Make sure the HTML file is named `archived_biographies.html`
     return render_template("archived_biographies.html", archived_people=archived_people)
 
+@app.route("/archive_person/<person_id>")
+def archive_person(person_id):
+    active_path = f"./types/person/biographies/{person_id}.json"
+    archive_path = f"./types/person/biographies/archived/{person_id}.json"
+
+    if not os.path.exists(active_path):
+        return "Biography not found.", 404
+
+    os.makedirs(os.path.dirname(archive_path), exist_ok=True)
+    os.rename(active_path, archive_path)
+
+    return redirect("/")
 
 @app.route("/person_view_archived/<person_id>")
 def view_archived_person(person_id):
