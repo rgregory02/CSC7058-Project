@@ -1,0 +1,52 @@
+{
+    "person_id": "Person_1752614283",
+    "name": "TeddybEAR",
+    "created": "2025-07-15T22:18:03.451932+01:00",
+    "entries": [
+        {
+            "time": {
+                "confidence": 100,
+                "date_value": "2025-07-14",
+                "label": "2025-07-14",
+                "label_type": "date",
+                "subvalue": ""
+            },
+            "created": "2025-07-15T22:18:10.022850",
+            "person": [
+                {
+                    "id": "plumber",
+                    "confidence": 100,
+                    "label_type": "onet_occupation"
+                },
+                {
+                    "id": "1",
+                    "confidence": 100,
+                    "label_type": "celebea_face_hq"
+                }
+            ]
+        },
+        {
+            "time": {
+                "confidence": 100,
+                "date_value": "",
+                "label": "forties",
+                "label_type": "life_stage",
+                "subvalue": "forties"
+            },
+            "created": "2025-07-15T22:18:24.837708",
+            "person": [
+                {
+                    "id": "teacher",
+                    "confidence": 100,
+                    "label_type": "onet_occupation"
+                },
+                {
+                    "id": "0",
+                    "confidence": 100,
+                    "label_type": "celebea_face_hq"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}

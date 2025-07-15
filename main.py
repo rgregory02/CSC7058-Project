@@ -244,21 +244,46 @@ def person_iframe_wizard():
         return redirect(url_for('person_iframe_wizard', step="0"))
 
 
-@app.route("/person_edit_start/<person_id>")
-def person_edit_start(person_id):
+# @app.route("/person_edit_start/<person_id>")
+# def person_edit_start(person_id):
+#     """
+#     Resumes the person biography wizard for a given person_id, allowing addition of a new timepoint.
+#     """
+#     file_path = f"./types/person/biographies/{person_id}.json"
+#     if not os.path.exists(file_path):
+#         return f"<h1>Person Biography '{person_id}' Not Found</h1>", 404
+
+#     # Load existing person biography to repopulate session
+#     person_data = load_json_as_dict(file_path)
+#     session['person_id'] = person_id
+#     session['person_name'] = person_data.get("name", "[Unknown]")
+
+#     # Go directly to Step 1 (Time)
+#     return redirect(url_for('person_iframe_wizard', step="1"))
+
+@app.route("/person_edit_start/<person_id>/<int:entry_index>")
+def person_edit_start(person_id, entry_index):
     """
-    Resumes the person biography wizard for a given person_id, allowing addition of a new timepoint.
+    Resumes the person biography wizard for editing a specific timepoint.
     """
     file_path = f"./types/person/biographies/{person_id}.json"
     if not os.path.exists(file_path):
         return f"<h1>Person Biography '{person_id}' Not Found</h1>", 404
 
-    # Load existing person biography to repopulate session
     person_data = load_json_as_dict(file_path)
     session['person_id'] = person_id
     session['person_name'] = person_data.get("name", "[Unknown]")
 
-    # Go directly to Step 1 (Time)
+    # Store the index of the entry being edited
+    session['edit_entry_index'] = entry_index
+
+    # Optionally preload the data into session["current_entry"]
+    try:
+        entry = person_data["entries"][entry_index]
+        session['current_entry'] = entry  # You may need to format this for step-by-step reuse
+    except IndexError:
+        return f"<h1>Entry index {entry_index} is out of bounds</h1>", 400
+
     return redirect(url_for('person_iframe_wizard', step="1"))
 
 
@@ -281,6 +306,117 @@ def start_person_naming():
     # 🖼️ Display the name entry form
     return render_template("start_person_naming.html")
 
+# @app.route("/person_step/time/<person_id>", methods=["GET", "POST"])
+# def person_step_time(person_id):
+#     labels_folder = "./types/time/labels"
+#     person_folder = "./types/person/biographies"
+#     os.makedirs(labels_folder, exist_ok=True)
+#     os.makedirs(person_folder, exist_ok=True)
+
+#     person_file = os.path.join(person_folder, f"{person_id}.json")
+#     if not os.path.exists(person_file):
+#         return f"Person biography {person_id} not found.", 404
+
+#     person_data = load_json_as_dict(person_file)
+#     name = person_data.get("name", "[Unknown]")
+
+#     selected_label_type = request.form.get("label_type") or request.args.get("label_type", "").strip()
+#     selected_subvalue = request.form.get("subvalue", "").strip()
+#     selected_date = request.form.get("date_value", "").strip()
+#     selected_confidence = request.form.get("confidence")
+
+#     # --- Handle submission ---
+#     if request.method == "POST":
+#         try:
+#             confidence_value = int(selected_confidence)
+#         except (TypeError, ValueError):
+#             confidence_value = None
+
+#         valid_entry = (
+#             confidence_value is not None and
+#             (
+#                 (selected_label_type == "date" and selected_date) or
+#                 (selected_label_type != "date" and selected_subvalue)
+#             )
+#         )
+
+#         if valid_entry:
+#             time_entry = {
+#                 "label_type": selected_label_type,
+#                 "confidence": confidence_value
+#             }
+
+#             if selected_label_type == "date":
+#                 time_entry["date_value"] = selected_date
+#                 label_value = selected_date
+#             else:
+#                 time_entry["subvalue"] = selected_subvalue
+#                 label_value = selected_subvalue
+
+#             # Save to session only
+#             session["time_selection"] = {
+#                 "label": label_value,
+#                 "confidence": confidence_value,
+#                 "label_type": selected_label_type,
+#                 "date_value": selected_date if selected_label_type == "date" else "",
+#                 "subvalue": selected_subvalue if selected_label_type != "date" else ""
+#             }
+#             session["person_id"] = person_id
+#             session["person_name"] = name
+#             session["time_step_in_progress"] = True
+
+#             print(f"[DEBUG] Time label saved to session: {session['time_selection']}")
+#             return redirect("/person_iframe_wizard?step=2")
+#         else:
+#             print("[WARN] Invalid time entry submission — missing confidence or value")
+
+#     # --- Load dropdown label options ---
+#     label_files = []
+#     if os.path.exists(labels_folder):
+#         for file in os.listdir(labels_folder):
+#             full_path = os.path.join(labels_folder, file)
+#             if file.endswith(".json") and os.path.isfile(full_path):
+#                 try:
+#                     with open(full_path) as f:
+#                         data = json.load(f)
+#                         label = os.path.splitext(file)[0]
+#                         desc = data.get("description", "")
+#                         label_files.append((label, desc))
+#                 except Exception as e:
+#                     print(f"[ERROR] Failed to load label {file}: {e}")
+
+#     # --- Load sublabels for the selected label type ---
+#     subfolder_labels = []
+#     if selected_label_type and selected_label_type != "date":
+#         subfolder_path = os.path.join(labels_folder, selected_label_type)
+#         if os.path.isdir(subfolder_path):
+#             subfolder_labels = [
+#                 os.path.splitext(f)[0]
+#                 for f in os.listdir(subfolder_path)
+#                 if f.endswith(".json")
+#             ]
+
+#     # --- Show existing time entries from person_data["entries"] ---
+#     display_list = []
+#     for entry in person_data.get("entries", []):
+#         time_info = entry.get("time", {})
+#         tag = time_info.get("subvalue") or time_info.get("date_value") or "[unspecified]"
+#         conf = time_info.get("confidence", "unknown")
+#         display_list.append((tag, conf))
+
+#     return render_template(
+#         "person_step_time.html",
+#         person_id=person_id,
+#         name=name,
+#         label_files=label_files,
+#         selected_label_type=selected_label_type,
+#         selected_subvalue=selected_subvalue,
+#         selected_date=selected_date,
+#         selected_confidence=selected_confidence,
+#         subfolder_labels=subfolder_labels,
+#         existing_entries=display_list
+#     )
+
 @app.route("/person_step/time/<person_id>", methods=["GET", "POST"])
 def person_step_time(person_id):
     labels_folder = "./types/time/labels"
@@ -300,7 +436,7 @@ def person_step_time(person_id):
     selected_date = request.form.get("date_value", "").strip()
     selected_confidence = request.form.get("confidence")
 
-    # --- Handle submission ---
+    # --- Handle POST submission ---
     if request.method == "POST":
         try:
             confidence_value = int(selected_confidence)
@@ -328,7 +464,7 @@ def person_step_time(person_id):
                 time_entry["subvalue"] = selected_subvalue
                 label_value = selected_subvalue
 
-            # Save to session only
+            # Save to session
             session["time_selection"] = {
                 "label": label_value,
                 "confidence": confidence_value,
@@ -341,6 +477,14 @@ def person_step_time(person_id):
             session["time_step_in_progress"] = True
 
             print(f"[DEBUG] Time label saved to session: {session['time_selection']}")
+
+            # Also: store edit index in session if editing
+            edit_index = session.get("edit_entry_index")
+            if edit_index is not None:
+                print(f"[DEBUG] Editing existing entry at index {edit_index}")
+            else:
+                print(f"[DEBUG] Adding new entry (no edit index)")
+
             return redirect("/person_iframe_wizard?step=2")
         else:
             print("[WARN] Invalid time entry submission — missing confidence or value")
@@ -371,7 +515,7 @@ def person_step_time(person_id):
                 if f.endswith(".json")
             ]
 
-    # --- Show existing time entries from person_data["entries"] ---
+    # --- Show existing time entries for context ---
     display_list = []
     for entry in person_data.get("entries", []):
         time_info = entry.get("time", {})
@@ -413,9 +557,26 @@ def person_step_dynamic(step):
             "time": session["time_selection"],
             "created": datetime.now().isoformat()
         }
-        person_data["entries"].append(new_entry)
+
+        edit_index = session.pop("edit_entry_index", None)
+        if edit_index is not None and isinstance(edit_index, int) and 0 <= edit_index < len(person_data["entries"]):
+            print(f"[INFO] Editing entry at index {edit_index}")
+            person_data["entries"][edit_index] = new_entry
+        else:
+            print(f"[INFO] Adding new entry")
+            person_data["entries"].append(new_entry)
+
         save_dict_as_json(person_file, person_data)
         session["time_step_in_progress"] = False
+
+    # if step == 0 and session.get("time_step_in_progress") and session.get("time_selection"):
+    #     new_entry = {
+    #         "time": session["time_selection"],
+    #         "created": datetime.now().isoformat()
+    #     }
+    #     person_data["entries"].append(new_entry)
+    #     save_dict_as_json(person_file, person_data)
+    #     session["time_step_in_progress"] = False
 
     # Load available type folders (excluding 'time')
     type_folders = sorted([
@@ -504,7 +665,12 @@ def person_step_dynamic(step):
                 })
 
         if new_entries and person_data.get("entries"):
-            latest = person_data["entries"][-1]
+            # latest = person_data["entries"][-1]
+            edit_index = session.get("edit_entry_index")
+            if edit_index is not None and isinstance(edit_index, int) and 0 <= edit_index < len(person_data["entries"]):
+                latest = person_data["entries"][edit_index]
+            else:
+                latest = person_data["entries"][-1]
             latest.setdefault(current_type, [])
             latest[current_type].extend(new_entries)
             save_dict_as_json(person_file, person_data)
@@ -726,10 +892,15 @@ def person_undo_archive(person_id, entry_index):
 
     return redirect(url_for("person_view", person_id=person_id))
 
+# @app.route("/person_edit_timepoint/<person_id>/<int:entry_index>")
+# def person_edit_timepoint(person_id, entry_index):
+#     # Load the file and entry, then redirect to step 1 preloaded
+#     # Optional: Implement pre-population logic here
+#     return redirect(url_for("person_step_time", person_id=person_id))
+
 @app.route("/person_edit_timepoint/<person_id>/<int:entry_index>")
 def person_edit_timepoint(person_id, entry_index):
-    # Load the file and entry, then redirect to step 1 preloaded
-    # Optional: Implement pre-population logic here
+    session["edit_entry_index"] = entry_index
     return redirect(url_for("person_step_time", person_id=person_id))
 
 

@@ -1,0 +1,31 @@
+{
+    "person_id": "Person_1752613743",
+    "name": "Test26.3.25",
+    "created": "2025-07-15T22:09:03.965766+01:00",
+    "entries": [
+        {
+            "time": {
+                "confidence": 0,
+                "date_value": "",
+                "label": "forties",
+                "label_type": "life_stage",
+                "subvalue": "forties"
+            },
+            "created": "2025-07-15T22:10:08.793554",
+            "person": [
+                {
+                    "id": "teacher",
+                    "confidence": 1,
+                    "label_type": "onet_occupation"
+                },
+                {
+                    "id": "1",
+                    "confidence": 100,
+                    "label_type": "celebea_face_hq"
+                }
+            ],
+            "status": "archived"
+        }
+    ],
+    "finalised": true
+}
