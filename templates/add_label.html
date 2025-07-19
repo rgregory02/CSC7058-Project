@@ -65,8 +65,9 @@
 <body>
 <div class="form-box">
     <h1>Add New Label</h1>
-    <div class="breadcrumb">
-        <a href="/">🏠 Home</a> → <a href="/wizard_home">Wizard</a> → <code>{{ type_name }}/{{ subfolder_name }}</code>
+    <div class="breadcrumb-buttons">
+        <a href="/" class="breadcrumb-button">🏠 Home</a>
+        <a href="{{ return_url }}" class="breadcrumb-button">↩️ Return to Wizard</a>
     </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}

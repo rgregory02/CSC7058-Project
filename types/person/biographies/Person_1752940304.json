@@ -6,31 +6,22 @@
         {
             "time": {
                 "confidence": 100,
-                "date_value": "",
-                "label": "thirties",
-                "label_type": "life_stage",
-                "subvalue": "thirties"
+                "date_value": "2025-07-23",
+                "label": "2025-07-23",
+                "label_type": "date",
+                "subvalue": ""
             },
-            "created": "2025-07-19T16:51:49.575285",
-            "buildings": [
-                {
-                    "id": "2_story_flat",
-                    "confidence": 72,
-                    "label_type": "house"
-                }
-            ],
-            "person": [
-                {
-                    "id": "plumber",
-                    "confidence": 48,
-                    "label_type": "onet_occupation"
-                },
-                {
-                    "id": "1",
-                    "confidence": 100,
-                    "label_type": "celebea_face_hq"
-                }
-            ]
+            "created": "2025-07-19T16:54:50.037056"
+        },
+        {
+            "time": {
+                "confidence": 100,
+                "date_value": "2025-07-23",
+                "label": "2025-07-23",
+                "label_type": "date",
+                "subvalue": ""
+            },
+            "created": "2025-07-19T17:02:55.548049"
         }
     ],
     "finalised": true

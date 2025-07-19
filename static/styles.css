@@ -294,3 +294,27 @@ input[type="range"] {
   border: 1px solid #cc0000;
   color: #660000;
 }
+
+.breadcrumb-buttons {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.breadcrumb-button {
+  padding: 10px 20px;
+  background: #eee;
+  border-radius: 6px;
+  text-decoration: none;
+  font-weight: bold;
+  color: #333;
+  border: 1px solid #ccc;
+  transition: background 0.2s;
+  width: fit-content;
+}
+
+.breadcrumb-button:hover {
+  background: #ddd;
+}
