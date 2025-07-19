@@ -1022,6 +1022,56 @@ def save_time_choice():
         session['person_bio_time'] = choice
     return redirect("/person_iframe_wizard?step=1")
 
+@app.route('/add_label/<type_name>/<subfolder_name>', methods=['GET', 'POST'])
+def add_label(type_name, subfolder_name):
+    labels_dir = os.path.join('types', type_name, 'labels', subfolder_name)
+    os.makedirs(labels_dir, exist_ok=True)
+
+    if request.method == 'POST':
+        label_name = request.form['label_name'].strip().replace(' ', '_').lower()
+        description = request.form.get('description', '').strip()
+        image = request.form.get('image', '').strip()
+        confidence = request.form.get('confidence', '100').strip()
+        source = request.form.get('source', 'user').strip()
+        timestamp = datetime.now(timezone.utc).isoformat()
+        extra_properties_raw = request.form.get('extra_properties', '').strip()
+
+        label_filename = f"{label_name}.json"
+        label_path = os.path.join(labels_dir, label_filename)
+
+        # Prevent duplicate labels (case-insensitive check)
+        existing_labels = [f.lower() for f in os.listdir(labels_dir) if f.endswith('.json')]
+        if label_filename.lower() in existing_labels:
+            flash("❌ A label with this name already exists in this subfolder.", "error")
+            return redirect(url_for('add_label', type_name=type_name, subfolder_name=subfolder_name))
+
+        # Parse any extra properties from user input
+        try:
+            extra_properties = json.loads(extra_properties_raw) if extra_properties_raw else {}
+        except json.JSONDecodeError:
+            flash("❌ Invalid JSON in extra properties. Please check your format.", "error")
+            return redirect(url_for('add_label', type_name=type_name, subfolder_name=subfolder_name))
+
+        # Construct the label data
+        new_label_data = {
+            "description": description,
+            "image": image,
+            "created": timestamp,
+            "properties": {
+                "value": label_name,
+                "confidence": int(confidence),
+                "source": source,
+                **extra_properties  # Add any optional metadata
+            }
+        }
+
+        with open(label_path, 'w') as f:
+            json.dump(new_label_data, f, indent=2)
+
+        flash("✅ Label added successfully!", "success")
+        return redirect(url_for('add_label', type_name=type_name, subfolder_name=subfolder_name))
+
+    return render_template('add_label.html', type_name=type_name, subfolder_name=subfolder_name)
 
 @app.route('/iframe_select/<string:type_name>')
 def iframe_select_type(type_name):

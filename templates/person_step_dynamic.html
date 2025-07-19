@@ -90,6 +90,15 @@
       color: #4B0082;
       text-decoration: underline;
     }
+    .add-label-link {
+    font-size: 0.85em;
+    margin-left: 10px;
+    text-decoration: none;
+    color: #007bff;
+  }
+    .add-label-link:hover {
+    text-decoration: underline;
+  }
   </style>
 </head>
 <body>
@@ -125,6 +134,14 @@
           </div>
         </div>
       </div>
+
+      <div class="label-group">
+        <div class="label-title">
+          {{ group.label }}
+          <a class="add-label-link"
+         href="{{ url_for('add_label', type_name=current_type, subfolder_name=group.key) }}"
+         target="_blank" title="Add new label to this group">➕ Add</a>
+        </div>
     {% endfor %}
 
     <button type="submit" class="add-entry-button">✅ Save Selections</button>

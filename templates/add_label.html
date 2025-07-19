@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Add New Label</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        body {
+            font-family: sans-serif;
+            background: #f2f2f2;
+            padding: 40px;
+        }
+        .form-box {
+            max-width: 600px;
+            margin: auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        label {
+            display: block;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+        input[type="text"], textarea, input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        .breadcrumb {
+            margin-bottom: 20px;
+        }
+        .flash {
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        .flash.error {
+            background-color: #ffdddd;
+            border: 1px solid #cc0000;
+        }
+        .flash.success {
+            background-color: #ddffdd;
+            border: 1px solid #00cc00;
+        }
+        small {
+            display: block;
+            color: #666;
+            margin-top: -15px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+<div class="form-box">
+    <h1>Add New Label</h1>
+    <div class="breadcrumb">
+        <a href="/">🏠 Home</a> → <a href="/wizard_home">Wizard</a> → <code>{{ type_name }}/{{ subfolder_name }}</code>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <form method="POST">
+        <label for="label_name">Label Name:</label>
+        <input type="text" id="label_name" name="label_name" required placeholder="e.g. Army Nurse">
+
+        <label for="description">Description (optional):</label>
+        <textarea id="description" name="description" rows="3" placeholder="What does this label represent?"></textarea>
+
+        <label for="image">Image filename or URL (optional):</label>
+        <input type="text" id="image" name="image" placeholder="e.g. nurse.jpg or https://...">
+
+        <label for="confidence">Default Confidence (0–100):</label>
+        <input type="number" id="confidence" name="confidence" min="0" max="100" value="100">
+
+        <label for="source">Source (optional):</label>
+        <input type="text" id="source" name="source" placeholder="e.g. WikiData ID, personal record">
+
+        <label for="extra_properties">Extra Properties (optional, JSON format):</label>
+        <textarea id="extra_properties" name="extra_properties" rows="4" placeholder='e.g. {"eye_colour": "green", "importance": "high"}'></textarea>
+        <small>Optional additional metadata to include in the label’s <code>properties</code>.</small>
+
+        <button type="submit">✅ Save Label</button>
+    </form>
+</div>
+</body>
+</html>
