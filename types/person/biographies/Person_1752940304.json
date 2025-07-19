@@ -1,0 +1,37 @@
+{
+    "person_id": "Person_1752940304",
+    "name": "Teddy",
+    "created": "2025-07-19T16:51:44.561152+01:00",
+    "entries": [
+        {
+            "time": {
+                "confidence": 100,
+                "date_value": "",
+                "label": "thirties",
+                "label_type": "life_stage",
+                "subvalue": "thirties"
+            },
+            "created": "2025-07-19T16:51:49.575285",
+            "buildings": [
+                {
+                    "id": "2_story_flat",
+                    "confidence": 72,
+                    "label_type": "house"
+                }
+            ],
+            "person": [
+                {
+                    "id": "plumber",
+                    "confidence": 48,
+                    "label_type": "onet_occupation"
+                },
+                {
+                    "id": "1",
+                    "confidence": 100,
+                    "label_type": "celebea_face_hq"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}
