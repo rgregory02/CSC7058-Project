@@ -93,8 +93,21 @@
 <body>
   <div class="box">
     <h1>🕰️ Step: Time</h1>
-    <div class="person-name">Name: {{ name }}</div>
-    <hr>
+<div class="person-name">Name: {{ name }}</div>
+
+{% if session.edit_entry_index is defined %}
+  <div style="color: orange; font-weight: bold; margin-bottom: 10px;">
+    ✏️ Editing Time Entry #{{ session.edit_entry_index }}
+    <form method="POST" action="{{ url_for('person_step_time', person_id=person_id) }}" style="display:inline;">
+      <input type="hidden" name="cancel_edit" value="true">
+      <button type="submit" class="back-button" style="margin-left: 12px; background-color: #dc3545;">
+        ❌ Cancel Edit
+      </button>
+    </form>
+  </div>
+{% endif %}
+
+<hr>
 
     <form method="POST">
       <label for="label_type">📅 Choose a time type:</label>
@@ -124,10 +137,8 @@
       {% if selected_label_type %}
         <label for="confidence">🎯 Confidence:</label>
         <input type="range" id="confidence" name="confidence" min="0" max="100"
-               value="{{ selected_confidence or 100 }}" oninput="updateConfidenceDisplay()" />
-        <div>
-          <span id="confidence_display">{{ selected_confidence or 100 }}</span>%
-        </div>
+                value="{{ selected_confidence | default(100, true) }}" oninput="updateConfidenceDisplay()" />
+        <span id="confidence_display">{{ selected_confidence | default(100, true) }}</span>%
         <div class="confidence-meta"><small id="confidence_level" class=""></small></div>
 
         <button type="submit" class="add-entry-button">✅ Save Time Selection</button>

@@ -1,0 +1,47 @@
+{
+    "person_id": "Person_1752952732",
+    "name": "Starbucks",
+    "created": "2025-07-19T20:18:52.841165+01:00",
+    "entries": [
+        {
+            "time": {
+                "confidence": 49,
+                "date_value": "2025-07-04",
+                "label": "2025-07-04",
+                "label_type": "date",
+                "subvalue": ""
+            },
+            "created": "2025-07-19T20:19:01.360865"
+        },
+        {
+            "time": {
+                "confidence": 100,
+                "date_value": "",
+                "label": "thirties",
+                "label_type": "life_stage",
+                "subvalue": "thirties"
+            },
+            "created": "2025-07-19T20:19:52.833772",
+            "buildings": [
+                {
+                    "id": "apartment",
+                    "confidence": 100,
+                    "label_type": "house"
+                }
+            ],
+            "person": [
+                {
+                    "id": "electrician",
+                    "confidence": 100,
+                    "label_type": "onet_occupation"
+                },
+                {
+                    "id": "1",
+                    "confidence": 100,
+                    "label_type": "celebea_face_hq"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}

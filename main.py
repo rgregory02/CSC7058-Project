@@ -308,12 +308,37 @@ def person_step_time(person_id):
     person_data = load_json_as_dict(person_file)
     name = person_data.get("name", "[Unknown]")
 
+    # Default values (for GET and POST)
     selected_label_type = request.form.get("label_type") or request.args.get("label_type", "").strip()
     selected_subvalue = request.form.get("subvalue", "").strip()
     selected_date = request.form.get("date_value", "").strip()
     selected_confidence = request.form.get("confidence")
 
-    # --- Handle POST submission ---
+    # ✅ EARLY EXIT: Handle Cancel Edit request
+    if request.method == "POST" and request.form.get("cancel_edit") == "true":
+        session.pop("edit_entry_index", None)
+        print("[DEBUG] Edit cancelled — edit_entry_index removed")
+        return redirect(url_for("person_view", person_id=person_id))
+    
+    # 🔁 Handle GET-based editing (prefill logic)
+    edit_index = request.args.get("edit_entry_index")
+    if request.method == "GET" and edit_index is not None:
+        try:
+            edit_index = int(edit_index)
+            session["edit_entry_index"] = edit_index
+            entries = person_data.get("entries", [])
+            if 0 <= edit_index < len(entries):
+                print(f"[DEBUG] Prefilling form for entry {edit_index}")
+                time_data = entries[edit_index].get("time", {})
+                selected_label_type = time_data.get("label_type", "")
+                selected_subvalue = time_data.get("subvalue", "")
+                selected_date = time_data.get("date_value", "")
+                selected_confidence = time_data.get("confidence", "")
+        except Exception as e:
+            print(f"[WARN] Could not prefill from entry {edit_index}: {e}")
+            session.pop("edit_entry_index", None)
+
+    # 📨 Handle POST (normal time selection)
     if request.method == "POST":
         try:
             confidence_value = int(selected_confidence)
@@ -341,7 +366,7 @@ def person_step_time(person_id):
                 time_entry["subvalue"] = selected_subvalue
                 label_value = selected_subvalue
 
-            # Save to session
+            # Save to session for use in next step
             session["time_selection"] = {
                 "label": label_value,
                 "confidence": confidence_value,
@@ -355,7 +380,7 @@ def person_step_time(person_id):
 
             print(f"[DEBUG] Time label saved to session: {session['time_selection']}")
 
-            # Also: store edit index in session if editing
+            # Debug edit mode
             edit_index = session.get("edit_entry_index")
             if edit_index is not None:
                 print(f"[DEBUG] Editing existing entry at index {edit_index}")
@@ -366,7 +391,7 @@ def person_step_time(person_id):
         else:
             print("[WARN] Invalid time entry submission — missing confidence or value")
 
-    # --- Load dropdown label options ---
+    # 📁 Load dropdown label options
     label_files = []
     if os.path.exists(labels_folder):
         for file in os.listdir(labels_folder):
@@ -381,7 +406,7 @@ def person_step_time(person_id):
                 except Exception as e:
                     print(f"[ERROR] Failed to load label {file}: {e}")
 
-    # --- Load sublabels for the selected label type ---
+    # 📁 Load sublabels for selected type
     subfolder_labels = []
     if selected_label_type and selected_label_type != "date":
         subfolder_path = os.path.join(labels_folder, selected_label_type)
@@ -392,7 +417,7 @@ def person_step_time(person_id):
                 if f.endswith(".json")
             ]
 
-    # --- Show existing time entries for context ---
+    # 📋 Display existing time entries
     display_list = []
     for entry in person_data.get("entries", []):
         time_info = entry.get("time", {})
@@ -439,23 +464,15 @@ def person_step_dynamic(step):
         if edit_index is not None and isinstance(edit_index, int) and 0 <= edit_index < len(person_data["entries"]):
             print(f"[INFO] Editing entry at index {edit_index}")
             person_data["entries"][edit_index] = new_entry
+            session["entry_index"] = edit_index
         else:
             print(f"[INFO] Adding new entry")
             person_data["entries"].append(new_entry)
+            session["entry_index"] = len(person_data["entries"]) - 1
 
         save_dict_as_json(person_file, person_data)
         session["time_step_in_progress"] = False
 
-    # if step == 0 and session.get("time_step_in_progress") and session.get("time_selection"):
-    #     new_entry = {
-    #         "time": session["time_selection"],
-    #         "created": datetime.now().isoformat()
-    #     }
-    #     person_data["entries"].append(new_entry)
-    #     save_dict_as_json(person_file, person_data)
-    #     session["time_step_in_progress"] = False
-
-    # Load available type folders (excluding 'time')
     type_folders = sorted([
         t for t in os.listdir("./types")
         if os.path.isdir(f"./types/{t}") and t != "time"
@@ -467,7 +484,6 @@ def person_step_dynamic(step):
     label_base_path = f"./types/{current_type}/labels"
     bio_path = f"./types/{current_type}/biographies"
 
-    # Load biography options
     biography_options = []
     if os.path.exists(bio_path):
         for f in os.listdir(bio_path):
@@ -476,7 +492,6 @@ def person_step_dynamic(step):
                 display_name = bio_id.replace("_", " ")
                 biography_options.append({"id": bio_id, "display": display_name})
 
-    # Load label groups from subfolders
     label_groups = {}
     label_groups_list = []
     seen_keys = set()
@@ -501,7 +516,7 @@ def person_step_dynamic(step):
                             label = {
                                 "id": base,
                                 "display": data.get("properties", {}).get("name", base),
-                                "label_type": key  # 👈 Track subfolder name here
+                                "label_type": key
                             }
                             if os.path.exists(img_path):
                                 label["image"] = f"/types/{current_type}/labels/{key}/{base}.jpg"
@@ -518,7 +533,6 @@ def person_step_dynamic(step):
                 label_groups[key] = label_dict
                 label_groups_list.append(label_dict)
 
-    # Handle submission
     if request.method == "POST":
         new_entries = []
 
@@ -538,26 +552,28 @@ def person_step_dynamic(step):
                 new_entries.append({
                     "id": selected_id,
                     "confidence": confidence,
-                    "label_type": key  # ✅ Store subfolder for later image display
+                    "label_type": key
                 })
 
         if new_entries and person_data.get("entries"):
-            # latest = person_data["entries"][-1]
-            edit_index = session.get("edit_entry_index")
-            if edit_index is not None and isinstance(edit_index, int) and 0 <= edit_index < len(person_data["entries"]):
-                latest = person_data["entries"][edit_index]
+            entry_index = session.get("entry_index")
+            if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
+                target_entry = person_data["entries"][entry_index]
             else:
-                latest = person_data["entries"][-1]
-            latest.setdefault(current_type, [])
-            latest[current_type].extend(new_entries)
+                target_entry = person_data["entries"][-1]
+                session["entry_index"] = len(person_data["entries"]) - 1
+
+            target_entry.setdefault(current_type, [])
+            target_entry[current_type] = new_entries
             save_dict_as_json(person_file, person_data)
 
         return redirect(url_for("person_step_dynamic", step=step + 1))
 
     existing_labels = []
     if person_data.get("entries"):
-        latest = person_data["entries"][-1]
-        existing_labels = latest.get(current_type, [])
+        entry_index = session.get("entry_index")
+        if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
+            existing_labels = person_data["entries"][entry_index].get(current_type, [])
 
     return render_template(
         "person_step_dynamic.html",

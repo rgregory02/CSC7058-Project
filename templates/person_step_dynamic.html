@@ -161,8 +161,16 @@
 
         <div class="label-options">
           {% for item in group.options %}
-            <label class="label-button">
-              <input type="radio" name="selected_id_{{ group.key }}" value="{{ item.id }}" style="display:none">
+            {% set match = None %}
+{% for existing in existing_labels %}
+  {% if existing.label_type == group.key and existing.id == item.id %}
+    {% set match = existing %}
+  {% endif %}
+{% endfor %}
+
+<label class="label-button {% if match %}selected{% endif %}">
+  <input type="radio" name="selected_id_{{ group.key }}" value="{{ item.id }}" style="display:none"
+         {% if match %}checked{% endif %}>
               {% if item.image %}
                 <img src="{{ item.image }}" alt="{{ item.display }}">
               {% endif %}
@@ -174,27 +182,61 @@
           {% endfor %}
         </div>
 
-        <div class="confidence-slider">
-          <label for="confidence_{{ group.key }}">🎯 Confidence:</label><br>
-          <input type="range" name="confidence_{{ group.key }}" id="confidence_{{ group.key }}" min="0" max="100" value="100"
-                oninput="updateConfidence('{{ group.key }}')">
-          <div class="confidence-display">
-            <span id="confidence_display_{{ group.key }}">100%</span>
-            <span id="confidence_level_{{ group.key }}">(Exact)</span>
-          </div>
-        </div>
+    {% set matched_conf = None %}
+{% for existing in existing_labels %}
+  {% if existing.label_type == group.key %}
+    {% set matched_conf = existing.confidence %}
+  {% endif %}
+{% endfor %}
 
-        <a href="{{ url_for('add_label', type_name=current_type, subfolder_name=group.key) }}?return_url={{ request.path }}"
-           class="add-label-button">
-           Can't see the label you want?<br>Click here to add a new one!
-        </a>
-      </div>
+<div class="confidence-slider">
+  <label for="confidence_{{ group.key }}">🎯 Confidence:</label><br>
+  <input type="range"
+         name="confidence_{{ group.key }}"
+         id="confidence_{{ group.key }}"
+         min="0"
+         max="100"
+         value="{{ matched_conf or 100 }}"
+         oninput="updateConfidence('{{ group.key }}')">
+
+  <div class="confidence-display">
+    <span id="confidence_display_{{ group.key }}">{{ matched_conf or 100 }}%</span>
+    <span id="confidence_level_{{ group.key }}">
+      {% if matched_conf == 100 %}
+        (Exact)
+      {% elif matched_conf is not none and matched_conf >= 67 %}
+        (High)
+      {% elif matched_conf is not none and matched_conf >= 34 %}
+        (Medium)
+      {% elif matched_conf is not none %}
+        (Low)
+      {% else %}
+        (Exact)
+      {% endif %}
+    </span>
+  </div>
+</div>
+
+  <div style="margin-top: 10px; text-align: center;">
+    <div style="margin-bottom: 10px; font-size: 0.9em; font-weight: 600; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">
+      Can’t see the label you want?
+    </div>
+  </div>
+  <a href="{{ url_for('add_label', type_name=current_type, subfolder_name=group.key) }}?return_url={{ request.path }}"
+     class="add-label-button">
+     ➕ Add a New Label
+  </a>
+</div>
     {% endfor %}
 
     <button type="submit" class="add-entry-button">✅ Save Selections</button>
     <div style="margin-top: 20px;">
       <a href="/" class="back-link">🏠 Return Home</a>
-      <a href="{{ request.args.get('return_url', url_for('person_step_dynamic', step=step|int - 1)) }}" class="back-link">🔙 Return to Last Step</a>
+      {% if prev_step is not none %}
+        <a href="{{ url_for('person_step_dynamic', step=prev_step) }}" class="back-link">🔙 Return to Last Step</a>
+      {% else %}
+        <a href="{{ url_for('person_step_time', person_id=person_id) }}" class="back-link">🔙 Return to Time Selection</a>
+{% endif %}
     </div>
   </form>
 
