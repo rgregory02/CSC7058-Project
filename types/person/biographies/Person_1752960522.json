@@ -1,0 +1,24 @@
+{
+    "person_id": "Person_1752960522",
+    "name": "Teddy",
+    "created": "2025-07-19T22:28:42.737036+01:00",
+    "entries": [
+        {
+            "time": {
+                "confidence": 0,
+                "date_value": "",
+                "label": "forties",
+                "label_type": "life_stage",
+                "subvalue": "forties"
+            },
+            "created": "2025-07-19T22:32:13.083737",
+            "buildings": [
+                {
+                    "id": "semi_detached",
+                    "confidence": 47,
+                    "label_type": "house"
+                }
+            ]
+        }
+    ]
+}

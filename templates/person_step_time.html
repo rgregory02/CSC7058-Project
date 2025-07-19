@@ -93,25 +93,25 @@
 <body>
   <div class="box">
     <h1>🕰️ Step: Time</h1>
-<div class="person-name">Name: {{ name }}</div>
+    <div class="person-name">Name: {{ name }}</div>
 
-{% if session.edit_entry_index is defined %}
-  <div style="color: orange; font-weight: bold; margin-bottom: 10px;">
-    ✏️ Editing Time Entry #{{ session.edit_entry_index }}
-    <form method="POST" action="{{ url_for('person_step_time', person_id=person_id) }}" style="display:inline;">
-      <input type="hidden" name="cancel_edit" value="true">
-      <button type="submit" class="back-button" style="margin-left: 12px; background-color: #dc3545;">
-        ❌ Cancel Edit
-      </button>
-    </form>
-  </div>
-{% endif %}
+    {% if session.edit_entry_index is defined %}
+      <div style="color: orange; font-weight: bold; margin-bottom: 10px;">
+        ✏️ Editing Time Entry #{{ session.edit_entry_index }}
+        <form method="POST" action="{{ url_for('person_step_time', person_id=person_id) }}" style="display:inline;">
+          <input type="hidden" name="cancel_edit" value="true">
+          <button type="submit" class="back-button" style="margin-left: 12px; background-color: #dc3545;">
+            ❌ Cancel Edit
+          </button>
+        </form>
+      </div>
+    {% endif %}
 
-<hr>
+    <hr>
 
     <form method="POST">
       <label for="label_type">📅 Choose a time type:</label>
-      <select id="label_type" name="label_type" required onchange="window.location.href='?label_type=' + this.value">
+      <select id="label_type" name="label_type" required onchange="this.form.submit()">
         <option value="">-- Select Time Label --</option>
         {% for label, desc in label_files %}
           <option value="{{ label }}" {% if label == selected_label_type %}selected{% endif %}>
@@ -185,7 +185,7 @@
     function updateConfidenceDisplay() {
       const slider = document.getElementById("confidence");
       const value = parseInt(slider.value || 0);
-      document.getElementById("confidence_display").textContent = value + "%";
+      document.getElementById("confidence_display").textContent = value;
 
       const level = document.getElementById("confidence_level");
       if (value === 100) {

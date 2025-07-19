@@ -1,0 +1,37 @@
+{
+    "person_id": "Person_1752956807",
+    "name": "Zelda",
+    "created": "2025-07-19T21:26:47.010402+01:00",
+    "entries": [
+        {
+            "time": {
+                "confidence": 48,
+                "date_value": "2025-07-01",
+                "label": "2025-07-01",
+                "label_type": "date",
+                "subvalue": ""
+            },
+            "created": "2025-07-19T21:30:23.755774",
+            "buildings": [
+                {
+                    "id": "apartment",
+                    "confidence": 47,
+                    "label_type": "house"
+                }
+            ],
+            "person": [
+                {
+                    "id": "electrician",
+                    "confidence": 44,
+                    "label_type": "onet_occupation"
+                },
+                {
+                    "id": "0",
+                    "confidence": 49,
+                    "label_type": "celebea_face_hq"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}

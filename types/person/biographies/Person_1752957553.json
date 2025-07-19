@@ -1,0 +1,24 @@
+{
+    "person_id": "Person_1752957553",
+    "name": "Starbucks",
+    "created": "2025-07-19T21:39:13.105848+01:00",
+    "entries": [
+        {
+            "time": {
+                "confidence": 100,
+                "date_value": "2025-08-06",
+                "label": "2025-08-06",
+                "label_type": "date",
+                "subvalue": ""
+            },
+            "created": "2025-07-19T21:39:30.797981",
+            "buildings": [
+                {
+                    "id": "2_story_flat",
+                    "confidence": 50,
+                    "label_type": "house"
+                }
+            ]
+        }
+    ]
+}

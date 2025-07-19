@@ -308,19 +308,18 @@ def person_step_time(person_id):
     person_data = load_json_as_dict(person_file)
     name = person_data.get("name", "[Unknown]")
 
-    # Default values (for GET and POST)
+    # Default values
     selected_label_type = request.form.get("label_type") or request.args.get("label_type", "").strip()
     selected_subvalue = request.form.get("subvalue", "").strip()
     selected_date = request.form.get("date_value", "").strip()
     selected_confidence = request.form.get("confidence")
 
-    # ✅ EARLY EXIT: Handle Cancel Edit request
+    # ✅ Cancel edit
     if request.method == "POST" and request.form.get("cancel_edit") == "true":
         session.pop("edit_entry_index", None)
-        print("[DEBUG] Edit cancelled — edit_entry_index removed")
         return redirect(url_for("person_view", person_id=person_id))
-    
-    # 🔁 Handle GET-based editing (prefill logic)
+
+    # ✏️ Editing via GET
     edit_index = request.args.get("edit_entry_index")
     if request.method == "GET" and edit_index is not None:
         try:
@@ -328,17 +327,29 @@ def person_step_time(person_id):
             session["edit_entry_index"] = edit_index
             entries = person_data.get("entries", [])
             if 0 <= edit_index < len(entries):
-                print(f"[DEBUG] Prefilling form for entry {edit_index}")
                 time_data = entries[edit_index].get("time", {})
                 selected_label_type = time_data.get("label_type", "")
                 selected_subvalue = time_data.get("subvalue", "")
                 selected_date = time_data.get("date_value", "")
                 selected_confidence = time_data.get("confidence", "")
-        except Exception as e:
-            print(f"[WARN] Could not prefill from entry {edit_index}: {e}")
+        except Exception:
             session.pop("edit_entry_index", None)
 
-    # 📨 Handle POST (normal time selection)
+    # ✅ NEW: Pre-fill from last entry if not editing
+    if (
+        request.method == "GET"
+        and not selected_label_type
+        and "edit_entry_index" not in session
+        and person_data.get("entries")
+    ):
+        latest_entry = person_data["entries"][-1]
+        time_data = latest_entry.get("time", {})
+        selected_label_type = time_data.get("label_type", "")
+        selected_subvalue = time_data.get("subvalue", "")
+        selected_date = time_data.get("date_value", "")
+        selected_confidence = time_data.get("confidence", "")
+
+    # 📩 Save on POST
     if request.method == "POST":
         try:
             confidence_value = int(selected_confidence)
@@ -346,8 +357,7 @@ def person_step_time(person_id):
             confidence_value = None
 
         valid_entry = (
-            confidence_value is not None and
-            (
+            confidence_value is not None and (
                 (selected_label_type == "date" and selected_date) or
                 (selected_label_type != "date" and selected_subvalue)
             )
@@ -358,7 +368,6 @@ def person_step_time(person_id):
                 "label_type": selected_label_type,
                 "confidence": confidence_value
             }
-
             if selected_label_type == "date":
                 time_entry["date_value"] = selected_date
                 label_value = selected_date
@@ -366,7 +375,6 @@ def person_step_time(person_id):
                 time_entry["subvalue"] = selected_subvalue
                 label_value = selected_subvalue
 
-            # Save to session for use in next step
             session["time_selection"] = {
                 "label": label_value,
                 "confidence": confidence_value,
@@ -378,18 +386,10 @@ def person_step_time(person_id):
             session["person_name"] = name
             session["time_step_in_progress"] = True
 
-            print(f"[DEBUG] Time label saved to session: {session['time_selection']}")
-
-            # Debug edit mode
-            edit_index = session.get("edit_entry_index")
-            if edit_index is not None:
-                print(f"[DEBUG] Editing existing entry at index {edit_index}")
-            else:
-                print(f"[DEBUG] Adding new entry (no edit index)")
+            if "entry_index" in session and "edit_entry_index" not in session:
+                session["edit_entry_index"] = session["entry_index"]
 
             return redirect("/person_iframe_wizard?step=2")
-        else:
-            print("[WARN] Invalid time entry submission — missing confidence or value")
 
     # 📁 Load dropdown label options
     label_files = []
@@ -406,7 +406,7 @@ def person_step_time(person_id):
                 except Exception as e:
                     print(f"[ERROR] Failed to load label {file}: {e}")
 
-    # 📁 Load sublabels for selected type
+    # 📁 Load sublabels
     subfolder_labels = []
     if selected_label_type and selected_label_type != "date":
         subfolder_path = os.path.join(labels_folder, selected_label_type)
@@ -417,7 +417,7 @@ def person_step_time(person_id):
                 if f.endswith(".json")
             ]
 
-    # 📋 Display existing time entries
+    # 📋 Show existing entries
     display_list = []
     for entry in person_data.get("entries", []):
         time_info = entry.get("time", {})
@@ -451,9 +451,7 @@ def person_step_dynamic(step):
     person_data = load_json_as_dict(person_file)
     person_data.setdefault("entries", [])
 
-    if step == 0 and not session.get("time_selection"):
-        return redirect(url_for("person_step_time", person_id=person_id))
-
+    # Handle new time entry
     if step == 0 and session.get("time_step_in_progress") and session.get("time_selection"):
         new_entry = {
             "time": session["time_selection"],
@@ -462,17 +460,16 @@ def person_step_dynamic(step):
 
         edit_index = session.pop("edit_entry_index", None)
         if edit_index is not None and isinstance(edit_index, int) and 0 <= edit_index < len(person_data["entries"]):
-            print(f"[INFO] Editing entry at index {edit_index}")
             person_data["entries"][edit_index] = new_entry
             session["entry_index"] = edit_index
         else:
-            print(f"[INFO] Adding new entry")
             person_data["entries"].append(new_entry)
             session["entry_index"] = len(person_data["entries"]) - 1
 
         save_dict_as_json(person_file, person_data)
         session["time_step_in_progress"] = False
 
+    # Determine label type folders
     type_folders = sorted([
         t for t in os.listdir("./types")
         if os.path.isdir(f"./types/{t}") and t != "time"
@@ -492,7 +489,6 @@ def person_step_dynamic(step):
                 display_name = bio_id.replace("_", " ")
                 biography_options.append({"id": bio_id, "display": display_name})
 
-    label_groups = {}
     label_groups_list = []
     seen_keys = set()
 
@@ -520,22 +516,22 @@ def person_step_dynamic(step):
                             }
                             if os.path.exists(img_path):
                                 label["image"] = f"/types/{current_type}/labels/{key}/{base}.jpg"
+                            if "description" in data:
+                                label["description"] = data["description"]
                             values.append(label)
                         except Exception as e:
                             print(f"[ERROR] Reading label {entry}: {e}")
 
             if values:
-                label_dict = {
+                label_groups_list.append({
                     "key": key,
                     "label": key.replace("_", " ").title(),
                     "options": values
-                }
-                label_groups[key] = label_dict
-                label_groups_list.append(label_dict)
+                })
 
+    # Handle POST: store new label selections
     if request.method == "POST":
         new_entries = []
-
         selected_bio_id = request.form.get("selected_id_biography")
         if selected_bio_id:
             new_entries.append({
@@ -558,28 +554,28 @@ def person_step_dynamic(step):
         if new_entries and person_data.get("entries"):
             entry_index = session.get("entry_index")
             if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
-                target_entry = person_data["entries"][entry_index]
-            else:
-                target_entry = person_data["entries"][-1]
-                session["entry_index"] = len(person_data["entries"]) - 1
-
-            target_entry.setdefault(current_type, [])
-            target_entry[current_type] = new_entries
-            save_dict_as_json(person_file, person_data)
+                person_data["entries"][entry_index].setdefault(current_type, [])
+                person_data["entries"][entry_index][current_type] = new_entries
+                save_dict_as_json(person_file, person_data)
 
         return redirect(url_for("person_step_dynamic", step=step + 1))
 
+    # Preload existing values
     existing_labels = []
-    if person_data.get("entries"):
-        entry_index = session.get("entry_index")
-        if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
-            existing_labels = person_data["entries"][entry_index].get(current_type, [])
+    entry_index = session.get("entry_index")
+    if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
+        existing_labels = person_data["entries"][entry_index].get(current_type, [])
+        for label in existing_labels:
+            if "label_type" not in label:
+                for group in label_groups_list:
+                    if any(opt["id"] == label["id"] for opt in group["options"]):
+                        label["label_type"] = group["key"]
+                        break
 
     return render_template(
         "person_step_dynamic.html",
         current_type=current_type,
         biography_options=biography_options,
-        label_groups=label_groups,
         label_groups_list=label_groups_list,
         existing_labels=existing_labels,
         person_id=person_id,
@@ -1035,10 +1031,12 @@ def finalise_person_bio():
     # Store for the next step
     person_name = person.get("name", "Unnamed Person")
 
-    # Optional: clear session variables
+    # Clear session variables
     session.pop("person_id", None)
     session.pop("person_name", None)
     session.pop("time_selection", None)
+    session.pop("entry_index", None)
+    session.pop("edit_entry_index", None)
 
     return render_template(
         "finalise_person_bio.html",

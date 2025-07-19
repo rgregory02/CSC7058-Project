@@ -51,7 +51,7 @@
       border-radius: 8px;
       cursor: pointer;
       width: 180px;
-      height: 160px; /* fixed height for consistency */
+      height: 160px;
       background-color: #fafafa;
       display: flex;
       flex-direction: column;
@@ -59,7 +59,7 @@
       justify-content: center;
       transition: 0.2s;
       text-align: center;
-  }
+    }
     .label-button.selected {
       border-color: #4CAF50;
       background-color: #eaffea;
@@ -75,7 +75,6 @@
       color: #666;
       margin-top: 5px;
     }
-
     .confidence-slider {
       margin-top: 12px;
       text-align: center;
@@ -85,22 +84,6 @@
       margin-top: 4px;
       text-align: center;
     }
-
-    .add-label-button {
-      display: inline-block;
-      margin-top: 10px;
-      font-size: 0.85em;
-      text-decoration: none;
-      background-color: #007bff;
-      color: white;
-      padding: 6px 12px;
-      border-radius: 6px;
-    }
-
-    .add-label-button:hover {
-      background-color: #0056b3;
-    }
-
     .add-entry-button {
       background-color: #4CAF50;
       color: white;
@@ -111,7 +94,15 @@
       font-size: 1em;
       margin-top: 20px;
     }
-
+    .back-link {
+      margin: 0 10px;
+      text-decoration: none;
+      border: 1px solid #007bff;
+      padding: 6px 12px;
+      border-radius: 4px;
+      color: #007bff;
+      background: white;
+    }
     .entry-block {
       background: #f9f9f9;
       border: 1px solid #ccc;
@@ -119,7 +110,6 @@
       margin-bottom: 10px;
       border-radius: 8px;
     }
-
     .continue-link {
       margin-top: 20px;
       display: inline-block;
@@ -127,7 +117,6 @@
       color: #4B0082;
       text-decoration: underline;
     }
-
     .confidence-exact { color: green; font-weight: bold; }
     .confidence-high { color: green; }
     .confidence-medium { color: orange; }
@@ -136,41 +125,35 @@
 </head>
 <body>
 <div class="box">
-  {% with messages = get_flashed_messages(with_categories=true) %}
-  {% if messages %}
-    {% for category, message in messages %}
-      <div class="flash {{ category }}">{{ message }}</div>
-    {% endfor %}
-  {% endif %}
-  {% endwith %}
-
   <h1>🧩 Select {{ current_type|replace('_', ' ')|title }}</h1>
   <div class="subheading">
-    {% if session.get('person_name') %}
-      <div><strong>Name:</strong> {{ session['person_name'] }}</div>
+    {% if person_name %}
+      <div><strong>Name:</strong> {{ person_name }}</div>
     {% endif %}
-    {% if session.get('time_selection') %}
-      <div><strong>Time:</strong> {{ session['time_selection'].label.replace('_', ' ')|title }}</div>
+    {% if time_selection and time_selection.label %}
+      <div><strong>Time:</strong> {{ time_selection.label.replace('_', ' ')|title }}</div>
+    {% elif time_selection and time_selection.date_value %}
+      <div><strong>Time:</strong> {{ time_selection.date_value }}</div>
     {% endif %}
   </div>
-  <form method="POST">
 
+  <form method="POST">
     {% for group in label_groups_list %}
+      {% set matched = existing_labels | selectattr('label_type', 'equalto', group.key) | list %}
+      {% set selected_id = matched[0].id if matched else None %}
+      {% set matched_conf = matched[0].confidence if matched else 100 %}
+
       <div class="label-group">
         <div class="label-title">{{ group.label.replace('_', ' ')|title }}</div>
 
         <div class="label-options">
           {% for item in group.options %}
-            {% set match = None %}
-{% for existing in existing_labels %}
-  {% if existing.label_type == group.key and existing.id == item.id %}
-    {% set match = existing %}
-  {% endif %}
-{% endfor %}
-
-<label class="label-button {% if match %}selected{% endif %}">
-  <input type="radio" name="selected_id_{{ group.key }}" value="{{ item.id }}" style="display:none"
-         {% if match %}checked{% endif %}>
+            <label class="label-button {% if item.id == selected_id %}selected{% endif %}">
+              <input type="radio"
+                     name="selected_id_{{ group.key }}"
+                     value="{{ item.id }}"
+                     style="display:none"
+                     {% if item.id == selected_id %}checked{% endif %}>
               {% if item.image %}
                 <img src="{{ item.image }}" alt="{{ item.display }}">
               {% endif %}
@@ -182,61 +165,33 @@
           {% endfor %}
         </div>
 
-    {% set matched_conf = None %}
-{% for existing in existing_labels %}
-  {% if existing.label_type == group.key %}
-    {% set matched_conf = existing.confidence %}
-  {% endif %}
-{% endfor %}
+        <div class="confidence-slider">
+          <label for="confidence_{{ group.key }}">🎯 Confidence:</label><br>
+          <input type="range"
+                 name="confidence_{{ group.key }}"
+                 id="confidence_{{ group.key }}"
+                 min="0"
+                 max="100"
+                 value="{{ matched_conf }}"
+                 oninput="updateConfidence('{{ group.key }}')">
 
-<div class="confidence-slider">
-  <label for="confidence_{{ group.key }}">🎯 Confidence:</label><br>
-  <input type="range"
-         name="confidence_{{ group.key }}"
-         id="confidence_{{ group.key }}"
-         min="0"
-         max="100"
-         value="{{ matched_conf or 100 }}"
-         oninput="updateConfidence('{{ group.key }}')">
-
-  <div class="confidence-display">
-    <span id="confidence_display_{{ group.key }}">{{ matched_conf or 100 }}%</span>
-    <span id="confidence_level_{{ group.key }}">
-      {% if matched_conf == 100 %}
-        (Exact)
-      {% elif matched_conf is not none and matched_conf >= 67 %}
-        (High)
-      {% elif matched_conf is not none and matched_conf >= 34 %}
-        (Medium)
-      {% elif matched_conf is not none %}
-        (Low)
-      {% else %}
-        (Exact)
-      {% endif %}
-    </span>
-  </div>
-</div>
-
-  <div style="margin-top: 10px; text-align: center;">
-    <div style="margin-bottom: 10px; font-size: 0.9em; font-weight: 600; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">
-      Can’t see the label you want?
-    </div>
-  </div>
-  <a href="{{ url_for('add_label', type_name=current_type, subfolder_name=group.key) }}?return_url={{ request.path }}"
-     class="add-label-button">
-     ➕ Add a New Label
-  </a>
-</div>
+          <div class="confidence-display">
+            <span id="confidence_display_{{ group.key }}">{{ matched_conf }}%</span>
+            <span id="confidence_level_{{ group.key }}"></span>
+          </div>
+        </div>
+      </div>
     {% endfor %}
 
     <button type="submit" class="add-entry-button">✅ Save Selections</button>
+
     <div style="margin-top: 20px;">
       <a href="/" class="back-link">🏠 Return Home</a>
       {% if prev_step is not none %}
         <a href="{{ url_for('person_step_dynamic', step=prev_step) }}" class="back-link">🔙 Return to Last Step</a>
       {% else %}
         <a href="{{ url_for('person_step_time', person_id=person_id) }}" class="back-link">🔙 Return to Time Selection</a>
-{% endif %}
+      {% endif %}
     </div>
   </form>
 
@@ -247,7 +202,12 @@
       {% for label in existing_labels %}
         <div>
           <strong>{{ label.id }}</strong> –
-          <span class="{% if label.confidence == 100 %}confidence-exact{% elif label.confidence >= 67 %}confidence-high{% elif label.confidence >= 34 %}confidence-medium{% else %}confidence-low{% endif %}">
+          <span class="
+            {% if label.confidence == 100 %}confidence-exact
+            {% elif label.confidence >= 67 %}confidence-high
+            {% elif label.confidence >= 34 %}confidence-medium
+            {% else %}confidence-low
+            {% endif %}">
             Confidence: {{ label.confidence }}{% if label.confidence == 100 %} (Exact){% endif %}
           </span>
         </div>
