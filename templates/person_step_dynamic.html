@@ -103,6 +103,13 @@
 </head>
 <body>
 <div class="box">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="flash {{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
   <h1>Select {{ current_type|replace('_', ' ')|title }}</h1>
   <form method="POST">
 
@@ -128,7 +135,7 @@
     <div class="confidence-slider">
       <label for="confidence_{{ group.key }}">🎯 Confidence:</label>
       <input type="range" name="confidence_{{ group.key }}" id="confidence_{{ group.key }}" min="0" max="100" value="100"
-             oninput="updateConfidence('{{ group.key }}')">
+            oninput="updateConfidence('{{ group.key }}')">
       <div class="confidence-display">
         <span id="confidence_display_{{ group.key }}">100%</span>
         <span id="confidence_level_{{ group.key }}">(Exact)</span>
@@ -136,7 +143,7 @@
     </div>
 
     <div style="margin-top: 10px; margin-bottom: 30px;">
-      <a href="{{ url_for('add_label', type_name=current_type, subfolder_name=group.key) }}"
+      <a href="{{ url_for('add_label', type_name=current_type, subfolder_name=group.key) }}?return_url={{ request.path }}"
          class="add-label-button">
          ➕ Can't see the label you want? Add your own.
       </a>

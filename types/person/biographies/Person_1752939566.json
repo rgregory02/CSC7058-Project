@@ -1,0 +1,37 @@
+{
+    "person_id": "Person_1752939566",
+    "name": "Zelda",
+    "created": "2025-07-19T16:39:26.486870+01:00",
+    "entries": [
+        {
+            "time": {
+                "confidence": 100,
+                "date_value": "",
+                "label": "thirties",
+                "label_type": "life_stage",
+                "subvalue": "thirties"
+            },
+            "created": "2025-07-19T16:39:30.213888",
+            "buildings": [
+                {
+                    "id": "17_story_house",
+                    "confidence": 100,
+                    "label_type": "house"
+                }
+            ],
+            "person": [
+                {
+                    "id": "plumber",
+                    "confidence": 23,
+                    "label_type": "onet_occupation"
+                },
+                {
+                    "id": "1",
+                    "confidence": 60,
+                    "label_type": "celebea_face_hq"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}

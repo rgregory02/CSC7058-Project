@@ -276,3 +276,21 @@ input[type="range"] {
 .add-label-button:hover {
   background-color: #1976D2;
 }
+
+.flash {
+  padding: 10px;
+  margin-bottom: 20px;
+  border-radius: 5px;
+  font-weight: bold;
+  text-align: left;
+}
+.flash.success {
+  background-color: #ddffdd;
+  border: 1px solid #00cc00;
+  color: #006600;
+}
+.flash.error {
+  background-color: #ffdddd;
+  border: 1px solid #cc0000;
+  color: #660000;
+}

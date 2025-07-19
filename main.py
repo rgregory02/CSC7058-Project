@@ -1035,24 +1035,23 @@ def add_label(type_name, subfolder_name):
         source = request.form.get('source', 'user').strip()
         timestamp = datetime.now(timezone.utc).isoformat()
         extra_properties_raw = request.form.get('extra_properties', '').strip()
+        return_url = request.form.get("return_url", "")  # <- POST form return_url
 
         label_filename = f"{label_name}.json"
         label_path = os.path.join(labels_dir, label_filename)
 
-        # Prevent duplicate labels (case-insensitive check)
+        # Prevent duplicate labels
         existing_labels = [f.lower() for f in os.listdir(labels_dir) if f.endswith('.json')]
         if label_filename.lower() in existing_labels:
             flash("❌ A label with this name already exists in this subfolder.", "error")
-            return redirect(url_for('add_label', type_name=type_name, subfolder_name=subfolder_name))
+            return redirect(request.url)
 
-        # Parse any extra properties from user input
         try:
             extra_properties = json.loads(extra_properties_raw) if extra_properties_raw else {}
         except json.JSONDecodeError:
             flash("❌ Invalid JSON in extra properties. Please check your format.", "error")
-            return redirect(url_for('add_label', type_name=type_name, subfolder_name=subfolder_name))
+            return redirect(request.url)
 
-        # Construct the label data
         new_label_data = {
             "description": description,
             "image": image,
@@ -1061,17 +1060,26 @@ def add_label(type_name, subfolder_name):
                 "value": label_name,
                 "confidence": int(confidence),
                 "source": source,
-                **extra_properties  # Add any optional metadata
+                **extra_properties
             }
         }
 
         with open(label_path, 'w') as f:
             json.dump(new_label_data, f, indent=2)
 
-        flash("✅ Label added successfully!", "success")
-        return redirect(url_for('add_label', type_name=type_name, subfolder_name=subfolder_name))
+        pretty_name = label_name.replace('_', ' ').title()
+        flash(f"✅ Label \"{pretty_name}\" added successfully!", "success")
 
-    return render_template('add_label.html', type_name=type_name, subfolder_name=subfolder_name)
+        return redirect(return_url or url_for('add_label', type_name=type_name, subfolder_name=subfolder_name))
+
+    # ✅ FIX: Grab return_url from the query string on GET
+    return_url = request.args.get("return_url") or request.referrer or ''
+    return render_template(
+        'add_label.html',
+        type_name=type_name,
+        subfolder_name=subfolder_name,
+        return_url=return_url
+    )
 
 @app.route('/iframe_select/<string:type_name>')
 def iframe_select_type(type_name):
