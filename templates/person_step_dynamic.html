@@ -107,44 +107,45 @@
   <form method="POST">
 
     {% for group in label_groups_list %}
-      <div class="label-group">
-        <div class="label-title">{{ group.label }}</div>
-        <div class="label-options">
-          {% for item in group.options %}
-            <label class="label-button">
-              <input type="radio" name="selected_id_{{ group.key }}" value="{{ item.id }}" style="display:none">
-              {% if item.image %}
-                <img src="{{ item.image }}" alt="{{ item.display }}">
-              {% endif %}
-              <div><strong>{{ item.display }}</strong></div>
-              {% if item.description %}
-                <div class="label-description">{{ item.description }}</div>
-              {% endif %}
-            </label>
-          {% endfor %}
-        </div>
+  <div class="label-group">
+    <div class="label-title">{{ group.label.replace('_', ' ')|title }}</div>
 
-        <div class="confidence-slider">
-          <label for="confidence_{{ group.key }}">🎯 Confidence:</label>
-          <input type="range" name="confidence_{{ group.key }}" id="confidence_{{ group.key }}" min="0" max="100" value="100"
-                 oninput="updateConfidence('{{ group.key }}')">
-          <div class="confidence-display">
-            <span id="confidence_display_{{ group.key }}">100%</span>
-            <span id="confidence_level_{{ group.key }}">(Exact)</span>
-          </div>
-        </div>
+    <div class="label-options">
+      {% for item in group.options %}
+        <label class="label-button">
+          <input type="radio" name="selected_id_{{ group.key }}" value="{{ item.id }}" style="display:none">
+          {% if item.image %}
+            <img src="{{ item.image }}" alt="{{ item.display }}">
+          {% endif %}
+          <div><strong>{{ item.display.replace('_', ' ')|title }}</strong></div>
+          {% if item.description %}
+            <div class="label-description">{{ item.description }}</div>
+          {% endif %}
+        </label>
+      {% endfor %}
+    </div>
+
+    <div class="confidence-slider">
+      <label for="confidence_{{ group.key }}">🎯 Confidence:</label>
+      <input type="range" name="confidence_{{ group.key }}" id="confidence_{{ group.key }}" min="0" max="100" value="100"
+             oninput="updateConfidence('{{ group.key }}')">
+      <div class="confidence-display">
+        <span id="confidence_display_{{ group.key }}">100%</span>
+        <span id="confidence_level_{{ group.key }}">(Exact)</span>
       </div>
+    </div>
 
-      <div class="label-group">
-        <div class="label-title">
-          {{ group.label }}
-          <a class="add-label-link"
-         href="{{ url_for('add_label', type_name=current_type, subfolder_name=group.key) }}"
-         target="_blank" title="Add new label to this group">➕ Add</a>
-        </div>
-    {% endfor %}
+    <div style="margin-top: 10px; margin-bottom: 30px;">
+      <a href="{{ url_for('add_label', type_name=current_type, subfolder_name=group.key) }}"
+         class="add-label-button">
+         ➕ Can't see the label you want? Add your own.
+      </a>
+    </div>
+  </div>
+{% endfor %}
 
-    <button type="submit" class="add-entry-button">✅ Save Selections</button>
+<button type="submit" class="add-entry-button">✅ Save Selections</button>
+
   </form>
 
   {% if existing_labels %}
