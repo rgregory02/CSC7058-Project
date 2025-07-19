@@ -20,22 +20,30 @@
       box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
     h1 {
-      margin-bottom: 20px;
+      margin-bottom: 10px;
       color: #333;
     }
+    .subheading {
+      margin-bottom: 20px;
+      color: #555;
+      font-size: 1em;
+    }
     .label-group {
-      margin-bottom: 40px;
-      text-align: left;
+      margin-bottom: 50px;
+      text-align: center;
     }
     .label-title {
       font-weight: bold;
       font-size: 1.1em;
       margin-bottom: 10px;
+      color: #6f42c1;
     }
     .label-options {
       display: flex;
       flex-wrap: wrap;
+      justify-content: center;
       gap: 15px;
+      margin-bottom: 10px;
     }
     .label-button {
       border: 2px solid #ccc;
@@ -43,16 +51,23 @@
       border-radius: 8px;
       cursor: pointer;
       width: 180px;
+      height: 160px; /* fixed height for consistency */
       background-color: #fafafa;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
       transition: 0.2s;
-    }
+      text-align: center;
+  }
     .label-button.selected {
       border-color: #4CAF50;
       background-color: #eaffea;
     }
     .label-button img {
       max-width: 100%;
-      height: auto;
+      max-height: 80px;
+      object-fit: contain;
       border-radius: 6px;
     }
     .label-description {
@@ -60,13 +75,32 @@
       color: #666;
       margin-top: 5px;
     }
+
     .confidence-slider {
-      margin-top: 10px;
+      margin-top: 12px;
+      text-align: center;
     }
     .confidence-display {
       font-size: 0.9em;
       margin-top: 4px;
+      text-align: center;
     }
+
+    .add-label-button {
+      display: inline-block;
+      margin-top: 10px;
+      font-size: 0.85em;
+      text-decoration: none;
+      background-color: #007bff;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 6px;
+    }
+
+    .add-label-button:hover {
+      background-color: #0056b3;
+    }
+
     .add-entry-button {
       background-color: #4CAF50;
       color: white;
@@ -75,7 +109,9 @@
       border-radius: 6px;
       cursor: pointer;
       font-size: 1em;
+      margin-top: 20px;
     }
+
     .entry-block {
       background: #f9f9f9;
       border: 1px solid #ccc;
@@ -83,6 +119,7 @@
       margin-bottom: 10px;
       border-radius: 8px;
     }
+
     .continue-link {
       margin-top: 20px;
       display: inline-block;
@@ -90,15 +127,11 @@
       color: #4B0082;
       text-decoration: underline;
     }
-    .add-label-link {
-    font-size: 0.85em;
-    margin-left: 10px;
-    text-decoration: none;
-    color: #007bff;
-  }
-    .add-label-link:hover {
-    text-decoration: underline;
-  }
+
+    .confidence-exact { color: green; font-weight: bold; }
+    .confidence-high { color: green; }
+    .confidence-medium { color: orange; }
+    .confidence-low { color: red; }
   </style>
 </head>
 <body>
@@ -109,50 +142,60 @@
       <div class="flash {{ category }}">{{ message }}</div>
     {% endfor %}
   {% endif %}
-{% endwith %}
-  <h1>Select {{ current_type|replace('_', ' ')|title }}</h1>
+  {% endwith %}
+
+  <h1>🧩 Select {{ current_type|replace('_', ' ')|title }}</h1>
+  <div class="subheading">
+    {% if session.get('person_name') %}
+      <div><strong>Name:</strong> {{ session['person_name'] }}</div>
+    {% endif %}
+    {% if session.get('time_selection') %}
+      <div><strong>Time:</strong> {{ session['time_selection'].label.replace('_', ' ')|title }}</div>
+    {% endif %}
+  </div>
   <form method="POST">
 
     {% for group in label_groups_list %}
-  <div class="label-group">
-    <div class="label-title">{{ group.label.replace('_', ' ')|title }}</div>
+      <div class="label-group">
+        <div class="label-title">{{ group.label.replace('_', ' ')|title }}</div>
 
-    <div class="label-options">
-      {% for item in group.options %}
-        <label class="label-button">
-          <input type="radio" name="selected_id_{{ group.key }}" value="{{ item.id }}" style="display:none">
-          {% if item.image %}
-            <img src="{{ item.image }}" alt="{{ item.display }}">
-          {% endif %}
-          <div><strong>{{ item.display.replace('_', ' ')|title }}</strong></div>
-          {% if item.description %}
-            <div class="label-description">{{ item.description }}</div>
-          {% endif %}
-        </label>
-      {% endfor %}
-    </div>
+        <div class="label-options">
+          {% for item in group.options %}
+            <label class="label-button">
+              <input type="radio" name="selected_id_{{ group.key }}" value="{{ item.id }}" style="display:none">
+              {% if item.image %}
+                <img src="{{ item.image }}" alt="{{ item.display }}">
+              {% endif %}
+              <div><strong>{{ item.display.replace('_', ' ')|title }}</strong></div>
+              {% if item.description %}
+                <div class="label-description">{{ item.description }}</div>
+              {% endif %}
+            </label>
+          {% endfor %}
+        </div>
 
-    <div class="confidence-slider">
-      <label for="confidence_{{ group.key }}">🎯 Confidence:</label>
-      <input type="range" name="confidence_{{ group.key }}" id="confidence_{{ group.key }}" min="0" max="100" value="100"
-            oninput="updateConfidence('{{ group.key }}')">
-      <div class="confidence-display">
-        <span id="confidence_display_{{ group.key }}">100%</span>
-        <span id="confidence_level_{{ group.key }}">(Exact)</span>
+        <div class="confidence-slider">
+          <label for="confidence_{{ group.key }}">🎯 Confidence:</label><br>
+          <input type="range" name="confidence_{{ group.key }}" id="confidence_{{ group.key }}" min="0" max="100" value="100"
+                oninput="updateConfidence('{{ group.key }}')">
+          <div class="confidence-display">
+            <span id="confidence_display_{{ group.key }}">100%</span>
+            <span id="confidence_level_{{ group.key }}">(Exact)</span>
+          </div>
+        </div>
+
+        <a href="{{ url_for('add_label', type_name=current_type, subfolder_name=group.key) }}?return_url={{ request.path }}"
+           class="add-label-button">
+           Can't see the label you want?<br>Click here to add a new one!
+        </a>
       </div>
+    {% endfor %}
+
+    <button type="submit" class="add-entry-button">✅ Save Selections</button>
+    <div style="margin-top: 20px;">
+      <a href="/" class="back-link">🏠 Return Home</a>
+      <a href="{{ request.args.get('return_url', url_for('person_step_dynamic', step=step|int - 1)) }}" class="back-link">🔙 Return to Last Step</a>
     </div>
-
-    <div style="margin-top: 10px; margin-bottom: 30px;">
-      <a href="{{ url_for('add_label', type_name=current_type, subfolder_name=group.key) }}?return_url={{ request.path }}"
-         class="add-label-button">
-         ➕ Can't see the label you want? Add your own.
-      </a>
-    </div>
-  </div>
-{% endfor %}
-
-<button type="submit" class="add-entry-button">✅ Save Selections</button>
-
   </form>
 
   {% if existing_labels %}
@@ -195,6 +238,7 @@
       level.style.color = "red";
     }
   }
+
   document.addEventListener("DOMContentLoaded", function () {
     const sliders = document.querySelectorAll("input[type=range]");
     sliders.forEach(slider => updateConfidence(slider.id.replace("confidence_", "")));
@@ -216,4 +260,3 @@
 </script>
 </body>
 </html>
-

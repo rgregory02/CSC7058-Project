@@ -275,19 +275,24 @@ def start_person_naming():
     if request.method == 'POST':
         name = request.form.get("person_name", "").strip()
 
-        # ✅ Basic validation: name must not be empty
+        # ✅ Validate that the name isn't empty
         if not name:
-            return "<p>Please enter a name.</p>"
+            flash("❌ Please enter a name.", "error")
+            return render_template(
+                "start_person_naming.html",
+                return_url=request.form.get("return_url", url_for("index"))
+            )
 
-        # 🧹 Clear previous session data
+        # 🧹 Clear old person_id if any, and store name
         session.pop('person_id', None)
         session['person_name'] = name
 
-        # 🚀 Proceed to confirmation step — file not saved yet
+        # 🚀 Go to step 0 of the wizard
         return redirect("/person_iframe_wizard?step=0")
 
-    # 🖼️ Display the name entry form
-    return render_template("start_person_naming.html")
+    # 🖼️ On GET: render the form, allow optional return_url
+    return_url = request.args.get("return_url") or request.referrer or url_for("index")
+    return render_template("start_person_naming.html", return_url=return_url)
 
 @app.route("/person_step/time/<person_id>", methods=["GET", "POST"])
 def person_step_time(person_id):
@@ -566,7 +571,8 @@ def person_step_dynamic(step):
         person_name=person_data.get("name", person_id),
         time_selection=session.get("time_selection"),
         next_step=step + 1,
-        prev_step=step - 1 if step > 0 else None
+        prev_step=step - 1 if step > 0 else None,
+        step=step
     )
 
 @app.route("/person_add_timepoint/<person_id>")

@@ -17,7 +17,8 @@ body {
 .container,
 .edit-entry-container,
 .archived-biographies-container,
-.edit-label-container {
+.edit-label-container,
+.box {
   max-width: 850px;
   margin: 0 auto 30px auto;
   background: white;
@@ -25,13 +26,14 @@ body {
   border-radius: 12px;
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease-in-out;
+  text-align: center;
 }
 
 /* 📝 HEADINGS */
 h1 {
   font-size: 28px;
   font-weight: 600;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
   color: #222;
 }
 
@@ -47,6 +49,15 @@ p {
   line-height: 1.6;
   margin-bottom: 12px;
   color: #555;
+}
+
+/* 👤 NAME + TIME DISPLAY */
+.name-time-display {
+  font-size: 18px;
+  font-weight: bold;
+  color: #6f42c1;
+  margin-top: 6px;
+  margin-bottom: 10px;
 }
 
 /* 📌 BUTTON BASE */
@@ -81,12 +92,29 @@ button,
 }
 
 .add-label-button {
-  background: #ffc107;
-  color: black;
+  display: inline-block;
+  padding: 24px 32px;              /* ↑ Increased top/bottom padding only */
+  font-size: 1.4rem;               /* ↑ Slightly bigger font */
+  font-weight: bold;
+  max-width: 280px;                /* Keeps button from getting too wide */
+  line-height: 1.8;                /* ↑ Space between lines */
+  text-align: center;
+  margin-top: auto;
+  margin-bottom: auto;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+  transition: all 0.2s ease-in-out;
 }
 
 .add-label-button:hover {
-  background: #e0a800;
+  background-color: #0056b3;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 86, 179, 0.4);
 }
 
 .delete-button {
@@ -180,15 +208,33 @@ input[type="number"] {
 }
 
 /* 🔢 CONFIDENCE SLIDER */
-input[type="range"] {
-  width: 100%;
-  margin-top: 10px;
+.confidence-slider {
+  text-align: center;
+  margin: 20px 0;
+  position: relative;
 }
 
-.range-output {
-  font-weight: bold;
-  font-size: 15px;
-  margin-top: 4px;
+.confidence-slider input[type="range"] {
+  width: 60%;
+  max-width: 400px;
+  margin: 10px auto;
+  display: block;
+}
+
+/* Tooltip bubble */
+.tooltip-bubble {
+  position: absolute;
+  top: -35px;
+  background-color: #444;
+  color: #fff;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
 }
 
 /* 🔙 BACK LINK */
@@ -210,73 +256,7 @@ input[type="range"] {
   color: white;
 }
 
-/* 📱 RESPONSIVE */
-@media (max-width: 768px) {
-  .container {
-    padding: 15px;
-    max-width: 95%;
-  }
-
-  .type-button,
-  .biography-button {
-    width: 90%;
-  }
-}
-
-.container {
-    max-width: 600px;
-    margin: auto;
-    padding: 1rem;
-}
-
-.input-field {
-    width: 100%;
-    padding: 8px;
-    font-size: 1rem;
-}
-
-.add-entry-button, .nav-button {
-    padding: 10px 20px;
-    font-size: 1rem;
-    background-color: #4CAF50;
-    border: none;
-    color: white;
-    cursor: pointer;
-    border-radius: 6px;
-    text-decoration: none;
-}
-
-
-#live-results {
-    border: 1px solid #ccc;
-    max-height: 200px;
-    overflow-y: auto;
-    background: #fff;
-    border-radius: 5px;
-    padding: 0.5rem;
-}
-#live-results div {
-    padding: 5px 10px;
-}
-#live-results div:hover {
-    background-color: #f0f0f0;
-}
-
-.add-label-button {
-  display: inline-block;
-  padding: 8px 16px;
-  background-color: #2196F3;
-  color: white;
-  text-decoration: none;
-  border-radius: 6px;
-  font-size: 0.95em;
-  transition: background-color 0.2s;
-}
-
-.add-label-button:hover {
-  background-color: #1976D2;
-}
-
+/* 💬 FLASH MESSAGES */
 .flash {
   padding: 10px;
   margin-bottom: 20px;
@@ -284,17 +264,20 @@ input[type="range"] {
   font-weight: bold;
   text-align: left;
 }
+
 .flash.success {
   background-color: #ddffdd;
   border: 1px solid #00cc00;
   color: #006600;
 }
+
 .flash.error {
   background-color: #ffdddd;
   border: 1px solid #cc0000;
   color: #660000;
 }
 
+/* 🧭 BREADCRUMB BUTTONS */
 .breadcrumb-buttons {
   display: flex;
   flex-direction: column;
@@ -317,4 +300,26 @@ input[type="range"] {
 
 .breadcrumb-button:hover {
   background: #ddd;
+}
+
+/* 🧩 SUBHEADER STYLING */
+.subheading {
+  font-size: 18px;
+  font-weight: bold;
+  margin-top: 10px;
+  margin-bottom: 10px;
+  color: #6f42c1;
+}
+
+/* 📱 RESPONSIVE */
+@media (max-width: 768px) {
+  .container {
+    padding: 15px;
+    max-width: 95%;
+  }
+
+  .type-button,
+  .biography-button {
+    width: 90%;
+  }
 }

@@ -25,7 +25,7 @@
     }
     .button-group {
       display: flex;
-      justify-content: space-between;
+      flex-direction: column;
       gap: 1rem;
       margin-top: 1.5rem;
     }
@@ -39,7 +39,6 @@
       display: inline-block;
     }
     .btn-green { background-color: #28a745; color: white; }
-    .btn-purple { background-color: #6f42c1; color: white; }
     .btn-grey { background-color: #6c757d; color: white; }
     .btn:hover { opacity: 0.9; }
 
@@ -50,18 +49,49 @@
       margin-top: -0.5rem;
       margin-bottom: 1rem;
     }
+
+    .flash {
+      padding: 10px;
+      margin-bottom: 20px;
+      border-radius: 5px;
+      text-align: left;
+    }
+    .flash.error {
+      background-color: #ffdddd;
+      border: 1px solid #cc0000;
+    }
+    .flash.success {
+      background-color: #ddffdd;
+      border: 1px solid #00cc00;
+    }
   </style>
 </head>
 <body>
   <div class="center-box">
     <h2>🌱 Start a Person Biography</h2>
+
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
     <form method="POST" onsubmit="return validateForm()">
-      <label for="person_name">Enter Name:</label><br>
+      <label for="person_name">Enter Name:</label>
       <input type="text" id="person_name" name="person_name" placeholder="e.g. Ada Lovelace" />
       <div id="error" class="error-message">Please enter a name before continuing.</div>
+
+      <!-- Optional return_url support -->
+      {% if return_url %}
+        <input type="hidden" name="return_url" value="{{ return_url }}">
+      {% endif %}
+
       <div class="button-group">
         <button type="submit" class="btn btn-green">➡️ Begin</button>
-        <a href="/" class="btn btn-grey">🏠 Cancel / Home</a>
+        <a href="{{ return_url or '/' }}" class="btn btn-grey">⬅ Back / Cancel</a>
       </div>
     </form>
   </div>
