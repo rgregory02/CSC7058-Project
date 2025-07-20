@@ -1,33 +1,33 @@
 {
-    "person_id": "Person_1753040403",
-    "name": "Teddy",
-    "created": "2025-07-20T20:40:03.153497+01:00",
+    "person_id": "Person_1753040945",
+    "name": "Sherlock Holmes",
+    "created": "2025-07-20T20:49:05.163447+01:00",
     "entries": [
         {
             "time": {
-                "label": "twenties",
-                "confidence": 21,
+                "label": "thirties",
+                "confidence": 100,
                 "label_type": "life_stage",
                 "date_value": "",
-                "subvalue": "twenties"
+                "subvalue": "thirties"
             },
-            "created": "2025-07-20T20:41:18.540321",
+            "created": "2025-07-20T20:49:16.656931",
             "buildings": [
                 {
-                    "id": "apartment",
-                    "confidence": 1,
+                    "id": "apartment123",
+                    "confidence": 100,
                     "label_type": "house"
                 }
             ],
             "person": [
                 {
-                    "id": "plumber",
+                    "id": "detective",
                     "confidence": 100,
                     "label_type": "onet_occupation"
                 },
                 {
                     "id": "1",
-                    "confidence": 99,
+                    "confidence": 100,
                     "label_type": "celebea_face_hq"
                 }
             ]
