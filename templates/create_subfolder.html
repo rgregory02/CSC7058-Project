@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Create Label Subfolder</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f5f5f5;
+      padding: 40px;
+      text-align: center;
+    }
+
+    .box {
+      background: white;
+      max-width: 600px;
+      margin: auto;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+    }
+
+    .add-entry-button {
+      background-color: #28a745;
+      color: white;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1em;
+      margin-top: 20px;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 8px 16px;
+      text-decoration: none;
+      color: #007bff;
+      border: 2px solid #007bff;
+      border-radius: 5px;
+      font-weight: bold;
+    }
+
+    .flash {
+      color: red;
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+
+    .flashes {
+      list-style: none;
+      padding: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>📂 Create New Label Subfolder</h1>
+    <p>Type: <strong>{{ type_name }}</strong></p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <ul class="flashes">
+          {% for category, message in messages %}
+            <li class="flash flash-{{ category }}">{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+
+    <form method="POST" onsubmit="return syncInternalName(event)">
+      <label for="subfolder_label"><strong>Display label (e.g. Recreational Buildings):</strong></label><br>
+      <input type="text" id="subfolder_label" name="subfolder_label" required><br><br>
+
+      <!-- Hidden field to submit internal_name -->
+      <input type="hidden" id="subfolder_name" name="subfolder_name">
+
+      {% if return_url %}
+        <input type="hidden" name="return_url" value="{{ return_url }}">
+      {% endif %}
+
+      <button type="submit" class="add-entry-button">➕ Create Subfolder</button>
+    </form>
+
+    <br>
+    {% if return_url %}
+      <a href="{{ return_url }}" class="back-link">← Return to Wizard</a>
+    {% else %}
+      <a href="/" class="back-link">🏠 Return Home</a>
+    {% endif %}
+  </div>
+
+<script>
+  function syncInternalName(event) {
+    event.preventDefault();
+
+    const label = document.getElementById("subfolder_label").value.trim();
+    if (!label) return false;
+
+    const internal = label
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]/g, '')  // remove punctuation
+      .replace(/\s+/g, '_');       // replace spaces with underscores
+
+    document.getElementById("subfolder_name").value = internal;
+
+    // Submit the form manually
+    event.target.submit();
+    return false;
+  }
+</script>
+</body>
+</html>

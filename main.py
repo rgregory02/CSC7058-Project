@@ -2,6 +2,7 @@ import os
 import json
 import shutil  # For moving files and folders
 import time  # For unique timestamps
+import re
 
 from flask import Flask, Response, jsonify, request, url_for, redirect, render_template, flash, get_flashed_messages, send_from_directory, render_template_string, session
 from markupsafe import Markup, escape
@@ -548,40 +549,50 @@ def person_step_dynamic(step):
 
     if os.path.exists(label_base_path):
         for file in os.listdir(label_base_path):
-            key = os.path.splitext(file)[0]
-            if not key or key == "undefined" or key in seen_keys:
+            # Only handle .json files
+            if not file.endswith(".json"):
                 continue
+
+            key = os.path.splitext(file)[0]
+
+            # Skip undefined, duplicates, or hidden/system files
+            if not key or key == "undefined" or key in seen_keys or key.startswith('.'):
+                continue
+
+            folder_path = os.path.join(label_base_path, key)
+            
+            # Only proceed if there's a corresponding subfolder
+            if not os.path.isdir(folder_path):
+                continue
+
             seen_keys.add(key)
 
             values = []
-            folder_path = os.path.join(label_base_path, key)
-            if os.path.isdir(folder_path):
-                for entry in os.listdir(folder_path):
-                    if entry.endswith(".json"):
-                        base = entry[:-5]
-                        json_path = os.path.join(folder_path, entry)
-                        img_path = os.path.join(folder_path, f"{base}.jpg")
-                        try:
-                            data = load_json_as_dict(json_path)
-                            label = {
-                                "id": base,
-                                "display": data.get("properties", {}).get("name", base),
-                                "label_type": key
-                            }
-                            if os.path.exists(img_path):
-                                label["image"] = f"/types/{current_type}/labels/{key}/{base}.jpg"
-                            if "description" in data:
-                                label["description"] = data["description"]
-                            values.append(label)
-                        except Exception as e:
-                            print(f"[ERROR] Reading label {entry}: {e}")
+            for entry in os.listdir(folder_path):
+                if entry.endswith(".json"):
+                    base = entry[:-5]
+                    json_path = os.path.join(folder_path, entry)
+                    img_path = os.path.join(folder_path, f"{base}.jpg")
+                    try:
+                        data = load_json_as_dict(json_path)
+                        label = {
+                            "id": base,
+                            "display": data.get("properties", {}).get("name", base),
+                            "label_type": key
+                        }
+                        if os.path.exists(img_path):
+                            label["image"] = f"/types/{current_type}/labels/{key}/{base}.jpg"
+                        if "description" in data:
+                            label["description"] = data["description"]
+                        values.append(label)
+                    except Exception as e:
+                        print(f"[ERROR] Reading label {entry}: {e}")
 
-            if values:
-                label_groups_list.append({
-                    "key": key,
-                    "label": key.replace("_", " ").title(),
-                    "options": values
-                })
+            label_groups_list.append({
+                "key": key,
+                "label": key.replace("_", " ").title(),
+                "options": values
+            })
 
     # Handle POST: store new label selections
     if request.method == "POST":
@@ -888,6 +899,54 @@ def add_label(type_name, subfolder_name):
         subfolder_name=subfolder_name,
         return_url=return_url
     )
+
+@app.route("/create_subfolder/<type_name>", methods=["GET", "POST"])
+def create_subfolder(type_name):
+    labels_dir = f"./types/{type_name}/labels"
+    return_url = request.args.get("return_url", "/")
+
+    if request.method == "POST":
+        display_label = request.form.get("subfolder_label", "").strip()
+
+        # Auto-generate internal_name (slugified)
+        internal_name = re.sub(r'\W+', '_', display_label.lower()).strip('_') if display_label else ""
+
+        if not display_label:
+            flash("Display label is required.", "error")
+            return redirect(request.url)
+
+        if not internal_name:
+            flash("Could not generate a valid internal name from display label.", "error")
+            return redirect(request.url)
+
+        subfolder_path = os.path.join(labels_dir, internal_name)
+        subfolder_json_path = os.path.join(labels_dir, f"{internal_name}.json")
+
+        try:
+            # ✅ Create subfolder if it doesn't exist
+            os.makedirs(subfolder_path, exist_ok=True)
+
+            # ✅ Create empty subfolder JSON if it doesn't exist
+            if not os.path.exists(subfolder_json_path):
+                with open(subfolder_json_path, "w") as f:
+                    json.dump([], f, indent=2)
+
+            # ✅ Create subfolder index (if not already) — this is the "big_events.json"
+            if os.path.exists(subfolder_json_path):
+                with open(subfolder_json_path, "r") as f:
+                    data = json.load(f)
+            else:
+                data = []
+
+            # ✅ If needed, you can skip writing anything else here — metadata is stored by the folder name
+            flash(f"Subfolder '{display_label}' created successfully.", "success")
+            return redirect(return_url)
+
+        except Exception as e:
+            flash(f"Error creating subfolder: {e}", "error")
+            return redirect(request.url)
+
+    return render_template("create_subfolder.html", type_name=type_name, return_url=return_url)
 
 @app.route('/iframe_select/<string:type_name>')
 def iframe_select_type(type_name):

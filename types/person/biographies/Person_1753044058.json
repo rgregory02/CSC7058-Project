@@ -1,0 +1,17 @@
+{
+    "person_id": "Person_1753044058",
+    "name": "Zelda",
+    "created": "2025-07-20T21:40:58.867271+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "twenties",
+                "confidence": 21,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "twenties"
+            },
+            "created": "2025-07-20T21:41:10.177979"
+        }
+    ]
+}
