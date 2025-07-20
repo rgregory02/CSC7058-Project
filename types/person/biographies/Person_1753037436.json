@@ -1,0 +1,37 @@
+{
+    "person_id": "Person_1753037436",
+    "name": "Testing",
+    "created": "2025-07-20T19:50:36.420102+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "twenties",
+                "confidence": 19,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "twenties"
+            },
+            "created": "2025-07-20T19:51:31.667849",
+            "buildings": [
+                {
+                    "id": "apartment123",
+                    "confidence": 1,
+                    "label_type": "house"
+                }
+            ],
+            "person": [
+                {
+                    "id": "plumber",
+                    "confidence": 100,
+                    "label_type": "onet_occupation"
+                },
+                {
+                    "id": "1",
+                    "confidence": 100,
+                    "label_type": "celebea_face_hq"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}
