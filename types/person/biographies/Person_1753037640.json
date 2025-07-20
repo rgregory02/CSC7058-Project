@@ -1,0 +1,17 @@
+{
+    "person_id": "Person_1753037640",
+    "name": "Zelda",
+    "created": "2025-07-20T19:54:00.719140+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "2025-07-01",
+                "confidence": 50,
+                "label_type": "date",
+                "date_value": "2025-07-01",
+                "subvalue": ""
+            },
+            "created": "2025-07-20T19:54:06.964983"
+        }
+    ]
+}

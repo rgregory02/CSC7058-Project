@@ -28,13 +28,16 @@
       color: #555;
       font-size: 1em;
     }
-    .label-group {
-      margin-bottom: 50px;
-      text-align: center;
+    .label-group-box {
+      border: 1px solid #ccc;
+      padding: 20px;
+      margin-bottom: 40px;
+      border-radius: 10px;
+      background: #fff;
     }
     .label-title {
       font-weight: bold;
-      font-size: 1.1em;
+      font-size: 1.2em;
       margin-bottom: 10px;
       color: #6f42c1;
     }
@@ -138,9 +141,7 @@
 
   <h1>🧩 Select {{ current_type|replace('_', ' ')|title }}</h1>
   <div class="subheading">
-    {% if person_name %}
-      <div><strong>Name:</strong> {{ person_name }}</div>
-    {% endif %}
+    {% if person_name %}<div><strong>Name:</strong> {{ person_name }}</div>{% endif %}
     {% if time_selection and time_selection.label %}
       <div><strong>Time:</strong> {{ time_selection.label.replace('_', ' ')|title }}</div>
     {% elif time_selection and time_selection.date_value %}
@@ -153,58 +154,44 @@
       {% set selected_id = existing_labels.get(group.key, {}).get('label') %}
       {% set matched_conf = existing_labels.get(group.key, {}).get('confidence', 100) %}
 
-      <div class="label-group">
+      <div class="label-group-box">
         <div class="label-title">{{ group.label.replace('_', ' ')|title }}</div>
 
         <div class="label-options">
           {% for item in group.options %}
             <label class="label-button {% if item.id == selected_id %}selected{% endif %}">
-              <input type="radio"
-                     name="selected_id_{{ group.key }}"
-                     value="{{ item.id }}"
-                     style="display:none"
-                     {% if item.id == selected_id %}checked{% endif %}>
-              {% if item.image %}
-                <img src="{{ item.image }}" alt="{{ item.display }}">
-              {% endif %}
+              <input type="radio" name="selected_id_{{ group.key }}" value="{{ item.id }}" style="display:none" {% if item.id == selected_id %}checked{% endif %}>
+              {% if item.image %}<img src="{{ item.image }}" alt="{{ item.display }}">{% endif %}
               <div><strong>{{ item.display.replace('_', ' ')|title }}</strong></div>
-              {% if item.description %}
-                <div class="label-description">{{ item.description }}</div>
-              {% endif %}
+              {% if item.description %}<div class="label-description">{{ item.description }}</div>{% endif %}
             </label>
           {% endfor %}
         </div>
 
         <div class="confidence-slider">
           <label for="confidence_{{ group.key }}">🎯 Confidence:</label><br>
-          <input type="range"
-                 name="confidence_{{ group.key }}"
-                 id="confidence_{{ group.key }}"
-                 min="0"
-                 max="100"
-                 value="{{ matched_conf }}"
-                 oninput="updateConfidence('{{ group.key }}')">
-
+          <input type="range" name="confidence_{{ group.key }}" id="confidence_{{ group.key }}" min="0" max="100" value="{{ matched_conf }}" oninput="updateConfidence('{{ group.key }}')">
           <div class="confidence-display">
             <span id="confidence_display_{{ group.key }}">{{ matched_conf }}%</span>
             <span id="confidence_level_{{ group.key }}"></span>
           </div>
         </div>
-      </div>
 
-      <div style="text-align: center; margin-top: 14px;">
-        <div style="font-size: 0.9em; color: #555; margin-bottom: 6px;">
-          Label you want to add not there?
+        <!-- Add Label link (doesn't submit the form) -->
+        <div style="text-align: center; margin-top: 14px;">
+          <a href="{{ url_for('add_label', type_name=current_type, subfolder_name=group.key, return_url=request.url) }}" class="add-entry-button" style="display: inline-block;">
+            ➕ Add a New {{ group.label.replace('_', ' ')|title }} Label
+          </a>
         </div>
-        <a href="{{ url_for('add_label', type_name=current_type, subfolder_name=group.key, return_url=request.url) }}"
-           class="add-label-button">
-          ➕ Add a New Label
-        </a>
       </div>
     {% endfor %}
 
-    <button type="submit" class="add-entry-button">✅ Save Selections</button>
+    <!-- Big Save button for all selections -->
+    <div style="text-align: center; margin-top: 30px;">
+      <button type="submit" class="add-entry-button">✅ Save All Selections</button>
+    </div>
 
+    <!-- Navigation -->
     <div style="margin-top: 20px;">
       <a href="/" class="back-link">🏠 Return Home</a>
       {% if prev_step is not none %}
@@ -215,26 +202,22 @@
     </div>
   </form>
 
-{% if existing_labels %}
-  <hr>
-  <h2>Current Selections</h2>
-  <div class="entry-block">
-    {% for label_type, data in existing_labels.items() %}
-      <div>
-        <strong>{{ data.label }}</strong> –
-        <span class="
-          {% if data.confidence == 100 %}confidence-exact
-          {% elif data.confidence >= 67 %}confidence-high
-          {% elif data.confidence >= 34 %}confidence-medium
-          {% else %}confidence-low
-          {% endif %}">
-          Confidence: {{ data.confidence }}{% if data.confidence == 100 %} (Exact){% endif %}
-        </span>
-        [{{ label_type|replace('_', ' ')|title }}]
-      </div>
-    {% endfor %}
-  </div>
-{% endif %}
+  {% if existing_labels %}
+    <hr>
+    <h2>Current Selections</h2>
+    <div class="entry-block">
+      {% for label_type, data in existing_labels.items() %}
+        <div>
+          <strong>{{ data.label }}</strong> –
+          <span class="
+            {% if data.confidence == 100 %}confidence-exact{% elif data.confidence >= 67 %}confidence-high{% elif data.confidence >= 34 %}confidence-medium{% else %}confidence-low{% endif %}">
+            Confidence: {{ data.confidence }}{% if data.confidence == 100 %} (Exact){% endif %}
+          </span>
+          [{{ label_type|replace('_', ' ')|title }}]
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
 
   {% if skip_allowed %}
     <a href="{{ url_for('person_step_dynamic', step=next_step) }}" class="continue-link">Skip this step →</a>
@@ -269,14 +252,16 @@
     const buttons = document.querySelectorAll(".label-button");
     buttons.forEach(button => {
       button.addEventListener("click", function () {
-        const group = button.querySelector("input[type=radio]").name;
+        const input = button.querySelector("input[type=radio]");
+        const group = input.name;
         buttons.forEach(btn => {
           if (btn.querySelector("input[type=radio]").name === group) {
             btn.classList.remove("selected");
+            btn.querySelector("input[type=radio]").checked = false;
           }
         });
         button.classList.add("selected");
-        button.querySelector("input[type=radio]").checked = true;
+        input.checked = true;
       });
     });
   });
