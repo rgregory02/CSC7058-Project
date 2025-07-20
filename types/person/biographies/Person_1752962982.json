@@ -1,0 +1,24 @@
+{
+    "person_id": "Person_1752962982",
+    "name": "Zelda",
+    "created": "2025-07-19T23:09:42.123096+01:00",
+    "entries": [
+        {
+            "time": {
+                "confidence": 61,
+                "date_value": "2025-07-15",
+                "label": "2025-07-15",
+                "label_type": "date",
+                "subvalue": ""
+            },
+            "created": "2025-07-19T23:09:52.098898",
+            "buildings": [
+                {
+                    "id": "semi_detached",
+                    "confidence": 41,
+                    "label_type": "house"
+                }
+            ]
+        }
+    ]
+}

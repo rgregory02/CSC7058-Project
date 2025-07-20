@@ -125,6 +125,17 @@
 </head>
 <body>
 <div class="box">
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <ul class="flashes">
+          {% for category, message in messages %}
+            <li class="flash flash-{{ category }}">{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+  {% endwith %}
+
   <h1>🧩 Select {{ current_type|replace('_', ' ')|title }}</h1>
   <div class="subheading">
     {% if person_name %}
@@ -180,6 +191,16 @@
             <span id="confidence_level_{{ group.key }}"></span>
           </div>
         </div>
+      </div>
+
+      <div style="text-align: center; margin-top: 14px;">
+        <div style="font-size: 0.9em; color: #555; margin-bottom: 6px;">
+          Label you want to add not there?
+        </div>
+        <a href="{{ url_for('add_label', type_name=current_type, subfolder_name=group.key, return_url=request.url) }}"
+           class="add-label-button">
+          ➕ Add a New Label
+        </a>
       </div>
     {% endfor %}
 

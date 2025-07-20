@@ -1,0 +1,66 @@
+{
+    "person_id": "Person_1752962640",
+    "name": "Zelda",
+    "created": "2025-07-19T23:04:00.069262+01:00",
+    "entries": [
+        {
+            "time": {
+                "confidence": 7,
+                "date_value": "2025-07-01",
+                "label": "2025-07-01",
+                "label_type": "date",
+                "subvalue": ""
+            },
+            "created": "2025-07-19T23:08:47.767845",
+            "buildings": [
+                {
+                    "id": "semi_detached",
+                    "confidence": 44,
+                    "label_type": "house"
+                }
+            ],
+            "person": [
+                {
+                    "id": "plumber",
+                    "confidence": 73,
+                    "label_type": "onet_occupation"
+                },
+                {
+                    "id": "1",
+                    "confidence": 77,
+                    "label_type": "celebea_face_hq"
+                }
+            ]
+        },
+        {
+            "time": {
+                "confidence": 52,
+                "date_value": "",
+                "label": "forties",
+                "label_type": "life_stage",
+                "subvalue": "forties"
+            },
+            "created": "2025-07-19T23:09:16.614432",
+            "buildings": [
+                {
+                    "id": "apartment",
+                    "confidence": 100,
+                    "label_type": "house"
+                }
+            ],
+            "person": [
+                {
+                    "id": "electrician",
+                    "confidence": 100,
+                    "label_type": "onet_occupation"
+                },
+                {
+                    "id": "0",
+                    "confidence": 100,
+                    "label_type": "celebea_face_hq"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}

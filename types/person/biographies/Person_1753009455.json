@@ -1,0 +1,37 @@
+{
+    "person_id": "Person_1753009455",
+    "name": "Teddy",
+    "created": "2025-07-20T12:04:15.826188+01:00",
+    "entries": [
+        {
+            "time": {
+                "confidence": 49,
+                "date_value": "2025-08-03",
+                "label": "2025-08-03",
+                "label_type": "date",
+                "subvalue": ""
+            },
+            "created": "2025-07-20T12:49:56.915020",
+            "buildings": [
+                {
+                    "id": "bungalow",
+                    "confidence": 0,
+                    "label_type": "house"
+                }
+            ],
+            "person": [
+                {
+                    "id": "teacher",
+                    "confidence": 0,
+                    "label_type": "onet_occupation"
+                },
+                {
+                    "id": "0",
+                    "confidence": 0,
+                    "label_type": "celebea_face_hq"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}
