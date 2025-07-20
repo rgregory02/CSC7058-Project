@@ -349,7 +349,7 @@ def person_step_time(person_id):
         selected_date = time_data.get("date_value", "")
         selected_confidence = time_data.get("confidence", "")
 
-    # 📩 Save on POST
+   # 📩 Save on POST
     if request.method == "POST":
         try:
             confidence_value = int(selected_confidence)
@@ -386,9 +386,25 @@ def person_step_time(person_id):
             session["person_name"] = name
             session["time_step_in_progress"] = True
 
-            if "entry_index" in session and "edit_entry_index" not in session:
-                session["edit_entry_index"] = session["entry_index"]
+            # ✅ Handle edit or new
+            edit_index = session.pop("edit_entry_index", None)
+            if edit_index is None:
+                edit_index = session.get("entry_index")
 
+            if edit_index is not None and 0 <= edit_index < len(person_data["entries"]):
+                person_data["entries"][edit_index]["time"] = session["time_selection"]
+                person_data["entries"][edit_index]["created"] = datetime.now().isoformat()
+                session["entry_index"] = edit_index
+            else:
+                new_entry = {
+                    "time": session["time_selection"],
+                    "created": datetime.now().isoformat()
+                }
+                person_data["entries"].append(new_entry)
+                session["entry_index"] = len(person_data["entries"]) - 1
+
+            # ✅ Save file and ALWAYS redirect
+            save_dict_as_json(person_file, person_data)
             return redirect("/person_iframe_wizard?step=2")
 
     # 📁 Load dropdown label options
@@ -451,22 +467,17 @@ def person_step_dynamic(step):
     person_data = load_json_as_dict(person_file)
     person_data.setdefault("entries", [])
 
-    # Handle new time entry
-    if step == 0 and session.get("time_step_in_progress") and session.get("time_selection"):
+   # Only add a new time entry if one hasn't already been added by the time route
+    if step == 0 and session.get("time_step_in_progress") and session.get("time_selection") and "entry_index" not in session:
         new_entry = {
             "time": session["time_selection"],
             "created": datetime.now().isoformat()
         }
 
-        edit_index = session.pop("edit_entry_index", None)
-        if edit_index is not None and isinstance(edit_index, int) and 0 <= edit_index < len(person_data["entries"]):
-            person_data["entries"][edit_index] = new_entry
-            session["entry_index"] = edit_index
-        else:
-            person_data["entries"].append(new_entry)
-            session["entry_index"] = len(person_data["entries"]) - 1
-
+        person_data["entries"].append(new_entry)
+        session["entry_index"] = len(person_data["entries"]) - 1
         save_dict_as_json(person_file, person_data)
+
         session["time_step_in_progress"] = False
 
     # Determine label type folders
@@ -561,16 +572,22 @@ def person_step_dynamic(step):
         return redirect(url_for("person_step_dynamic", step=step + 1))
 
     # Preload existing values
-    existing_labels = []
+    existing_labels = {}
     entry_index = session.get("entry_index")
     if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
-        existing_labels = person_data["entries"][entry_index].get(current_type, [])
-        for label in existing_labels:
+        labels_list = person_data["entries"][entry_index].get(current_type, [])
+        for label in labels_list:
             if "label_type" not in label:
                 for group in label_groups_list:
                     if any(opt["id"] == label["id"] for opt in group["options"]):
                         label["label_type"] = group["key"]
                         break
+            label_type = label.get("label_type")
+            if label_type:
+                existing_labels[label_type] = {
+                    "label": label.get("id"),
+                    "confidence": label.get("confidence", 100)
+                }
 
     return render_template(
         "person_step_dynamic.html",

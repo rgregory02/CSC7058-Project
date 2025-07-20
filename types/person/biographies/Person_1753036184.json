@@ -1,0 +1,17 @@
+{
+    "person_id": "Person_1753036184",
+    "name": "Teddy",
+    "created": "2025-07-20T19:29:44.698364+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "twenties",
+                "confidence": 19,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "twenties"
+            },
+            "created": "2025-07-20T19:29:58.310613"
+        }
+    ]
+}

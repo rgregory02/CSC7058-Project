@@ -150,9 +150,8 @@
 
   <form method="POST">
     {% for group in label_groups_list %}
-      {% set matched = existing_labels | selectattr('label_type', 'equalto', group.key) | list %}
-      {% set selected_id = matched[0].id if matched else None %}
-      {% set matched_conf = matched[0].confidence if matched else 100 %}
+      {% set selected_id = existing_labels.get(group.key, {}).get('label') %}
+      {% set matched_conf = existing_labels.get(group.key, {}).get('confidence', 100) %}
 
       <div class="label-group">
         <div class="label-title">{{ group.label.replace('_', ' ')|title }}</div>
@@ -216,25 +215,26 @@
     </div>
   </form>
 
-  {% if existing_labels %}
-    <hr>
-    <h2>Current Selections</h2>
-    <div class="entry-block">
-      {% for label in existing_labels %}
-        <div>
-          <strong>{{ label.id }}</strong> –
-          <span class="
-            {% if label.confidence == 100 %}confidence-exact
-            {% elif label.confidence >= 67 %}confidence-high
-            {% elif label.confidence >= 34 %}confidence-medium
-            {% else %}confidence-low
-            {% endif %}">
-            Confidence: {{ label.confidence }}{% if label.confidence == 100 %} (Exact){% endif %}
-          </span>
-        </div>
-      {% endfor %}
-    </div>
-  {% endif %}
+{% if existing_labels %}
+  <hr>
+  <h2>Current Selections</h2>
+  <div class="entry-block">
+    {% for label_type, data in existing_labels.items() %}
+      <div>
+        <strong>{{ data.label }}</strong> –
+        <span class="
+          {% if data.confidence == 100 %}confidence-exact
+          {% elif data.confidence >= 67 %}confidence-high
+          {% elif data.confidence >= 34 %}confidence-medium
+          {% else %}confidence-low
+          {% endif %}">
+          Confidence: {{ data.confidence }}{% if data.confidence == 100 %} (Exact){% endif %}
+        </span>
+        [{{ label_type|replace('_', ' ')|title }}]
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
 
   {% if skip_allowed %}
     <a href="{{ url_for('person_step_dynamic', step=next_step) }}" class="continue-link">Skip this step →</a>
