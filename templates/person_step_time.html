@@ -81,6 +81,10 @@
       border-radius: 6px;
       font-size: 0.95rem;
     }
+    ul {
+      list-style-type: none;
+      padding-left: 0;
+    }
   </style>
 </head>
 <body>
@@ -145,7 +149,12 @@
       <ul>
         {% set last = existing_entries[-1] %}
         <li>
-          {{ last[0]|replace('_', ' ')|title }} – Confidence:
+          {% if "-" in last[0] or last[0]|length == 10 %}
+            {{ last[0] | display_dob_uk }}
+          {% else %}
+            {{ last[0] | replace('_', ' ') | title }}
+          {% endif %}
+          – Confidence:
           <span class="{% if last[1]|int == 100 %}confidence-exact{% elif last[1]|int >= 67 %}confidence-high{% elif last[1]|int >= 34 %}confidence-medium{% else %}confidence-low{% endif %}">
             {{ last[1] }}{% if last[1]|int == 100 %} (Exact){% endif %}
           </span>
@@ -157,7 +166,12 @@
         <ul>
           {% for tag, conf in existing_entries[:-1] %}
             <li>
-              {{ tag|replace('_', ' ')|title }} – Confidence:
+              {% if "-" in tag or tag|length == 10 %}
+                {{ tag | display_dob_uk }}
+              {% else %}
+                {{ tag | replace('_', ' ') | title }}
+              {% endif %}
+              – Confidence:
               <span class="{% if conf|int == 100 %}confidence-exact{% elif conf|int >= 67 %}confidence-high{% elif conf|int >= 34 %}confidence-medium{% else %}confidence-low{% endif %}">
                 {{ conf }}{% if conf|int == 100 %} (Exact){% endif %}
               </span>

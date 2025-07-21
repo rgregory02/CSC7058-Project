@@ -27,6 +27,15 @@ def save_dict_as_json(file_path, dictionary):
         print(f"Error saving JSON file {file_path}: {e}")
         return False
 
+def uk_datetime(iso_dt):
+    """
+    Converts ISO datetime string to UK-friendly format: 'DD Month YYYY, HH:MM'.
+    """
+    try:
+        return datetime.fromisoformat(iso_dt).strftime("%d %B %Y, %H:%M")
+    except (ValueError, TypeError):
+        return iso_dt
+
 def display_dob_uk(iso_date):
     """
     Converts a date string from 'YYYY-MM-DD' to 'DD/MM/YYYY' format.

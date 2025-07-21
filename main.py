@@ -31,6 +31,7 @@ from utils import (
     get_label_description,
     enrich_label_data,
     get_icon,
+    uk_datetime,
     display_dob_uk,
     resolve_entities,
     LIFE_STAGE_ORDER
@@ -38,6 +39,9 @@ from utils import (
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'the_random_string')  # Use environment variable if available
+
+app.jinja_env.filters['uk_datetime'] = uk_datetime
+app.jinja_env.filters['display_dob_uk'] = display_dob_uk
 
 @app.route('/favicon.ico')
 def favicon():

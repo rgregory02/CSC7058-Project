@@ -199,7 +199,15 @@
         <div class="entry-date">
           <span class="timeline-dot"></span>
           <span class="chevron">▶️</span>
-          <strong>{{ entry.time.date_value or entry.time.subvalue|title or 'Unknown' }}</strong>
+          <strong>
+            {% if entry.time.date_value %}
+              {{ entry.time.date_value | display_dob_uk }}
+            {% elif entry.time.subvalue %}
+              {{ entry.time.subvalue | title }}
+            {% else %}
+              Unknown
+            {% endif %}
+          </strong>
           <div style="font-size: 0.85em; color: #555; margin-top: 4px;">
             🕒 {{ entry.created|uk_datetime }}<br>
             📝 {{ entry_summary(entry) }}
