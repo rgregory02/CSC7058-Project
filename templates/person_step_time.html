@@ -176,8 +176,10 @@
       <p><em>No time period selected yet.</em></p>
     {% endif %}
 
-    {% if request.referrer %}
+    {% if request.referrer and 'finalise_person_bio' not in request.referrer %}
       <a href="{{ request.referrer }}" class="back-button">⬅️ Return to Last Step</a>
+    {% else %}
+      <a href="{{ url_for('person_summary', person_id=person_id) }}" class="back-button">⬅️ Return to Last Step</a>
     {% endif %}
   </div>
 

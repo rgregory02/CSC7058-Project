@@ -28,7 +28,8 @@ from utils import (
     get_readable_time,
     printButton,
     prettify,
-    get_label_description
+    get_label_description,
+    enrich_label_data
 )
 
 app = Flask(__name__)
@@ -1231,10 +1232,22 @@ def finalise_person_bio():
     save_dict_as_json(file_path, person)
 
     person_name = person.get("name", "Unnamed Person")
-
-    # ✅ Get the most recent entry to show in the snapshot
     entries = person.get("entries", [])
     entry = entries[-1] if entries else {}
+
+    # ✅ Enrich all labels in the latest entry
+    for type_key, label_group in entry.items():
+        if isinstance(label_group, list):
+            enriched = []
+            for label in label_group:
+                if isinstance(label, dict) and "id" in label and "label_type" in label:
+                    # Dynamically load label metadata
+                    full = enrich_label_data(label["label_type"], label["id"])
+                    full["confidence"] = label.get("confidence", 100)
+                    enriched.append(full)
+                else:
+                    enriched.append(label)
+            entry[type_key] = enriched
 
     # Clear session variables
     session.pop("person_id", None)
@@ -1243,7 +1256,6 @@ def finalise_person_bio():
     session.pop("entry_index", None)
     session.pop("edit_entry_index", None)
 
-    # ✅ Pass `entry` to the template
     return render_template(
         "finalise_person_bio.html",
         person_id=person_id,
@@ -1251,6 +1263,31 @@ def finalise_person_bio():
         entry=entry
     )
 
+@app.route('/person_summary/<person_id>')
+def person_summary(person_id):
+    path = f"./types/person/biographies/{person_id}.json"
+    person = load_json_as_dict(path)
+    entry = person.get("entries", [])[-1] if person.get("entries") else {}
+
+    # ✅ Enrich labels
+    for type_key, label_group in entry.items():
+        if isinstance(label_group, list):
+            enriched = []
+            for label in label_group:
+                if isinstance(label, dict) and "id" in label and "label_type" in label:
+                    full = enrich_label_data(label["label_type"], label["id"])
+                    full["confidence"] = label.get("confidence", 100)
+                    enriched.append(full)
+                else:
+                    enriched.append(label)
+            entry[type_key] = enriched
+
+    return render_template(
+        "finalise_person_bio.html",
+        person_id=person_id,
+        person_name=person.get("name", "Unnamed Person"),
+        entry=entry
+    )
 
 @app.route('/person_view/<person_id>')
 def person_view(person_id):

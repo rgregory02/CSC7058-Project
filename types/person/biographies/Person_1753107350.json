@@ -1,0 +1,37 @@
+{
+    "person_id": "Person_1753107350",
+    "name": "Starbucks",
+    "created": "2025-07-21T15:15:50.899222+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "forties",
+                "confidence": 100,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "forties"
+            },
+            "created": "2025-07-21T15:26:00.108325",
+            "buildings": [
+                {
+                    "id": "bungalow",
+                    "confidence": 100,
+                    "label_type": "house"
+                },
+                {
+                    "id": "school",
+                    "confidence": 100,
+                    "label_type": "educational_buildings"
+                }
+            ],
+            "events": [
+                {
+                    "id": "graduation",
+                    "confidence": 100,
+                    "label_type": "small_events"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}

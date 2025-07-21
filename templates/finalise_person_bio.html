@@ -176,27 +176,36 @@
               else 'confidence-medium' if label.confidence >= 34
               else 'confidence-low'
             ) %}
-            <div class="label-block">
-              <strong>
-                {% if label.label_type %}
-                  {{ label.label_type.replace("_", " ")|title }}
-                {% else %}
-                  {{ label.label }}
-                {% endif %}
-              </strong>
-              {% if label.display %} — {{ label.display }}{% endif %}
-              {% if label.confidence is defined %}
-                <div class="confidence-tag {{ label_conf_class }}">
-                  Confidence: {{ label.confidence }}%
-                </div>
-              {% endif %}
-              {% if label.description %}
-                <em>{{ label.description }}</em>
-              {% endif %}
-              {% if label.image_url %}
-                <img src="{{ label.image_url }}" alt="{{ label.display }}">
-              {% endif %}
-            </div>
+    <div class="label-block">
+      <div>
+        <strong>
+          {% if label.label_type %}
+            {{ label.label_type.replace("_", " ")|title }}
+          {% else %}
+            Label
+          {% endif %}
+        </strong>
+        {% if label.display %}
+          – {{ label.display }}
+        {% elif label.label %}
+          – {{ label.label.replace("_", " ")|title }}
+        {% else %}
+          – Unnamed
+        {% endif %}
+      </div>
+
+      {% if label.confidence is defined %}
+        <div class="confidence-tag {{ label_conf_class }}">
+          Confidence: {{ label.confidence }}%
+        </div>
+      {% endif %}
+      {% if label.description %}
+        <em>{{ label.description }}</em>
+      {% endif %}
+      {% if label.image_url %}
+        <img src="{{ label.image_url }}" alt="{{ label.display or label.label }}">
+      {% endif %}
+    </div>
           {% endfor %}
         {% endif %}
       {% endfor %}
