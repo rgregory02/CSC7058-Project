@@ -54,30 +54,51 @@
       justify-content: center;
       gap: 15px;
       margin-bottom: 10px;
+      max-width: 100%;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
-    .label-button {
+    .label-card {
       border: 2px solid #ccc;
       padding: 10px;
       border-radius: 8px;
       cursor: pointer;
-      width: 180px;
-      height: 160px;
+      min-width: 160px;
+      max-width: 200px;
+      min-height: 160px;
+      height: auto;
       background-color: #fafafa;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      transition: 0.2s;
+      transition: all 0.2s ease;
       text-align: center;
+      position: relative;
     }
 
-    .label-button.selected {
+    .label-card:hover {
+      box-shadow: 0 0 6px rgba(0, 0, 0, 0.1);
+      transform: translateY(-2px);
+    }
+
+    .label-card.selected {
       border-color: #4CAF50;
       background-color: #eaffea;
     }
 
-    .label-button img {
+    .label-card.selected::after {
+      content: "\2713";
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      font-size: 1.2em;
+      color: #4CAF50;
+      font-weight: bold;
+    }
+
+    .label-card img {
       max-width: 100%;
       max-height: 80px;
       object-fit: contain;
@@ -166,121 +187,114 @@
 
 <body>
   <div class="box">
-
     {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-    <ul class="flashes">
-      {% for category, message in messages %}
-      <li class="flash flash-{{ category }}">{{ message }}</li>
-      {% endfor %}
-    </ul>
-    {% endif %}
+      {% if messages %}
+        <ul class="flashes">
+        {% for category, message in messages %}
+          <li class="flash flash-{{ category }}">{{ message }}</li>
+        {% endfor %}
+        </ul>
+      {% endif %}
     {% endwith %}
 
     <h1>🧩 Select {{ current_type|replace('_', ' ')|title }}</h1>
     <div class="subheading">
       {% if person_name %}<div><strong>Name:</strong> {{ person_name }}</div>{% endif %}
       {% if time_selection and time_selection.label %}
-      <div><strong>Time:</strong> {{ time_selection.label.replace('_', ' ')|title }}</div>
+        <div><strong>Time:</strong> {{ time_selection.label.replace('_', ' ')|title }}</div>
       {% elif time_selection and time_selection.date_value %}
-      <div><strong>Time:</strong> {{ time_selection.date_value }}</div>
+        <div><strong>Time:</strong> {{ time_selection.date_value }}</div>
       {% endif %}
     </div>
 
-<form method="POST">
-  {% for group in label_groups_list %}
-    {% set selected_id = existing_labels.get(group.key, {}).get('label') %}
-    {% set matched_conf = existing_labels.get(group.key, {}).get('confidence', 100) %}
+    <form method="POST">
+      {% for group in label_groups_list %}
+        {% set selected_id = existing_labels.get(group.key, {}).get('label') %}
+        {% set matched_conf = existing_labels.get(group.key, {}).get('confidence', 100) %}
 
-    <div class="label-group-box">
-      <div class="label-title">{{ group.label.replace('_', ' ')|title }}</div>
+        <div class="label-group-box">
+          <div class="label-title">{{ group.label.replace('_', ' ')|title }}</div>
 
-      <div class="label-options">
-        {% if group.options %}
-          {% for item in group.options %}
-            <label class="label-button {% if item.id == selected_id %}selected{% endif %}">
-              <input type="radio" name="selected_id_{{ group.key }}" value="{{ item.id }}" style="display:none" {% if item.id == selected_id %}checked{% endif %}>
-              {% if item.image %}
-                <img src="{{ item.image }}" alt="{{ item.display }}">
-              {% endif %}
-              <div><strong>{{ item.display.replace('_', ' ')|title }}</strong></div>
-              {% if item.description %}
-                <div class="label-description">{{ item.description }}</div>
-              {% endif %}
-            </label>
-          {% endfor %}
-        {% else %}
-          <div class="no-labels-message">No labels added yet for this category.</div>
-        {% endif %}
-      </div>
+          <input type="hidden" name="selected_id_{{ group.key }}" id="input_{{ group.key }}" value="{{ selected_id or '' }}">
 
-      {% if group.options %}
-        <div class="confidence-slider">
-          <label for="confidence_{{ group.key }}">🎯 Confidence:</label><br>
-          <input type="range" name="confidence_{{ group.key }}" id="confidence_{{ group.key }}" min="0" max="100"
-            value="{{ matched_conf }}" oninput="updateConfidence('{{ group.key }}')">
-          <div class="confidence-display">
-            <span id="confidence_display_{{ group.key }}">{{ matched_conf }}%</span>
-            <span id="confidence_level_{{ group.key }}"></span>
+          <div class="label-options">
+            {% if group.options %}
+              {% for item in group.options %}
+                <div class="label-card {% if selected_id == item.id %}selected{% endif %}"
+                     data-group="{{ group.key }}" data-value="{{ item.id }}"
+                     onclick="toggleLabelSelection(this)">
+                  {% if item.image %}<img src="{{ item.image }}" alt="{{ item.display }}">{% endif %}
+                  <div><strong>{{ item.display.replace('_', ' ')|title }}</strong></div>
+                  {% if item.description %}<div class="label-description">{{ item.description }}</div>{% endif %}
+                </div>
+              {% endfor %}
+            {% else %}
+              <div class="no-labels-message">No labels added yet for this category.</div>
+            {% endif %}
+          </div>
+
+          {% if group.options %}
+            <div class="confidence-slider">
+              <label for="confidence_{{ group.key }}">🎯 Confidence:</label><br>
+              <input type="range" name="confidence_{{ group.key }}" id="confidence_{{ group.key }}" min="0" max="100"
+                     value="{{ matched_conf }}" oninput="updateConfidence('{{ group.key }}')">
+              <div class="confidence-display">
+                <span id="confidence_display_{{ group.key }}">{{ matched_conf }}%</span>
+                <span id="confidence_level_{{ group.key }}"></span>
+              </div>
+            </div>
+          {% endif %}
+
+          <div style="text-align: center; margin-top: 14px;">
+            <a href="{{ url_for('add_label', type_name=current_type, subfolder_name=group.key, return_url=request.url) }}"
+               class="add-entry-button">➕ Add a New {{ group.label.replace('_', ' ')|title }} Label</a>
           </div>
         </div>
-      {% endif %}
+      {% endfor %}
 
-      <div style="text-align: center; margin-top: 14px;">
-        <a href="{{ url_for('add_label', type_name=current_type, subfolder_name=group.key, return_url=request.url) }}"
-          class="add-entry-button" style="display: inline-block;">
-          ➕ Add a New {{ group.label.replace('_', ' ')|title }} Label
+      <div style="text-align: center; margin-top: 30px;">
+        <button type="submit" class="add-entry-button">✅ Save All Selections</button>
+      </div>
+
+      <div style="text-align: center; margin-top: 30px;">
+        <a href="{{ url_for('create_subfolder', type_name=current_type) }}?return_url={{ request.path }}"
+           class="add-entry-button" style="background-color: #6c63ff;">
+          📁 Create New Label Subfolder
         </a>
       </div>
-    </div> <!-- end .label-group-box -->
-  {% endfor %}
+    </form>
 
-  <!-- Big Save button for all selections -->
-  <div style="text-align: center; margin-top: 30px;">
-    <button type="submit" class="add-entry-button">✅ Save All Selections</button>
-  </div>
-
-  <div style="text-align: center; margin-top: 30px;">
-    <a href="{{ url_for('create_subfolder', type_name=current_type) }}?return_url={{ request.path }}"
-      class="add-entry-button"
-      style="background-color: #6c63ff;">
-      📁 Create New Label Subfolder
-    </a>
-  </div>
-</form>
-
-  <!-- Navigation -->
-  <div style="margin-top: 20px;">
-    <a href="/" class="back-link">🏠 Return Home</a>
-    {% if prev_step is not none %}
-    <a href="{{ url_for('person_step_dynamic', step=prev_step) }}" class="back-link">🔙 Return to Last Step</a>
-    {% else %}
-    <a href="{{ url_for('person_step_time', person_id=person_id) }}" class="back-link">🔙 Return to Time Selection</a>
-    {% endif %}
-  </div>
-  </form>
-
-  {% if existing_labels %}
-  <hr>
-  <h2>Current Selections</h2>
-  <div class="entry-block">
-    {% for label_type, data in existing_labels.items() %}
-    <div>
-      <strong>{{ data.label }}</strong> –
-      <span
-        class="
-            {% if data.confidence == 100 %}confidence-exact{% elif data.confidence >= 67 %}confidence-high{% elif data.confidence >= 34 %}confidence-medium{% else %}confidence-low{% endif %}">
-        Confidence: {{ data.confidence }}{% if data.confidence == 100 %} (Exact){% endif %}
-      </span>
-      [{{ label_type|replace('_', ' ')|title }}]
+    <div style="margin-top: 20px; margin-bottom: 40px;">
+      <a href="/" class="back-link">🏠 Return Home</a>
+      {% if prev_step is not none %}
+        <a href="{{ url_for('person_step_dynamic', step=prev_step) }}" class="back-link">🔙 Return to Last Step</a>
+      {% else %}
+        <a href="{{ url_for('person_step_time', person_id=person_id) }}" class="back-link">🔙 Return to Time Selection</a>
+      {% endif %}
     </div>
-    {% endfor %}
-  </div>
-  {% endif %}
 
-  {% if skip_allowed %}
-  <a href="{{ url_for('person_step_dynamic', step=next_step) }}" class="continue-link">Skip this step →</a>
-  {% endif %}
+    {% if existing_labels %}
+    <hr style="margin-top: 80px; margin-bottom: 30px;">
+    <h2 style="margin-bottom: 20px; font-size: 1.3em; color: #444;">Previous Selections</h2>
+    <div class="entry-block">
+      {% for label_type, data in existing_labels.items() %}
+        <div style="margin-bottom: 12px;">
+          <span style="font-weight: bold; color: #4B0082;">
+            {{ data.label.replace('_', ' ')|title }}
+          </span>
+          –
+          <span class="{% if data.confidence == 100 %}confidence-exact{% elif data.confidence >= 67 %}confidence-high{% elif data.confidence >= 34 %}confidence-medium{% else %}confidence-low{% endif %}">
+            Confidence: {{ data.confidence }}{% if data.confidence == 100 %} (Exact){% endif %}
+          </span>
+          <span style="color: #999;">[{{ label_type.replace('_', ' ')|title }}]</span>
+        </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if skip_allowed %}
+      <a href="{{ url_for('person_step_dynamic', step=next_step) }}" class="continue-link">Skip this step →</a>
+    {% endif %}
   </div>
 
   <script>
@@ -304,27 +318,29 @@
       }
     }
 
+    function toggleLabelSelection(el) {
+      const groupKey = el.getAttribute("data-group");
+      const value = el.getAttribute("data-value");
+      const hiddenInput = document.getElementById("input_" + groupKey);
+      const currentValue = hiddenInput.value;
+      const allCards = document.querySelectorAll(`.label-card[data-group="${groupKey}"]`);
+
+      if (currentValue === value) {
+        if (confirm("Are you sure you want to unselect this label?")) {
+          hiddenInput.value = "";
+          el.classList.remove("selected");
+        }
+      } else {
+        allCards.forEach(card => card.classList.remove("selected"));
+        hiddenInput.value = value;
+        el.classList.add("selected");
+      }
+    }
+
     document.addEventListener("DOMContentLoaded", function () {
       const sliders = document.querySelectorAll("input[type=range]");
       sliders.forEach(slider => updateConfidence(slider.id.replace("confidence_", "")));
-
-      const buttons = document.querySelectorAll(".label-button");
-      buttons.forEach(button => {
-        button.addEventListener("click", function () {
-          const input = button.querySelector("input[type=radio]");
-          const group = input.name;
-          buttons.forEach(btn => {
-            if (btn.querySelector("input[type=radio]").name === group) {
-              btn.classList.remove("selected");
-              btn.querySelector("input[type=radio]").checked = false;
-            }
-          });
-          button.classList.add("selected");
-          input.checked = true;
-        });
-      });
     });
   </script>
 </body>
-
 </html>

@@ -511,17 +511,15 @@ def person_step_dynamic(step):
     person_data = load_json_as_dict(person_file)
     person_data.setdefault("entries", [])
 
-   # Only add a new time entry if one hasn't already been added by the time route
+    # Only add a new time entry if one hasn't already been added by the time route
     if step == 0 and session.get("time_step_in_progress") and session.get("time_selection") and "entry_index" not in session:
         new_entry = {
             "time": session["time_selection"],
             "created": datetime.now().isoformat()
         }
-
         person_data["entries"].append(new_entry)
         session["entry_index"] = len(person_data["entries"]) - 1
         save_dict_as_json(person_file, person_data)
-
         session["time_step_in_progress"] = False
 
     # Determine label type folders
@@ -549,22 +547,14 @@ def person_step_dynamic(step):
 
     if os.path.exists(label_base_path):
         for file in os.listdir(label_base_path):
-            # Only handle .json files
             if not file.endswith(".json"):
                 continue
-
             key = os.path.splitext(file)[0]
-
-            # Skip undefined, duplicates, or hidden/system files
             if not key or key == "undefined" or key in seen_keys or key.startswith('.'):
                 continue
-
             folder_path = os.path.join(label_base_path, key)
-            
-            # Only proceed if there's a corresponding subfolder
             if not os.path.isdir(folder_path):
                 continue
-
             seen_keys.add(key)
 
             values = []
@@ -609,19 +599,28 @@ def person_step_dynamic(step):
             key = group["key"]
             selected_id = request.form.get(f"selected_id_{key}")
             confidence = int(request.form.get(f"confidence_{key}", 80))
+
             if selected_id:
                 new_entries.append({
                     "id": selected_id,
                     "confidence": confidence,
                     "label_type": key
                 })
+            else:
+                new_entries.append({
+                    "id": None,
+                    "confidence": 0,
+                    "label_type": key
+                })
 
-        if new_entries and person_data.get("entries"):
-            entry_index = session.get("entry_index")
-            if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
-                person_data["entries"][entry_index].setdefault(current_type, [])
-                person_data["entries"][entry_index][current_type] = new_entries
-                save_dict_as_json(person_file, person_data)
+        entry_index = session.get("entry_index")
+        if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
+            cleaned_entries = [e for e in new_entries if e["id"]]
+            if cleaned_entries:
+                person_data["entries"][entry_index][current_type] = cleaned_entries
+            else:
+                person_data["entries"][entry_index].pop(current_type, None)
+            save_dict_as_json(person_file, person_data)
 
         return redirect(url_for("person_step_dynamic", step=step + 1))
 

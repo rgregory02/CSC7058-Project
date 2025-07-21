@@ -1,0 +1,18 @@
+{
+    "person_id": "Person_1753100824",
+    "name": "Teddy",
+    "created": "2025-07-21T13:27:04.278699+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "2025-07-01",
+                "confidence": 100,
+                "label_type": "date",
+                "date_value": "2025-07-01",
+                "subvalue": ""
+            },
+            "created": "2025-07-21T13:27:15.284029"
+        }
+    ],
+    "finalised": true
+}
