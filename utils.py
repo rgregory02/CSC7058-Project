@@ -60,31 +60,50 @@ def get_label_description(labels_dir, label_name):
             return f.read().strip()
     return ""
 
-import os
-import json
 
 def enrich_label_data(label_type: str, label_id: str, base_type: str = "person"):
     """
-    Loads label metadata from JSON file based on type (e.g., 'house', 'small_events') and ID.
-    Returns label details like display name, image, description, etc.
+    Attempts to enrich a label by checking both:
+    1. Subfolder-style: types/<base_type>/labels/<label_type>/<label_id>.json
+    2. List-style: types/<base_type>/labels/<label_type>.json
     """
-    label_file = f"./types/{base_type}/labels/{label_type}.json"
-    if not os.path.exists(label_file):
-        return {"id": label_id, "label_type": label_type, "label": label_id}
 
-    with open(label_file, "r") as f:
-        label_list = json.load(f)
+    # 1. Try subfolder-style
+    subfolder_path = f"./types/{base_type}/labels/{label_type}/{label_id}.json"
+    if os.path.exists(subfolder_path):
+        with open(subfolder_path, "r") as f:
+            label = json.load(f)
+        return {
+            "id": label_id,
+            "label_type": label_type,
+            "label": label.get("label", label_id),
+            "display": label.get("display", label.get("label", label_id)),
+            "description": label.get("description"),
+            "image_url": label.get("image_url"),
+            "properties": label.get("properties"),
+        }
 
-    for label in label_list:
-        if label.get("id") == label_id:
-            return {
-                "id": label_id,
-                "label_type": label_type,
-                "label": label.get("label", label_id),
-                "display": label.get("display", label.get("label", label_id)),
-                "description": label.get("description"),
-                "image_url": label.get("image_url"),
-                "properties": label.get("properties"),
-            }
+    # 2. Try list-style
+    list_path = f"./types/{base_type}/labels/{label_type}.json"
+    if os.path.exists(list_path):
+        with open(list_path, "r") as f:
+            label_list = json.load(f)
 
-    return {"id": label_id, "label_type": label_type, "label": label_id}
+        for label in label_list:
+            if label.get("id") == label_id:
+                return {
+                    "id": label_id,
+                    "label_type": label_type,
+                    "label": label.get("label", label_id),
+                    "display": label.get("display", label.get("label", label_id)),
+                    "description": label.get("description"),
+                    "image_url": label.get("image_url"),
+                    "properties": label.get("properties"),
+                }
+
+    # 3. Fallback
+    return {
+        "id": label_id,
+        "label_type": label_type,
+        "label": label_id,
+    }

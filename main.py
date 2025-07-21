@@ -1237,15 +1237,15 @@ def finalise_person_bio():
 
     # ✅ Enrich all labels in the latest entry
     for type_key, label_group in entry.items():
-        if isinstance(label_group, list):
+        if isinstance(label_group, list) and all(isinstance(l, dict) for l in label_group):
             enriched = []
             for label in label_group:
-                if isinstance(label, dict) and "id" in label and "label_type" in label:
-                    # Dynamically load label metadata
+                try:
                     full = enrich_label_data(label["label_type"], label["id"])
                     full["confidence"] = label.get("confidence", 100)
                     enriched.append(full)
-                else:
+                except Exception as e:
+                    print(f"Error enriching label: {label} - {e}")
                     enriched.append(label)
             entry[type_key] = enriched
 

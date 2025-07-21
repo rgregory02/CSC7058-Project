@@ -185,13 +185,13 @@
             Label
           {% endif %}
         </strong>
-        {% if label.display %}
-          – {{ label.display }}
-        {% elif label.label %}
-          – {{ label.label.replace("_", " ")|title }}
-        {% else %}
-          – Unnamed
-        {% endif %}
+          {% set display_text = (
+              label.display
+              or label.label
+              or label.id
+              or 'Unnamed'
+          ) %}
+          – {{ display_text.replace("_", " ")|title }}
       </div>
 
       {% if label.confidence is defined %}
