@@ -340,13 +340,11 @@ def person_step_time(person_id):
     person_data = load_json_as_dict(person_file)
     name = person_data.get("name", "[Unknown]")
 
-    # Start with blank defaults
     selected_label_type = ""
     selected_subvalue = ""
     selected_date = ""
     selected_confidence = ""
 
-    # If editing via GET
     edit_index = request.args.get("edit_entry_index")
     if request.method == "GET" and edit_index is not None:
         try:
@@ -362,14 +360,12 @@ def person_step_time(person_id):
         except Exception:
             session.pop("edit_entry_index", None)
 
-    # If returning from POST
     if request.method == "POST":
         selected_label_type = request.form.get("label_type") or selected_label_type
         selected_subvalue = request.form.get("subvalue") or selected_subvalue
         selected_date = request.form.get("date_value") or selected_date
         selected_confidence = request.form.get("confidence") or selected_confidence
 
-    # If not editing, but previous entry exists
     if (
         request.method == "GET"
         and not selected_label_type
@@ -383,47 +379,10 @@ def person_step_time(person_id):
         selected_date = time_data.get("date_value", "")
         selected_confidence = time_data.get("confidence", "")
 
-    # ✅ Cancel edit
     if request.method == "POST" and request.form.get("cancel_edit") == "true":
         session.pop("edit_entry_index", None)
         return redirect(url_for("person_view", person_id=person_id))
 
-    # ✏️ Editing via GET
-    edit_index = request.args.get("edit_entry_index")
-    if request.method == "GET" and edit_index is not None:
-        try:
-            edit_index = int(edit_index)
-            session["edit_entry_index"] = edit_index
-            entries = person_data.get("entries", [])
-            if 0 <= edit_index < len(entries):
-                time_data = entries[edit_index].get("time", {})
-                selected_label_type = time_data.get("label_type", "")
-                selected_subvalue = time_data.get("subvalue", "")
-                selected_date = time_data.get("date_value", "")
-                selected_confidence = time_data.get("confidence", "")
-            else:
-                session.pop("edit_entry_index", None)
-        except Exception:
-            session.pop("edit_entry_index", None)
-
-    elif "edit_entry_index" not in request.args:
-        session.pop("edit_entry_index", None)
-
-    # ✅ NEW: Pre-fill from last entry if not editing
-    if (
-        request.method == "GET"
-        and not selected_label_type
-        and "edit_entry_index" not in session
-        and person_data.get("entries")
-    ):
-        latest_entry = person_data["entries"][-1]
-        time_data = latest_entry.get("time", {})
-        selected_label_type = time_data.get("label_type", "")
-        selected_subvalue = time_data.get("subvalue", "")
-        selected_date = time_data.get("date_value", "")
-        selected_confidence = time_data.get("confidence", "")
-
-    # 📩 Save on POST
     if request.method == "POST":
         try:
             confidence_value = int(selected_confidence)
@@ -479,7 +438,6 @@ def person_step_time(person_id):
             save_dict_as_json(person_file, person_data)
             return redirect("/person_iframe_wizard?step=2")
 
-    # 📁 Load dropdown label options
     label_files = []
     if os.path.exists(labels_folder):
         for file in os.listdir(labels_folder):
@@ -494,7 +452,6 @@ def person_step_time(person_id):
                 except Exception as e:
                     print(f"[ERROR] Failed to load label {file}: {e}")
 
-    # 📁 Load sublabels with descriptions for display
     subfolder_labels = []
     if selected_label_type and selected_label_type != "date":
         subfolder_path = os.path.join(labels_folder, selected_label_type)
@@ -511,10 +468,8 @@ def person_step_time(person_id):
                             })
                     except Exception as e:
                         print(f"[ERROR] Failed to load sublabel {f}: {e}")
-            # Sort by order if available
             subfolder_labels.sort(key=lambda x: (x.get("order", 999), x["name"]))
 
-    # 📋 Show existing entries
     display_list = []
     for entry in person_data.get("entries", []):
         time_info = entry.get("time", {})
@@ -532,7 +487,8 @@ def person_step_time(person_id):
         selected_date=selected_date,
         selected_confidence=selected_confidence,
         subfolder_labels=subfolder_labels,
-        existing_entries=display_list
+        existing_entries=display_list,
+        edit_entry_index=session.get("edit_entry_index")
     )
 
 @app.route("/person_step/dynamic/<int:step>", methods=["GET", "POST"])

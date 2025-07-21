@@ -214,8 +214,8 @@
           </div>
         </div>
         <div class="entry-actions">
-          <a href="{{ url_for('person_step_time', person_id=person_id) }}?edit_entry_index={{ loop.index0 }}" class="edit-btn">✏️ Edit</a>
-          <a href="#" onclick="confirmDelete({{ loop.index0 }})" class="delete-btn">🗑️ Archive</a>
+          <a href="{{ url_for('person_step_time', person_id=person_id) }}?edit_entry_index={{ entry.original_index }}" class="edit-btn">✏️ Edit</a>
+          <a href="#" onclick="confirmDelete({{ entry.original_index }})" class="delete-btn">🗑️ Archive</a>
         </div>
       </div>
       <div class="entry-content">
@@ -256,30 +256,30 @@
   </div>
 
   <script>
-  function toggleEntry(index) {
-    const entry = document.getElementById('entry-' + index);
-    const chevron = entry.querySelector('.chevron');
-    entry.classList.toggle('expanded');
-    chevron.textContent = entry.classList.contains('expanded') ? '🔽' : '▶️';
-  }
-
-  function toggleAll(expand) {
-    const entries = document.querySelectorAll('.entry-block');
-    entries.forEach(entry => {
-      entry.classList.toggle('expanded', expand);
+    function toggleEntry(index) {
+      const entry = document.getElementById('entry-' + index);
       const chevron = entry.querySelector('.chevron');
-      if (chevron) {
-        chevron.textContent = expand ? '🔽' : '▶️';
-      }
-    });
-  }
-
-  function confirmDelete(index) {
-    if (confirm('Are you sure you want to archive this time period?')) {
-      window.location.href = "/person_delete_entry/{{ person_id }}/" + index;
+      entry.classList.toggle('expanded');
+      chevron.textContent = entry.classList.contains('expanded') ? '🔽' : '▶️';
     }
-  }
-</script>
+
+    function toggleAll(expand) {
+      const entries = document.querySelectorAll('.entry-block');
+      entries.forEach(entry => {
+        entry.classList.toggle('expanded', expand);
+        const chevron = entry.querySelector('.chevron');
+        if (chevron) {
+          chevron.textContent = expand ? '🔽' : '▶️';
+        }
+      });
+    }
+
+    function confirmDelete(index) {
+      if (confirm('Are you sure you want to archive this time period?')) {
+        window.location.href = "/person_delete_entry/{{ person_id }}/" + index;
+      }
+    }
+  </script>
 </body>
 
 </html>
