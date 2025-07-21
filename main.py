@@ -528,7 +528,7 @@ def person_step_dynamic(step):
         if os.path.isdir(f"./types/{t}") and t != "time"
     ])
     if step >= len(type_folders):
-        return redirect(url_for("finalise_person_bio"))
+        return redirect(url_for("add_type_prompt"))
 
     current_type = type_folders[step]
     label_base_path = f"./types/{current_type}/labels"
@@ -656,6 +656,90 @@ def person_step_dynamic(step):
         prev_step=step - 1 if step > 0 else None,
         step=step
     )
+
+@app.route("/person_step/add_type_prompt", methods=["GET", "POST"])
+def add_type_prompt():
+    person_id = session.get("person_id")
+    if not person_id:
+        return redirect(url_for("person_iframe_wizard", step="0"))
+
+    person_file = f"./types/person/biographies/{person_id}.json"
+    if not os.path.exists(person_file):
+        return f"Person file {person_id} not found", 404
+
+    person_data = load_json_as_dict(person_file)
+
+    if request.method == "POST":
+        new_type_name = request.form.get("new_type_name", "").strip().lower().replace(" ", "_")
+
+        if not new_type_name:
+            flash("Type name cannot be empty.", "error")
+            return redirect(request.url)
+
+        new_type_path = os.path.join("types", new_type_name)
+        labels_path = os.path.join(new_type_path, "labels")
+        biographies_path = os.path.join(new_type_path, "biographies")
+
+        if os.path.exists(new_type_path):
+            flash(f"Type '{new_type_name}' already exists.", "error")
+            return redirect(request.url)
+
+        try:
+            os.makedirs(labels_path)
+            os.makedirs(biographies_path)
+            flash(f"New type '{new_type_name}' created successfully.", "success")
+
+            # Determine step index based on alphabetical order of types
+            all_types = sorted([
+                t for t in os.listdir("types")
+                if os.path.isdir(os.path.join("types", t)) and t != "time"
+            ])
+            step_index = all_types.index(new_type_name)
+
+            return redirect(url_for(
+                'create_subfolder',
+                type_name=new_type_name,
+                return_url=url_for('person_step_dynamic', step=step_index)
+            ))
+
+        except Exception as e:
+            flash(f"Error creating type: {e}", "error")
+            return redirect(request.url)
+
+    return render_template(
+        "add_type_prompt.html",
+        person_id=person_id,
+        person_name=person_data.get("name", person_id)
+    )
+
+# Updated version of create_type to support return_to_wizard flag
+@app.route('/create_type', methods=['GET', 'POST'])
+def create_type():
+    return_to_wizard = request.args.get("return_to_wizard")
+
+    if request.method == 'POST':
+        type_name = request.form.get('type_name', '').strip().lower().replace(" ", "_")
+        label_folder = f"./types/{type_name}/labels"
+        bio_folder = f"./types/{type_name}/biographies"
+
+        os.makedirs(label_folder, exist_ok=True)
+        os.makedirs(bio_folder, exist_ok=True)
+
+        flash(f"New type '{type_name}' created successfully!", "success")
+
+        if return_to_wizard:
+            # Refresh session step list and jump back into wizard flow
+            type_folders = sorted([
+                t for t in os.listdir("./types")
+                if os.path.isdir(f"./types/{t}") and t != "time"
+            ])
+            session["type_folders"] = type_folders
+            new_step = type_folders.index(type_name) if type_name in type_folders else 0
+            return redirect(url_for("person_step_dynamic", step=new_step))
+        else:
+            return redirect(url_for('index'))
+
+    return render_template('create_type.html', return_to_wizard=return_to_wizard)
 
 @app.route("/person_add_timepoint/<person_id>")
 def person_add_timepoint(person_id):
