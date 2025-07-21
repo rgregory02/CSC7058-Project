@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <title>Time Period Created – {{ person_name }}</title>
@@ -11,37 +12,77 @@
       text-align: center;
       padding: 60px 20px;
     }
+
     .box {
       background: #ffffff;
       max-width: 700px;
       margin: auto;
       padding: 50px 40px;
       border-radius: 14px;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.1);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
     }
+
     h1 {
       color: #2e7d32;
       margin-bottom: 10px;
       font-size: 2em;
     }
+
     .celebration {
       font-size: 2.5em;
       margin-bottom: 20px;
     }
+
     .details {
       font-size: 1.1em;
       margin-bottom: 30px;
       color: #444;
     }
+
     .details strong {
       color: #000;
     }
+
+    .entry-block {
+      background-color: #f9f9f9;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 30px;
+      text-align: left;
+      max-width: 600px;
+      margin: 0 auto 30px auto;
+    }
+
+    .entry-block h3 {
+      color: #2e7d32;
+      margin-top: 0;
+    }
+
+    .confidence-tag {
+      font-style: italic;
+      margin-left: 8px;
+    }
+
+    .confidence-high {
+      color: green;
+    }
+
+    .confidence-medium {
+      color: orange;
+    }
+
+    .confidence-low {
+      color: red;
+    }
+
     .actions {
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
       gap: 20px;
     }
+
     .actions a {
       padding: 12px 24px;
       border-radius: 8px;
@@ -50,24 +91,47 @@
       font-weight: bold;
       transition: all 0.2s ease;
     }
+
     .actions a.primary {
       background-color: #4CAF50;
       color: white;
     }
+
     .actions a.secondary {
       background-color: #888;
       color: white;
     }
+
     .actions a.tertiary {
       background-color: #6c63ff;
       color: white;
     }
+
     .actions a:hover {
       opacity: 0.9;
       transform: translateY(-2px);
     }
+
+    .label-block {
+      border-left: 4px solid #ccc;
+      padding-left: 12px;
+      margin-bottom: 10px;
+    }
+
+    .label-block img {
+      max-height: 80px;
+      margin-top: 6px;
+      border-radius: 6px;
+    }
+
+    .label-block em {
+      font-size: 0.9em;
+      color: #555;
+      display: block;
+    }
   </style>
 </head>
+
 <body>
   <div class="box">
     <div class="celebration">🕰️</div>
@@ -76,6 +140,66 @@
     <div class="details">
       <p><strong>Name:</strong> {{ person_name }}</p>
       <p><strong>ID:</strong> {{ person_id }}</p>
+    </div>
+
+    <!-- Determine class for time confidence -->
+    {% set time_confidence_class = (
+        'confidence-high' if entry.time.confidence >= 67
+        else 'confidence-medium' if entry.time.confidence >= 34
+        else 'confidence-low'
+    ) %}
+
+    <div class="entry-block">
+      <h3>📝 Snapshot of This Entry</h3>
+
+      <!-- Time -->
+      <p><strong>Time:</strong>
+        {% if entry.time.date_value %}
+          {{ entry.time.date_value|uk_date }}
+        {% elif entry.time.subvalue %}
+          {{ entry.time.subvalue|title }}
+        {% else %}
+          Unknown
+        {% endif %}
+        <span class="confidence-tag {{ time_confidence_class }}">
+          (Confidence: {{ entry.time.confidence }}%)
+        </span>
+      </p>
+
+      <!-- Labels Per Type -->
+      {% for type_key, type_data in entry.items() %}
+        {% if type_key not in ["time", "created", "status"] %}
+          <h4 style="margin-top: 20px;">{{ type_key|replace("_", " ")|title }}</h4>
+          {% for label in type_data if label is mapping %}
+            {% set label_conf_class = (
+              'confidence-high' if label.confidence >= 67
+              else 'confidence-medium' if label.confidence >= 34
+              else 'confidence-low'
+            ) %}
+            <div class="label-block">
+              <strong>
+                {% if label.label_type %}
+                  {{ label.label_type.replace("_", " ")|title }}
+                {% else %}
+                  {{ label.label }}
+                {% endif %}
+              </strong>
+              {% if label.display %} — {{ label.display }}{% endif %}
+              {% if label.confidence is defined %}
+                <div class="confidence-tag {{ label_conf_class }}">
+                  Confidence: {{ label.confidence }}%
+                </div>
+              {% endif %}
+              {% if label.description %}
+                <em>{{ label.description }}</em>
+              {% endif %}
+              {% if label.image_url %}
+                <img src="{{ label.image_url }}" alt="{{ label.display }}">
+              {% endif %}
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endfor %}
     </div>
 
     <div class="actions">

@@ -1230,8 +1230,11 @@ def finalise_person_bio():
     person["finalised"] = True
     save_dict_as_json(file_path, person)
 
-    # Store for the next step
     person_name = person.get("name", "Unnamed Person")
+
+    # ✅ Get the most recent entry to show in the snapshot
+    entries = person.get("entries", [])
+    entry = entries[-1] if entries else {}
 
     # Clear session variables
     session.pop("person_id", None)
@@ -1240,10 +1243,12 @@ def finalise_person_bio():
     session.pop("entry_index", None)
     session.pop("edit_entry_index", None)
 
+    # ✅ Pass `entry` to the template
     return render_template(
         "finalise_person_bio.html",
         person_id=person_id,
-        person_name=person_name
+        person_name=person_name,
+        entry=entry
     )
 
 
