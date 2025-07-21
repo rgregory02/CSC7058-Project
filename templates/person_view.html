@@ -21,15 +21,26 @@
       box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1);
     }
 
-    h1 {
-      font-size: 2em;
-      margin-bottom: 5px;
+    .header-box {
+      background: #e9f4ff;
+      padding: 20px;
+      border-radius: 10px;
       text-align: center;
+      margin-bottom: 25px;
+    }
+
+    .header-box h1 {
+      margin: 0;
+      font-size: 2em;
+    }
+
+    .header-box h1 strong {
+      color: #007bff;
     }
 
     .subtitle {
-      text-align: center;
-      font-size: 0.9em;
+      margin-top: 6px;
+      font-size: 0.85em;
       color: #555;
     }
 
@@ -45,32 +56,51 @@
     }
 
     .entry-block {
-      background-color: #fafafa;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 0;
+      background-color: #f0f8ff;
+      border-radius: 6px;
       margin-bottom: 20px;
       position: relative;
       overflow: hidden;
-      transition: all 0.4s ease;
+      padding-left: 40px;
+    }
+
+    .entry-block::before {
+      content: "";
+      position: absolute;
+      top: 12px;
+      bottom: 0;
+      left: 18px;
+      width: 2px;
+      background: #007bff;
+      z-index: 0;
     }
 
     .entry-header {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      background-color: #e8f0fe;
+      align-items: flex-start;
       padding: 16px;
+      background-color: #e8f0fe;
       cursor: pointer;
     }
 
     .entry-date {
-      font-weight: bold;
-      font-size: 1.1em;
+      flex-grow: 1;
     }
 
     .chevron {
+      margin-right: 6px;
+    }
+
+    .timeline-dot {
+      height: 12px;
+      width: 12px;
+      background-color: #007bff;
+      border-radius: 50%;
+      display: inline-block;
       margin-right: 8px;
+      position: relative;
+      z-index: 1;
     }
 
     .entry-content {
@@ -153,16 +183,27 @@
 
 <body>
   <div class="card">
-    <h1>Viewing Person: {{ person_name }}</h1>
-    <div class="subtitle">ID: {{ person_id }}</div>
+    <div class="header-box">
+      <h1>📘 Life of <strong>{{ person_name }}</strong></h1>
+      <div class="subtitle">🆔 ID: {{ person_id }}</div>
+      <div style="margin-top: 10px;">
+        <button onclick="toggleAll(true)" class="btn">🟢 Expand All</button>
+        <button onclick="toggleAll(false)" class="btn btn-secondary">🙈 Collapse All</button>
+      </div>
+    </div>
 
     {% if entries %}
     {% for entry in entries %}
     <div class="entry-block collapsed" id="entry-{{ loop.index0 }}">
       <div class="entry-header" onclick="toggleEntry({{ loop.index0 }})">
         <div class="entry-date">
+          <span class="timeline-dot"></span>
           <span class="chevron">▶️</span>
-          {{ entry.time.date_value or entry.time.subvalue|title or 'Unknown' }}
+          <strong>{{ entry.time.date_value or entry.time.subvalue|title or 'Unknown' }}</strong>
+          <div style="font-size: 0.85em; color: #555; margin-top: 4px;">
+            🕒 {{ entry.created|uk_datetime }}<br>
+            📝 {{ entry_summary(entry) }}
+          </div>
         </div>
         <div class="entry-actions">
           <a href="{{ url_for('person_step_time', person_id=person_id) }}?edit_entry_index={{ loop.index0 }}" class="edit-btn">✏️ Edit</a>
@@ -170,26 +211,31 @@
         </div>
       </div>
       <div class="entry-content">
-        <p><strong>Entry created:</strong> {{ entry.created|uk_datetime }}</p>
-{% for key, value in entry.items() %}
-  {% if key not in ["time", "created", "status"] and value %}
-    {% if value is iterable and value is not string %}
-      {% for item in value %}
-        <div class="label-info">
-          <strong>{{ item.label_type.replace("_", " ")|title }}</strong>
-          {% if item.display %}<div>{{ item.display }}</div>{% endif %}
-          {% if item.confidence is defined %}
-          <div class="confidence-tag {% if item.confidence >= 67 %}confidence-high{% elif item.confidence >= 34 %}confidence-medium{% else %}confidence-low{% endif %}">
-            – Confidence: {{ item.confidence }}%
-          </div>
+        {% for key, value in entry.items() %}
+          {% if key not in ["time", "created", "status"] and value %}
+            {% if value is iterable and value is not string %}
+              <div class="label-group">
+                <h4>{{ key.replace("_", " ")|title }}</h4>
+                {% for item in value %}
+                  <div class="label-info">
+                    <strong>
+                      <span class="label-icon">{{ get_icon(item.label_type) }}</span>
+                      {{ item.label_type.replace("_", " ")|title }}
+                    </strong>
+                    {% if item.display %}<div>{{ item.display }}</div>{% endif %}
+                    {% if item.confidence is defined %}
+                    <div class="confidence-tag {% if item.confidence >= 67 %}confidence-high{% elif item.confidence >= 34 %}confidence-medium{% else %}confidence-low{% endif %}">
+                      – Confidence: {{ item.confidence }}%
+                    </div>
+                    {% endif %}
+                    {% if item.image_url %}<img src="{{ item.image_url }}" alt="{{ item.display }}">{% endif %}
+                    {% if item.description %}<em>{{ item.description }}</em>{% endif %}
+                  </div>
+                {% endfor %}
+              </div>
+            {% endif %}
           {% endif %}
-          {% if item.image_url %}<img src="{{ item.image_url }}" alt="{{ item.display }}">{% endif %}
-          {% if item.description %}<em>{{ item.description }}</em>{% endif %}
-        </div>
-      {% endfor %}
-    {% endif %}
-  {% endif %}
-{% endfor %}
+        {% endfor %}
       </div>
     </div>
     {% endfor %}
@@ -207,6 +253,17 @@
     const chevron = entry.querySelector('.chevron');
     entry.classList.toggle('expanded');
     chevron.textContent = entry.classList.contains('expanded') ? '🔽' : '▶️';
+  }
+
+  function toggleAll(expand) {
+    const entries = document.querySelectorAll('.entry-block');
+    entries.forEach(entry => {
+      entry.classList.toggle('expanded', expand);
+      const chevron = entry.querySelector('.chevron');
+      if (chevron) {
+        chevron.textContent = expand ? '🔽' : '▶️';
+      }
+    });
   }
 
   function confirmDelete(index) {

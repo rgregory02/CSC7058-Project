@@ -107,3 +107,25 @@ def enrich_label_data(label_type: str, label_id: str, base_type: str = "person")
         "label_type": label_type,
         "label": label_id,
     }
+
+def get_icon(label_type):
+    """
+    Returns a small emoji or icon string based on label type or subfolder name.
+    """
+    if not label_type:
+        return "🔖"
+    label_type = label_type.lower()
+    return {
+        "house": "🏠",
+        "school": "🏫",
+        "university": "🎓",
+        "job": "💼",
+        "onet_occupation": "💼",
+        "location": "📍",
+        "event": "📅",
+        "face": "🧑",
+        "celebea_face_hq": "🧑‍🎤",
+        "vehicle": "🚗",
+        "organisation": "🏢",
+        "friend": "🧑‍🤝‍🧑",
+    }.get(label_type, "🔖")

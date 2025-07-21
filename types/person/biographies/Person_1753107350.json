@@ -91,6 +91,40 @@
                     "label_type": "car"
                 }
             ]
+        },
+        {
+            "time": {
+                "label": "thirties",
+                "confidence": 29,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "thirties"
+            },
+            "created": "2025-07-21T17:20:47.097674",
+            "buildings": [
+                {
+                    "id": "bungalow",
+                    "confidence": 47,
+                    "label_type": "house"
+                },
+                {
+                    "id": "cathedral",
+                    "confidence": 29,
+                    "label_type": "religious"
+                }
+            ],
+            "person": [
+                {
+                    "id": "1",
+                    "confidence": 35,
+                    "label_type": "celebea_face_hq"
+                },
+                {
+                    "id": "detective",
+                    "confidence": 100,
+                    "label_type": "onet_occupation"
+                }
+            ]
         }
     ],
     "finalised": true

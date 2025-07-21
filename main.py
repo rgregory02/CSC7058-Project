@@ -29,7 +29,8 @@ from utils import (
     printButton,
     prettify,
     get_label_description,
-    enrich_label_data
+    enrich_label_data,
+    get_icon
 )
 
 app = Flask(__name__)
@@ -1292,6 +1293,22 @@ def person_summary(person_id):
 @app.route('/person_view/<person_id>')
 def person_view(person_id):
     from flask import request
+
+    def entry_summary(entry):
+        """
+        Generates a comma-separated summary string from a given biography entry.
+        Prioritises 'display' > 'label' > 'id' and prettifies the output.
+        """
+        summary = []
+        for key, values in entry.items():
+            if key not in ["time", "created", "status"] and isinstance(values, list):
+                for v in values:
+                    if isinstance(v, dict):
+                        label = v.get("display") or v.get("label") or v.get("id")
+                        if label:
+                            summary.append(label.replace("_", " ").title())
+        return ", ".join(summary)
+
     type_name = "person"
     person_file = f"./types/{type_name}/biographies/{person_id}.json"
 
@@ -1325,7 +1342,7 @@ def person_view(person_id):
         else:
             entries.append(entry_obj)
 
-    # ✅ Add these:
+    # Debugging info
     print(f"Show archived flag: {show_archived}")
     print(f"Archived entries for {person_id}: {len(archived_entries)}")
 
@@ -1335,7 +1352,9 @@ def person_view(person_id):
         person_name=person_name,
         entries=entries,
         archived_entries=archived_entries,
-        show_archived=show_archived
+        show_archived=show_archived,
+        entry_summary=entry_summary,  # ✅ Injected for Jinja use
+        get_icon=get_icon
     )
 
 def resolve_entities(entry_type, entity_list):
