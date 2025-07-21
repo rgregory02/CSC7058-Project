@@ -15,13 +15,20 @@
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
       text-align: center;
     }
-    input[type="text"] {
+    input[type="text"],
+    input[type="date"] {
       width: 100%;
       padding: 10px;
       margin: 1rem 0;
       font-size: 1rem;
       border-radius: 6px;
       border: 1px solid #ccc;
+    }
+    label {
+      font-weight: bold;
+      display: block;
+      text-align: left;
+      margin-top: 1rem;
     }
     .button-group {
       display: flex;
@@ -82,9 +89,13 @@
     <form method="POST" onsubmit="return validateForm()">
       <label for="person_name">Enter Name:</label>
       <input type="text" id="person_name" name="person_name" placeholder="e.g. Ada Lovelace" />
-      <div id="error" class="error-message">Please enter a name before continuing.</div>
 
-      <!-- Optional return_url support -->
+      <label for="dob">Enter Date of Birth:</label>
+      <input type="date" id="dob" name="dob" placeholder="dd/mm/yyyy" pattern="\d{4}-\d{2}-\d{2}" />
+      <small style="color: #666;">📅 Format: Day/Month/Year — but use the calendar picker</small>
+
+      <div id="error" class="error-message">Please complete both fields before continuing.</div>
+
       {% if return_url %}
         <input type="hidden" name="return_url" value="{{ return_url }}">
       {% endif %}
@@ -98,12 +109,16 @@
 
   <script>
     function validateForm() {
-      const input = document.getElementById("person_name");
+      const nameInput = document.getElementById("person_name");
+      const dobInput = document.getElementById("dob");
       const error = document.getElementById("error");
-      if (!input.value.trim()) {
+
+      if (!nameInput.value.trim() || !dobInput.value.trim()) {
         error.style.display = "block";
         return false;
       }
+
+      error.style.display = "none";
       return true;
     }
   </script>

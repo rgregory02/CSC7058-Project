@@ -1,0 +1,11 @@
+{
+    "description":"The period in your life between the ages of 50 and 59",
+    "order": 9,
+    "properties":{
+        "age_range": {
+            "type": "string",
+            "enum": ["50-59"],
+            "description": "Age range for the fifties stage"
+        }
+    }
+}

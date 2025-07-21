@@ -1,0 +1,18 @@
+{
+    "description":"The period in your life between the ages of 4 and 9",
+    "order": 3,
+    "properties":{
+        "age_range": {
+            "type": "string",
+            "enum": ["4-9"],
+            "description": "Age range for the childhood stage"
+        },
+        "milestones": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "description": "Key developmental milestones for children"
+        }
+    }
+}

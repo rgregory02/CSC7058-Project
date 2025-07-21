@@ -30,7 +30,6 @@
       color: #6f42c1;
       margin-bottom: 15px;
     }
-
     label {
       display: block;
       margin-top: 20px;
@@ -46,7 +45,6 @@
       border: 1px solid #ccc;
       border-radius: 8px;
     }
-
     .add-entry-button {
       background-color: #28a745;
       color: white;
@@ -57,27 +55,22 @@
       font-size: 1rem;
       margin-top: 10px;
     }
-
     .section-title {
       margin-top: 30px;
       font-weight: bold;
       font-size: 1.2em;
       color: #333;
     }
-
     .confidence-exact { color: green; font-weight: bold; }
     .confidence-high { color: green; }
     .confidence-medium { color: orange; }
     .confidence-low { color: red; }
-
     .confidence-meta {
       font-size: 0.9rem;
     }
-
     .icon {
       margin-right: 6px;
     }
-
     .back-button {
       display: inline-block;
       margin-top: 25px;
@@ -127,8 +120,8 @@
         <label for="subvalue">📚 Select a value:</label>
         <select id="subvalue" name="subvalue">
           {% for item in subfolder_labels %}
-            <option value="{{ item }}" {% if item == selected_subvalue %}selected{% endif %}>
-              {{ item|replace('_', ' ')|title }}
+            <option value="{{ item.name }}" {% if item.name == selected_subvalue %}selected{% endif %}>
+              {{ item.name|replace('_', ' ')|title }}{% if item.description %} – {{ item.description }}{% endif %}
             </option>
           {% endfor %}
         </select>

@@ -27,7 +27,15 @@ def save_dict_as_json(file_path, dictionary):
         print(f"Error saving JSON file {file_path}: {e}")
         return False
 
-
+def display_dob_uk(iso_date):
+    """
+    Converts a date string from 'YYYY-MM-DD' to 'DD/MM/YYYY' format.
+    Returns original input if parsing fails.
+    """
+    try:
+        return datetime.strptime(iso_date, "%Y-%m-%d").strftime("%d/%m/%Y")
+    except (ValueError, TypeError):
+        return iso_date
 
 def get_readable_time(timestamp):
     """
@@ -60,6 +68,48 @@ def get_label_description(labels_dir, label_name):
             return f.read().strip()
     return ""
 
+def resolve_entities(entry_type, entity_list):
+    resolved = []
+    for item in entity_list:
+        if isinstance(item, str):
+            item = {"id": item, "label_type": entry_type}
+
+        eid = item.get("id")
+        if not eid:
+            continue
+
+        label_type = item.get("label_type", entry_type)
+        entry = {
+            "id": eid,
+            "confidence": item.get("confidence"),
+            "label": item.get("label", ""),
+            "label_type": label_type
+        }
+
+        entry["display"] = eid.capitalize()
+        entry["link"] = None
+
+        bio_path = f"./types/{entry_type}/biographies/{eid}.json"
+        if os.path.exists(bio_path):
+            bio_data = load_json_as_dict(bio_path)
+            entry["display"] = bio_data.get("name", eid)
+            entry["link"] = f"/biography/{entry_type}/{eid}"
+
+        label_json_path = f"./types/{entry_type}/labels/{label_type}/{eid}.json"
+        image_file_path = f"./types/{entry_type}/labels/{label_type}/{eid}.jpg"
+        image_web_path = f"/serve_label_image/{entry_type}/{label_type}/{eid}.jpg"
+
+        if os.path.exists(label_json_path):
+            label_data = load_json_as_dict(label_json_path)
+            entry["display"] = label_data.get("title") or label_data.get("name", eid.capitalize())
+            entry["description"] = label_data.get("description", "")
+            entry["properties"] = label_data.get("properties", {})
+
+            if os.path.exists(image_file_path):
+                entry["image_url"] = image_web_path
+
+        resolved.append(entry)
+    return resolved
 
 def enrich_label_data(label_type: str, label_id: str, base_type: str = "person"):
     """
@@ -129,3 +179,20 @@ def get_icon(label_type):
         "organisation": "🏢",
         "friend": "🧑‍🤝‍🧑",
     }.get(label_type, "🔖")
+
+LIFE_STAGE_ORDER = {
+    "infant": 0.5,
+    "toddler": 1.5,
+    "childhood": 6.5,
+    "preteen": 11.5,
+    "teens": 15,
+    "twenties": 25,
+    "thirties": 35,
+    "forties": 45,
+    "fifties": 55,
+    "sixties": 65,
+    "seventies": 75,
+    "eighties": 85,
+    "nineties": 95,
+    "hundreds": 105
+}

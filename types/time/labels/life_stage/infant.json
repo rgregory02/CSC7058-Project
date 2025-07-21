@@ -1,0 +1,18 @@
+{
+    "description":"The period in your life between birth and age 1",
+    "order": 1,
+    "properties": {
+        "age_range": {
+            "type": "string",
+            "enum": ["0-1"],
+            "description": "Age range for the infant stage"
+        },
+        "milestones": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "description": "Key developmental milestones for infants"
+        }
+    }
+}

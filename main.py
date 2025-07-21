@@ -7,7 +7,7 @@ import re
 from flask import Flask, Response, jsonify, request, url_for, redirect, render_template, flash, get_flashed_messages, send_from_directory, render_template_string, session
 from markupsafe import Markup, escape
 from urllib.parse import quote, unquote
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 def safe_date(x):
     try:
@@ -30,7 +30,10 @@ from utils import (
     prettify,
     get_label_description,
     enrich_label_data,
-    get_icon
+    get_icon,
+    display_dob_uk,
+    resolve_entities,
+    LIFE_STAGE_ORDER
 )
 
 app = Flask(__name__)
@@ -180,6 +183,13 @@ def api_search_person_bios():
 
     return jsonify(matches[:10])  # Return only first 10 matches for speed
 
+from flask import request, session, redirect, url_for, render_template
+from utils import load_json_as_dict, save_dict_as_json, display_dob_uk
+from datetime import datetime
+from zoneinfo import ZoneInfo
+import os
+import time
+
 @app.route('/person_iframe_wizard')
 def person_iframe_wizard():
     step = request.args.get("step", "0")
@@ -200,7 +210,11 @@ def person_iframe_wizard():
     if step == "0":
         # New name entry — reset time in progress
         session.pop("time_step_in_progress", None)
-        return render_template("person_step_name.html", person_id=person_id)
+        return render_template(
+            "person_step_name.html",
+            person_id=person_id,
+            display_dob_uk=display_dob_uk  # ✅ Inject display_dob_uk for Jinja
+        )
 
     elif step == "1":
         # Create draft file if not already saved
@@ -212,13 +226,13 @@ def person_iframe_wizard():
             save_dict_as_json(file_path, {
                 "person_id": person_id,
                 "name": session['person_name'],
+                "dob": session.get('dob', ""),  # ✅ Store DOB if available
                 "created": now_uk,
                 "entries": []
             })
         if not person_id:
             return redirect(url_for('person_iframe_wizard', step="0"))
 
-        # ✅ Instead of redirecting to /person_step_time directly...
         return redirect(url_for('person_step_time', person_id=person_id))
 
     elif step == "final":
@@ -234,7 +248,6 @@ def person_iframe_wizard():
             ])
             step_index = int(step) - 2
 
-            # ✅ Only proceed if a valid time label has been selected
             if not session.get("time_selection"):
                 print("[WARN] Cannot continue — missing time_selection")
                 return redirect(url_for('person_iframe_wizard', step="1"))
@@ -277,8 +290,9 @@ def person_edit_start(person_id, entry_index):
 def start_person_naming():
     if request.method == 'POST':
         name = request.form.get("person_name", "").strip()
+        dob_raw = request.form.get("dob", "").strip()  # HTML5 date input gives YYYY-MM-DD
 
-        # ✅ Validate that the name isn't empty
+        # ✅ Validate name
         if not name:
             flash("❌ Please enter a name.", "error")
             return render_template(
@@ -286,14 +300,25 @@ def start_person_naming():
                 return_url=request.form.get("return_url", url_for("index"))
             )
 
-        # 🧹 Clear old person_id if any, and store name
+        # ✅ Validate DOB
+        try:
+            dob_parsed = datetime.strptime(dob_raw, "%Y-%m-%d")
+            dob_formatted = dob_parsed.strftime("%Y-%m-%d")  # keep consistent format for storage
+        except ValueError:
+            flash("❌ Please enter a valid date of birth.", "error")
+            return render_template(
+                "start_person_naming.html",
+                return_url=request.form.get("return_url", url_for("index"))
+            )
+
+        # 🧹 Clear old session info and store name and DOB
         session.pop('person_id', None)
         session['person_name'] = name
+        session['dob'] = dob_formatted
 
-        # 🚀 Go to step 0 of the wizard
         return redirect("/person_iframe_wizard?step=0")
 
-    # 🖼️ On GET: render the form, allow optional return_url
+    # 🖼️ GET request
     return_url = request.args.get("return_url") or request.referrer or url_for("index")
     return render_template("start_person_naming.html", return_url=return_url)
 
@@ -311,7 +336,7 @@ def person_step_time(person_id):
     person_data = load_json_as_dict(person_file)
     name = person_data.get("name", "[Unknown]")
 
-        # Start with blank defaults
+    # Start with blank defaults
     selected_label_type = ""
     selected_subvalue = ""
     selected_date = ""
@@ -359,7 +384,7 @@ def person_step_time(person_id):
         session.pop("edit_entry_index", None)
         return redirect(url_for("person_view", person_id=person_id))
 
-        # ✏️ Editing via GET
+    # ✏️ Editing via GET
     edit_index = request.args.get("edit_entry_index")
     if request.method == "GET" and edit_index is not None:
         try:
@@ -373,11 +398,10 @@ def person_step_time(person_id):
                 selected_date = time_data.get("date_value", "")
                 selected_confidence = time_data.get("confidence", "")
             else:
-                session.pop("edit_entry_index", None)  # 🧹 Invalid index
+                session.pop("edit_entry_index", None)
         except Exception:
-            session.pop("edit_entry_index", None)  # 🧹 Error parsing index
+            session.pop("edit_entry_index", None)
 
-    # 🧹 Add this outside the editing block
     elif "edit_entry_index" not in request.args:
         session.pop("edit_entry_index", None)
 
@@ -395,7 +419,7 @@ def person_step_time(person_id):
         selected_date = time_data.get("date_value", "")
         selected_confidence = time_data.get("confidence", "")
 
-   # 📩 Save on POST
+    # 📩 Save on POST
     if request.method == "POST":
         try:
             confidence_value = int(selected_confidence)
@@ -432,7 +456,6 @@ def person_step_time(person_id):
             session["person_name"] = name
             session["time_step_in_progress"] = True
 
-            # ✅ Handle edit or new
             edit_index = session.pop("edit_entry_index", None)
             if edit_index is None:
                 edit_index = session.get("entry_index")
@@ -449,7 +472,6 @@ def person_step_time(person_id):
                 person_data["entries"].append(new_entry)
                 session["entry_index"] = len(person_data["entries"]) - 1
 
-            # ✅ Save file and ALWAYS redirect
             save_dict_as_json(person_file, person_data)
             return redirect("/person_iframe_wizard?step=2")
 
@@ -468,16 +490,25 @@ def person_step_time(person_id):
                 except Exception as e:
                     print(f"[ERROR] Failed to load label {file}: {e}")
 
-    # 📁 Load sublabels
+    # 📁 Load sublabels with descriptions for display
     subfolder_labels = []
     if selected_label_type and selected_label_type != "date":
         subfolder_path = os.path.join(labels_folder, selected_label_type)
         if os.path.isdir(subfolder_path):
-            subfolder_labels = [
-                os.path.splitext(f)[0]
-                for f in os.listdir(subfolder_path)
-                if f.endswith(".json")
-            ]
+            for f in os.listdir(subfolder_path):
+                if f.endswith(".json"):
+                    try:
+                        with open(os.path.join(subfolder_path, f)) as sf:
+                            data = json.load(sf)
+                            subfolder_labels.append({
+                                "name": os.path.splitext(f)[0],
+                                "description": data.get("description", ""),
+                                "order": data.get("order", 999)
+                            })
+                    except Exception as e:
+                        print(f"[ERROR] Failed to load sublabel {f}: {e}")
+            # Sort by order if available
+            subfolder_labels.sort(key=lambda x: (x.get("order", 999), x["name"]))
 
     # 📋 Show existing entries
     display_list = []
@@ -1261,7 +1292,9 @@ def finalise_person_bio():
         "finalise_person_bio.html",
         person_id=person_id,
         person_name=person_name,
-        entry=entry
+        entry=entry,
+        dob=session.get('dob'),
+        display_dob_uk=display_dob_uk
     )
 
 @app.route('/person_summary/<person_id>')
@@ -1287,12 +1320,13 @@ def person_summary(person_id):
         "finalise_person_bio.html",
         person_id=person_id,
         person_name=person.get("name", "Unnamed Person"),
-        entry=entry
+        entry=entry,
+        dob=session.get('dob'),
+        display_dob_uk=display_dob_uk,
     )
 
 @app.route('/person_view/<person_id>')
 def person_view(person_id):
-    from flask import request
 
     def entry_summary(entry):
         """
@@ -1309,6 +1343,13 @@ def person_view(person_id):
                             summary.append(label.replace("_", " ").title())
         return ", ".join(summary)
 
+    def format_uk_date(datestr):
+        """Formats YYYY-MM-DD string as DD Month YYYY (UK style)."""
+        try:
+            return datetime.strptime(datestr.strip(), "%Y-%m-%d").strftime("%d %B %Y")
+        except:
+            return datestr
+
     type_name = "person"
     person_file = f"./types/{type_name}/biographies/{person_id}.json"
 
@@ -1319,10 +1360,47 @@ def person_view(person_id):
     person_name = person_data.get("name", f"Person {person_id}")
     show_archived = request.args.get("show_archived", "false").lower() == "true"
 
-    all_entries = person_data.get("entries", [])
+    # ✅ Parse DOB
+    dob_str = person_data.get("dob")
+    dob = None
+    if dob_str:
+        try:
+            dob = datetime.strptime(dob_str.strip(), "%Y-%m-%d")
+        except Exception as e:
+            print(f"[WARNING] Could not parse DOB '{dob_str}': {e}")
 
-    entries = []
-    archived_entries = []
+    def get_sort_order(entry):
+        time_info = entry.get("time", {})
+        label_type = time_info.get("label_type")
+        subvalue = time_info.get("subvalue", "").lower()
+        date_value = time_info.get("date_value")
+
+        # 1️⃣ Use date_value if valid
+        if date_value:
+            try:
+                ts = datetime.strptime(date_value.strip(), "%Y-%m-%d").timestamp()
+                print(f"[DEBUG] Parsed date_value '{date_value}' → {ts}")
+                return ts
+            except Exception as e:
+                print(f"[ERROR] Invalid date_value '{date_value}': {e}")
+
+        # 2️⃣ Estimate using LIFE_STAGE_ORDER if available
+        if dob and label_type == "life_stage" and subvalue:
+            order = LIFE_STAGE_ORDER.get(subvalue)
+            if isinstance(order, (int, float)):
+                estimated_date = dob + timedelta(days=order * 365.25)
+                ts = estimated_date.timestamp()
+                print(f"[DEBUG] Estimated '{subvalue}' using LIFE_STAGE_ORDER={order} → {ts}")
+                return ts
+            else:
+                print(f"[WARNING] No valid LIFE_STAGE_ORDER for '{subvalue}'")
+
+        # 3️⃣ Fallback
+        print(f"[DEBUG] No valid sort key for entry '{subvalue or date_value}'")
+        return float('inf')
+
+    all_entries = person_data.get("entries", [])
+    entries, archived_entries = [], []
 
     for i, raw_entry in enumerate(all_entries):
         entry_obj = {
@@ -1342,9 +1420,16 @@ def person_view(person_id):
         else:
             entries.append(entry_obj)
 
-    # Debugging info
-    print(f"Show archived flag: {show_archived}")
-    print(f"Archived entries for {person_id}: {len(archived_entries)}")
+    # ✅ Sort by estimated timestamps
+    entries.sort(key=get_sort_order)
+    archived_entries.sort(key=get_sort_order)
+
+    # 🧪 Debug: show final entry order
+    print("\n=== FINAL SORTED ORDER ===")
+    for e in entries:
+        t = e.get("time", {})
+        label = t.get("subvalue") or t.get("date_value") or "[unspecified]"
+        print(f"- {label}")
 
     return render_template(
         "person_view.html",
@@ -1353,52 +1438,12 @@ def person_view(person_id):
         entries=entries,
         archived_entries=archived_entries,
         show_archived=show_archived,
-        entry_summary=entry_summary,  # ✅ Injected for Jinja use
-        get_icon=get_icon
+        entry_summary=entry_summary,
+        get_icon=get_icon,
+        dob=person_data.get("dob"),
+        display_dob_uk=display_dob_uk,
+        format_uk_date=format_uk_date  
     )
-
-def resolve_entities(entry_type, entity_list):
-    resolved = []
-    for item in entity_list:
-        if isinstance(item, str):
-            item = {"id": item, "label_type": entry_type}
-
-        eid = item.get("id")
-        if not eid:
-            continue
-
-        label_type = item.get("label_type", entry_type)
-        entry = {
-            "id": eid,
-            "confidence": item.get("confidence"),
-            "label": item.get("label", ""),
-            "label_type": label_type
-        }
-
-        entry["display"] = eid.capitalize()
-        entry["link"] = None
-
-        bio_path = f"./types/{entry_type}/biographies/{eid}.json"
-        if os.path.exists(bio_path):
-            bio_data = load_json_as_dict(bio_path)
-            entry["display"] = bio_data.get("name", eid)
-            entry["link"] = f"/biography/{entry_type}/{eid}"
-
-        label_json_path = f"./types/{entry_type}/labels/{label_type}/{eid}.json"
-        image_file_path = f"./types/{entry_type}/labels/{label_type}/{eid}.jpg"
-        image_web_path = f"/serve_label_image/{entry_type}/{label_type}/{eid}.jpg"
-
-        if os.path.exists(label_json_path):
-            label_data = load_json_as_dict(label_json_path)
-            entry["display"] = label_data.get("title") or label_data.get("name", eid.capitalize())
-            entry["description"] = label_data.get("description", "")
-            entry["properties"] = label_data.get("properties", {})
-
-            if os.path.exists(image_file_path):
-                entry["image_url"] = image_web_path
-
-        resolved.append(entry)
-    return resolved
 
 @app.route('/cancel_person_creation')
 def cancel_person_creation():

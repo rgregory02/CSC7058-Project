@@ -1,0 +1,18 @@
+{
+    "description":"The period in your life between the ages of 10 and 12",
+    "order": 4,
+    "properties":{
+        "age_range": {
+            "type": "string",
+            "enum": ["10-12"],
+            "description": "Age range for the preteen stage"
+        },
+        "milestones": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "description": "Key developmental milestones for preteens"
+        }
+    }
+}

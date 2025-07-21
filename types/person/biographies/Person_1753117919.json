@@ -1,0 +1,42 @@
+{
+    "person_id": "Person_1753117919",
+    "name": "Zelda",
+    "created": "2025-07-21T18:11:59.318296+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "forties",
+                "confidence": 28,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "forties"
+            },
+            "created": "2025-07-21T18:12:02.609755",
+            "buildings": [
+                {
+                    "id": "bungalow",
+                    "confidence": 0,
+                    "label_type": "house"
+                },
+                {
+                    "id": "school",
+                    "confidence": 0,
+                    "label_type": "educational_buildings"
+                }
+            ],
+            "person": [
+                {
+                    "id": "1",
+                    "confidence": 100,
+                    "label_type": "celebea_face_hq"
+                },
+                {
+                    "id": "plumber",
+                    "confidence": 100,
+                    "label_type": "onet_occupation"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}

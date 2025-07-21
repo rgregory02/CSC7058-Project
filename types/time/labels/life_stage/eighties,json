@@ -1,0 +1,18 @@
+{
+    "description":"The period in your life between the ages of 80 and 89",
+    "order": 12,
+    "properties":{
+        "age_range": {
+            "type": "string",
+            "enum": ["80-89"],
+            "description": "Age range for the eighties stage"
+        },
+        "milestones": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "description": "Key developmental milestones for people in their eighties"
+        }
+    }
+}

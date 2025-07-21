@@ -25,8 +25,13 @@
     .name-display {
       font-size: 1.5em;
       font-weight: bold;
-      margin: 10px 0 30px 0;
+      margin: 10px 0;
       color: #444;
+    }
+    .dob-display {
+      font-size: 1.2em;
+      color: #666;
+      margin-bottom: 30px;
     }
     .btn {
       display: inline-block;
@@ -58,7 +63,11 @@
     <p>You entered:</p>
     <div class="name-display">{{ session['person_name'] }}</div>
 
-    <p>Do you want to continue with this name?</p>
+    {% if session.get('dob') %}
+      <div class="dob-display">📅 Date of Birth: {{ display_dob_uk(session['dob']) }}</div>
+    {% endif %}
+
+    <p>Do you want to continue with this information?</p>
 
     <form action="/person_iframe_wizard" method="get">
       <input type="hidden" name="step" value="1">
@@ -66,7 +75,7 @@
     </form>
 
     <p>
-      <a href="/start_person_naming" class="btn btn-secondary">✏️ Edit Name</a>
+      <a href="/start_person_naming" class="btn btn-secondary">✏️ Edit Name/DOB</a>
       <a href="/cancel_person_creation" class="btn btn-danger">❌ Cancel and Return Home</a>
     </p>
   </div>

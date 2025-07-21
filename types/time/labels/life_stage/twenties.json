@@ -1,5 +1,11 @@
 {
-    "description":"The period in your life between the ages of 20 and 30",
+    "description":"The period in your life between the ages of 20 and 29",
+    "order": 6,
     "properties":{
+        "age_range": {
+            "type": "string",
+            "enum": ["20-29"],
+            "description": "Age range for the twenties stage"
+        }
     }
 }
