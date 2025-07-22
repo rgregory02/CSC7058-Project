@@ -215,7 +215,7 @@
         <div class="label-group-box">
           <div class="label-title">{{ group.label.replace('_', ' ')|title }}</div>
 
-          <input type="hidden" name="selected_id_{{ group.key }}" id="input_{{ group.key }}" value="{{ selected_id or '' }}">
+          <input type="hidden" name="selected_id_{{ group.key }}" id="input_{{ group.key }}" class="group-selection-tracker" value="{{ selected_id or '' }}">
 
           <div class="label-options">
             {% if group.options %}
@@ -252,9 +252,21 @@
         </div>
       {% endfor %}
 
-      <div style="text-align: center; margin-top: 30px;">
-        <button type="submit" class="add-entry-button">✅ Save All Selections</button>
-      </div>
+    <div style="text-align: center; margin-top: 30px;">
+      <button type="submit" id="saveButton" class="add-entry-button">
+        ➡️ Move to next page with no labels selected
+      </button>
+    </div>
+
+      {% if skip_allowed %}
+        <a href="{{ url_for('person_step_dynamic', step=next_step) }}"
+          id="skipButton"
+          class="add-entry-button"
+          style="background-color: #6c63ff; display: none;">
+          ➡️ Skip to Next Step
+        </a>
+      {% endif %}
+    </div>
 
       <div style="text-align: center; margin-top: 30px;">
         <a href="{{ url_for('create_subfolder', type_name=current_type) }}?return_url={{ request.path }}"
@@ -297,50 +309,73 @@
     {% endif %}
   </div>
 
-  <script>
-    function updateConfidence(key) {
-      const slider = document.getElementById("confidence_" + key);
-      const value = parseInt(slider.value || 0);
-      document.getElementById("confidence_display_" + key).textContent = value + "%";
-      const level = document.getElementById("confidence_level_" + key);
-      if (value === 100) {
-        level.textContent = "(Exact)";
-        level.style.color = "green";
-      } else if (value >= 67) {
-        level.textContent = "(High)";
-        level.style.color = "green";
-      } else if (value >= 34) {
-        level.textContent = "(Medium)";
-        level.style.color = "orange";
+ <script>
+  function updateConfidence(key) {
+    const slider = document.getElementById("confidence_" + key);
+    const value = parseInt(slider.value || 0);
+    document.getElementById("confidence_display_" + key).textContent = value + "%";
+    const level = document.getElementById("confidence_level_" + key);
+    if (value === 100) {
+      level.textContent = "(Exact)";
+      level.style.color = "green";
+    } else if (value >= 67) {
+      level.textContent = "(High)";
+      level.style.color = "green";
+    } else if (value >= 34) {
+      level.textContent = "(Medium)";
+      level.style.color = "orange";
+    } else {
+      level.textContent = "(Low)";
+      level.style.color = "red";
+    }
+  }
+
+  function updateSaveButtonState() {
+    const selectionTrackers = document.querySelectorAll('.group-selection-tracker');
+    const saveButton = document.getElementById('saveButton');
+
+    const hasSelection = Array.from(selectionTrackers).some(input => input.value.trim() !== '');
+
+    if (saveButton) {
+      if (hasSelection) {
+        saveButton.textContent = '✅ Save All Selections';
+        saveButton.style.backgroundColor = '#4CAF50'; // green
       } else {
-        level.textContent = "(Low)";
-        level.style.color = "red";
+        saveButton.textContent = '➡️ Move to next page with no labels selected';
+        saveButton.style.backgroundColor = '#6c63ff'; // purple
       }
     }
+  }
 
-    function toggleLabelSelection(el) {
-      const groupKey = el.getAttribute("data-group");
-      const value = el.getAttribute("data-value");
-      const hiddenInput = document.getElementById("input_" + groupKey);
-      const currentValue = hiddenInput.value;
-      const allCards = document.querySelectorAll(`.label-card[data-group="${groupKey}"]`);
+  function toggleLabelSelection(el) {
+    const groupKey = el.getAttribute("data-group");
+    const value = el.getAttribute("data-value");
+    const hiddenInput = document.getElementById("input_" + groupKey);
+    const currentValue = hiddenInput.value;
+    const allCards = document.querySelectorAll(`.label-card[data-group="${groupKey}"]`);
 
-      if (currentValue === value) {
-        if (confirm("Are you sure you want to unselect this label?")) {
-          hiddenInput.value = "";
-          el.classList.remove("selected");
-        }
-      } else {
-        allCards.forEach(card => card.classList.remove("selected"));
-        hiddenInput.value = value;
-        el.classList.add("selected");
+    if (currentValue === value) {
+      if (confirm("Are you sure you want to unselect this label?")) {
+        hiddenInput.value = "";
+        el.classList.remove("selected");
       }
+    } else {
+      allCards.forEach(card => card.classList.remove("selected"));
+      hiddenInput.value = value;
+      el.classList.add("selected");
     }
 
-    document.addEventListener("DOMContentLoaded", function () {
-      const sliders = document.querySelectorAll("input[type=range]");
-      sliders.forEach(slider => updateConfidence(slider.id.replace("confidence_", "")));
-    });
-  </script>
+    updateSaveButtonState();
+  }
+
+  // ✅ THIS was missing!
+  document.addEventListener("DOMContentLoaded", function () {
+    const sliders = document.querySelectorAll("input[type=range]");
+    sliders.forEach(slider => updateConfidence(slider.id.replace("confidence_", "")));
+
+    // ✅ This line was missing — adds button check on load
+    updateSaveButtonState();
+  });
+</script>
 </body>
 </html>
