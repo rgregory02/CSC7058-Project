@@ -12,7 +12,34 @@
                 "date_value": "",
                 "subvalue": "infant"
             },
-            "created": "2025-07-22T21:40:21.288307"
+            "created": "2025-07-22T21:40:21.288307",
+            "buildings": [
+                {
+                    "id": "cathedral",
+                    "confidence": 30,
+                    "label_type": "religious"
+                },
+                {
+                    "id": "school",
+                    "confidence": 65,
+                    "label_type": "educational_buildings"
+                }
+            ],
+            "events": [
+                {
+                    "id": "wedding",
+                    "confidence": 100,
+                    "label_type": "big_events"
+                }
+            ],
+            "person": [
+                {
+                    "id": "0",
+                    "confidence": 100,
+                    "label_type": "celebea_face_hq"
+                }
+            ]
         }
-    ]
+    ],
+    "finalised": true
 }

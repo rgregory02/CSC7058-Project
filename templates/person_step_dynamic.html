@@ -22,6 +22,35 @@
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     }
 
+    .flash-container {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 30px;
+    }
+
+    .flash-banner {
+      background-color: #d4edda; /* light green */
+      color: #155724; /* dark green text */
+      padding: 16px 30px;
+      border-radius: 10px;
+      border: 1px solid #c3e6cb;
+      font-size: 1.1em;
+      font-weight: bold;
+      text-align: center;
+      box-shadow: 0 3px 6px rgba(0, 0, 0, 0.05);
+    }
+
+    .flash-error {
+      background-color: #f8d7da;
+      color: #721c24;
+      border-color: #f5c6cb;
+    }
+
+  .flash-warning {
+      background-color: #fff3cd;
+      color: #856404;
+      border-color: #ffeeba;
+    }
     h1 {
       margin-bottom: 10px;
       color: #333;
@@ -268,11 +297,11 @@
   <div class="box">
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
-        <ul class="flashes">
-        {% for category, message in messages %}
-          <li class="flash flash-{{ category }}">{{ message }}</li>
-        {% endfor %}
-        </ul>
+        <div class="flash-container">
+          {% for category, message in messages %}
+            <div class="flash-banner flash-{{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
       {% endif %}
     {% endwith %}
 
