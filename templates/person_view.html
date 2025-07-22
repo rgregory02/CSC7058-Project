@@ -92,16 +92,6 @@
       margin-right: 6px;
     }
 
-    .timeline-dot {
-      height: 12px;
-      width: 12px;
-      background-color: #007bff;
-      border-radius: 50%;
-      display: inline-block;
-      margin-right: 8px;
-      position: relative;
-      z-index: 1;
-    }
 
     .entry-content {
       padding: 16px;
@@ -197,7 +187,6 @@
     <div class="entry-block collapsed" id="entry-{{ loop.index0 }}">
       <div class="entry-header" onclick="toggleEntry({{ loop.index0 }})">
         <div class="entry-date">
-          <span class="timeline-dot"></span>
           <span class="chevron">▶️</span>
           <strong>
             {% if entry.time.date_value %}
@@ -281,5 +270,4 @@
     }
   </script>
 </body>
-
 </html>
