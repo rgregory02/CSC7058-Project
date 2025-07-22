@@ -182,6 +182,85 @@
       text-align: center;
       margin: 10px 0;
     }
+    
+    .bottom-card {
+  margin-top: 50px;
+  background: #fdfdfd;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border: 1px solid #ddd;
+  text-align: center;
+}
+
+.button-row {
+  margin-bottom: 30px;
+}
+
+.primary-button {
+  display: inline-block;
+  background-color: #6c63ff;
+  color: white;
+  font-weight: bold;
+  padding: 12px 28px;
+  border: none;
+  border-radius: 8px;
+  font-size: 1em;
+  text-decoration: none;
+  margin: 5px;
+  box-shadow: 0 4px 8px rgba(108, 99, 255, 0.2);
+  transition: background-color 0.3s ease;
+}
+
+.primary-button:hover {
+  background-color: #5a54d6;
+}
+
+.subfolder-card {
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px dashed #ccc;
+  border-radius: 10px;
+  background-color: #f9f9ff;
+}
+
+.footer-note {
+  font-size: 1em;
+  color: #444;
+  margin-bottom: 15px;
+}
+
+.footer-button {
+  display: inline-block;
+  background-color: #6c63ff;
+  color: white;
+  font-weight: bold;
+  padding: 10px 22px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95em;
+  text-decoration: none;
+  box-shadow: 0 4px 6px rgba(108, 99, 255, 0.2);
+}
+
+.footer-button:hover {
+  background-color: #5a54d6;
+}
+
+.navigation-links {
+  margin-top: 25px;
+}
+
+.navigation-links .back-link {
+  margin: 0 10px;
+  text-decoration: none;
+  border: 1px solid #007bff;
+  padding: 6px 12px;
+  border-radius: 4px;
+  color: #007bff;
+  background: white;
+}
+
   </style>
 </head>
 
@@ -252,37 +331,39 @@
         </div>
       {% endfor %}
 
-    <div style="text-align: center; margin-top: 30px;">
-      <button type="submit" id="saveButton" class="add-entry-button">
-        ➡️ Move to next page with no labels selected
-      </button>
-    </div>
+    <div class="bottom-card">
+      <div class="button-row">
+        <button type="submit" id="saveButton" class="primary-button">
+          ➡️ Move to next page with no labels selected
+        </button>
 
-      {% if skip_allowed %}
-        <a href="{{ url_for('person_step_dynamic', step=next_step) }}"
-          id="skipButton"
-          class="add-entry-button"
-          style="background-color: #6c63ff; display: none;">
-          ➡️ Skip to Next Step
-        </a>
-      {% endif %}
-    </div>
+        {% if skip_allowed %}
+          <a href="{{ url_for('person_step_dynamic', step=next_step) }}"
+            id="skipButton" class="primary-button" style="display: none;">
+            ➡️ Skip to Next Step
+          </a>
+        {% endif %}
+      </div>
 
-      <div style="text-align: center; margin-top: 30px;">
+      <div class="subfolder-card">
+        <p class="footer-note">
+          🧭 Need to add a label category to the <strong>{{ current_type.replace('_', ' ')|title }}</strong> type?
+        </p>
+
         <a href="{{ url_for('create_subfolder', type_name=current_type) }}?return_url={{ request.path }}"
-           class="add-entry-button" style="background-color: #6c63ff;">
+          class="footer-button">
           📁 Create New Label Subfolder
         </a>
       </div>
-    </form>
 
-    <div style="margin-top: 20px; margin-bottom: 40px;">
-      <a href="/" class="back-link">🏠 Return Home</a>
-      {% if prev_step is not none %}
-        <a href="{{ url_for('person_step_dynamic', step=prev_step) }}" class="back-link">🔙 Return to Last Step</a>
-      {% else %}
-        <a href="{{ url_for('person_step_time', person_id=person_id) }}" class="back-link">🔙 Return to Time Selection</a>
-      {% endif %}
+      <div class="navigation-links">
+        <a href="/" class="back-link">🏠 Return Home</a>
+        {% if prev_step is not none %}
+          <a href="{{ url_for('person_step_dynamic', step=prev_step) }}" class="back-link">🔙 Return to Last Step</a>
+        {% else %}
+          <a href="{{ url_for('person_step_time', person_id=person_id) }}" class="back-link">🔙 Return to Time Selection</a>
+        {% endif %}
+      </div>
     </div>
 
     {% if existing_labels %}
