@@ -323,17 +323,29 @@
         <div class="label-group-box">
           <div class="label-title">{{ group.label.replace('_', ' ')|title }}</div>
 
-          <input type="hidden" name="selected_id_{{ group.key }}" id="input_{{ group.key }}" class="group-selection-tracker" value="{{ selected_id or '' }}">
+          <!-- 🔍 Add search bar -->
+          <input type="text"
+                class="label-search"
+                placeholder="Search {{ group.label.replace('_', ' ')|title }}..."
+                oninput="filterLabels(this, '{{ group.key }}')"
+                data-group="{{ group.key }}">
+
+          <input type="hidden" name="selected_id_{{ group.key }}" id="input_{{ group.key }}"
+                class="group-selection-tracker" value="{{ selected_id or '' }}">
 
           <div class="label-options">
             {% if group.options %}
               {% for item in group.options %}
                 <div class="label-card {% if selected_id == item.id %}selected{% endif %}"
-                     data-group="{{ group.key }}" data-value="{{ item.id }}"
-                     onclick="toggleLabelSelection(this)">
+                    data-group="{{ group.key }}"
+                    data-value="{{ item.id }}"
+                    onclick="toggleLabelSelection(this)"
+                    style="{% if loop.index > 3 %}display: none;{% endif %}">
                   {% if item.image %}<img src="{{ item.image }}" alt="{{ item.display }}">{% endif %}
                   <div><strong>{{ item.display.replace('_', ' ')|title }}</strong></div>
-                  {% if item.description %}<div class="label-description">{{ item.description }}</div>{% endif %}
+                  {% if item.description %}
+                    <div class="label-description">{{ item.description }}</div>
+                  {% endif %}
                 </div>
               {% endfor %}
             {% else %}
@@ -345,7 +357,7 @@
             <div class="confidence-slider">
               <label for="confidence_{{ group.key }}">🎯 Confidence:</label><br>
               <input type="range" name="confidence_{{ group.key }}" id="confidence_{{ group.key }}" min="0" max="100"
-                     value="{{ matched_conf }}" oninput="updateConfidence('{{ group.key }}')">
+                    value="{{ matched_conf }}" oninput="updateConfidence('{{ group.key }}')">
               <div class="confidence-display">
                 <span id="confidence_display_{{ group.key }}">{{ matched_conf }}%</span>
                 <span id="confidence_level_{{ group.key }}"></span>
@@ -355,7 +367,7 @@
 
           <div style="text-align: center; margin-top: 14px;">
             <a href="{{ url_for('add_label', type_name=current_type, subfolder_name=group.key, return_url=request.url) }}"
-               class="add-entry-button">➕ Add a New {{ group.label.replace('_', ' ')|title }} Label</a>
+              class="add-entry-button">➕ Add a New {{ group.label.replace('_', ' ')|title }} Label</a>
           </div>
         </div>
       {% endfor %}
@@ -419,7 +431,7 @@
     {% endif %}
   </div>
 
- <script>
+<script>
   function updateConfidence(key) {
     const slider = document.getElementById("confidence_" + key);
     const value = parseInt(slider.value || 0);
@@ -449,10 +461,10 @@
     if (saveButton) {
       if (hasSelection) {
         saveButton.textContent = '✅ Save All Selections';
-        saveButton.style.backgroundColor = '#4CAF50'; // green
+        saveButton.style.backgroundColor = '#4CAF50';
       } else {
         saveButton.textContent = '➡️ Move to next page with no labels selected';
-        saveButton.style.backgroundColor = '#6c63ff'; // purple
+        saveButton.style.backgroundColor = '#6c63ff';
       }
     }
   }
@@ -478,13 +490,40 @@
     updateSaveButtonState();
   }
 
-  // ✅ THIS was missing!
+  // 🔍 NEW: Filter labels based on search
+  function filterLabels(input, groupKey) {
+    const query = input.value.toLowerCase();
+    const cards = document.querySelectorAll(`.label-card[data-group="${groupKey}"]`);
+    let visibleCount = 0;
+
+    cards.forEach(card => {
+      const labelText = card.innerText.toLowerCase();
+      const matches = labelText.includes(query);
+
+      if (matches && visibleCount < 3) {
+        card.style.display = "flex";
+        visibleCount++;
+      } else {
+        card.style.display = "none";
+      }
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     const sliders = document.querySelectorAll("input[type=range]");
     sliders.forEach(slider => updateConfidence(slider.id.replace("confidence_", "")));
 
-    // ✅ This line was missing — adds button check on load
     updateSaveButtonState();
+
+    // 🔍 NEW: Initial filtering for all label groups
+    const allGroups = new Set(
+      Array.from(document.querySelectorAll('.label-card')).map(card => card.dataset.group)
+    );
+
+    allGroups.forEach(groupKey => {
+      const input = document.querySelector(`.label-search[data-group="${groupKey}"]`);
+      if (input) filterLabels(input, groupKey);
+    });
   });
 </script>
 </body>

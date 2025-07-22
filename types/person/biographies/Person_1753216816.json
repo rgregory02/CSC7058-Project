@@ -39,6 +39,38 @@
                     "label_type": "celebea_face_hq"
                 }
             ]
+        },
+        {
+            "time": {
+                "label": "teens",
+                "confidence": 90,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "teens"
+            },
+            "created": "2025-07-22T21:52:15.065261",
+            "buildings": [
+                {
+                    "id": "apartment",
+                    "confidence": 100,
+                    "label_type": "house"
+                },
+                {
+                    "id": "uni",
+                    "confidence": 100,
+                    "label_type": "educational_buildings"
+                }
+            ]
+        },
+        {
+            "time": {
+                "label": "forties",
+                "confidence": 90,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "forties"
+            },
+            "created": "2025-07-22T21:52:50.833228"
         }
     ],
     "finalised": true
