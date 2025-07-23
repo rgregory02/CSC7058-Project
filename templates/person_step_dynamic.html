@@ -385,6 +385,26 @@
         </div>
       {% endfor %}
 
+      {% if biography_options %}
+        <div class="label-group-box">
+          <div class="label-title">Linked {{ current_type.replace('_', ' ')|title }} Biography</div>
+
+          <select name="selected_id_biography" class="form-control">
+            <option value="">-- Select Existing Biography --</option>
+            {% for option in biography_options %}
+              <option value="{{ option.id }}">{{ option.display }}</option>
+            {% endfor %}
+          </select>
+
+          <div style="margin-top: 10px;">
+            <a href="{{ url_for('search_or_add_biography', type_name=current_type, return_url=request.url) }}"
+              class="add-entry-button">
+              ➕ Search or Create {{ current_type.replace('_', ' ')|title }} Biography
+            </a>
+          </div>
+        </div>
+      {% endif %}
+
     <div class="bottom-card">
       <div class="button-row">
         <button type="submit" id="saveButton" class="primary-button">

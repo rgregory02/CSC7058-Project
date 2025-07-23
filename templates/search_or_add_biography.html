@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Search or Add Biography – {{ type_name.title() }}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="box">
+    <h1>🔍 Search {{ type_name.title() }} Biographies</h1>
+
+    <form method="post" action="{{ url_for('search_or_add_biography', type_name=type_name, return_url=return_url) }}">
+      <input type="text" name="search_query" placeholder="Search by name..." value="{{ query }}">
+      <button type="submit">Search</button>
+    </form>
+
+    {% if results %}
+      <h3>Matches Found:</h3>
+      <ul>
+        {% for item in results %}
+          <li>
+            <strong>{{ item.display }}</strong><br>
+            <small>{{ item.description }}</small><br>
+            <a href="{{ return_url }}#bio_{{ item.id }}">
+              ✅ Use This Biography
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    <hr>
+    <h2>➕ Add New Biography</h2>
+    <form method="post" action="{{ url_for('search_or_add_biography', type_name=type_name, return_url=return_url) }}">
+      <input type="text" name="new_bio_name" placeholder="Name" required><br>
+      <textarea name="new_bio_description" placeholder="Short description (optional)"></textarea><br>
+      <button type="submit">Create Biography</button>
+    </form>
+
+    <p style="margin-top: 20px;">
+      <a href="{{ return_url }}">⬅️ Back to Label Selection</a>
+    </p>
+  </div>
+</body>
+</html>

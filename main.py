@@ -661,6 +661,55 @@ def person_step_dynamic(step):
         step=step
     )
 
+@app.route("/search_or_add_biography/<type_name>", methods=["GET", "POST"])
+def search_or_add_biography(type_name):
+    bio_folder = f"./types/{type_name}/biographies"
+    os.makedirs(bio_folder, exist_ok=True)
+
+    matched = []
+    query = ""
+    return_url = request.args.get("return_url", url_for("index"))  # Default fallback
+
+    if request.method == "POST":
+        if "search_query" in request.form:
+            query = request.form["search_query"].strip().lower()
+            for f in os.listdir(bio_folder):
+                if f.endswith(".json") and query in f.lower():
+                    bio_id = f[:-5]
+                    with open(os.path.join(bio_folder, f), "r") as file:
+                        data = json.load(file)
+                    matched.append({
+                        "id": bio_id,
+                        "display": data.get("name", bio_id),
+                        "description": data.get("description", "")
+                    })
+
+        elif "new_bio_name" in request.form:
+            name = request.form["new_bio_name"].strip()
+            desc = request.form.get("new_bio_description", "").strip()
+            bio_id = name.lower().replace(" ", "_")
+            filepath = os.path.join(bio_folder, f"{bio_id}.json")
+
+            if not os.path.exists(filepath):
+                new_bio = {
+                    "name": name,
+                    "description": desc,
+                    "created": datetime.now().isoformat()
+                }
+                with open(filepath, "w") as f:
+                    json.dump(new_bio, f, indent=2)
+
+                flash(f"Biography '{name}' created successfully.", "success")
+                return redirect(return_url)  # ✅ Send user back to wizard step
+            else:
+                flash("A biography with this name already exists.", "error")
+
+    return render_template("search_or_add_biography.html", 
+                           type_name=type_name, 
+                           query=query, 
+                           results=matched, 
+                           return_url=return_url)
+
 @app.route("/person_step/add_type_prompt", methods=["GET", "POST"])
 def add_type_prompt():
     person_id = session.get("person_id")
