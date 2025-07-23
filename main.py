@@ -675,7 +675,7 @@ def search_or_add_biography(type_name):
 
     matched = []
     query = ""
-    return_url = request.args.get("return_url", url_for("index"))
+    return_url = request.args.get("return_url", url_for("index_page"))
 
     # Handle POST actions
     if request.method == "POST":
