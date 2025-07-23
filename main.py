@@ -522,6 +522,11 @@ def person_step_dynamic(step):
     ])
     if step >= len(type_folders):
         return redirect(url_for("add_type_prompt"))
+    
+    # If this step matches the one just created, flag that it must stop after submission
+    if session.get("created_type_step") == step:
+        session.pop("created_type_step", None)
+        session["force_stop_after_this_step"] = True
 
     current_type = type_folders[step]
     label_base_path = f"./types/{current_type}/labels"
@@ -615,7 +620,13 @@ def person_step_dynamic(step):
                 person_data["entries"][entry_index].pop(current_type, None)
             save_dict_as_json(person_file, person_data)
 
-        return redirect(url_for("person_step_dynamic", step=step + 1))
+        # Handle skip or regular submission
+    if request.form.get("skip") or request.method == "POST":
+        if session.pop("loopback_to_add_type", False) or session.pop("force_stop_after_this_step", False):
+            session.pop("type_just_created", None)
+            return redirect(url_for("add_type_prompt"))
+        else:
+            return redirect(url_for("person_step_dynamic", step=step + 1))
 
     # Preload existing values
     existing_labels = {}
@@ -702,6 +713,11 @@ def add_type_prompt():
             ])
             step_index = all_types.index(new_type_name)
 
+            # 🧠 Store loopback logic
+            session["type_just_created"] = new_type_name
+            session["loopback_to_add_type"] = True
+            session["created_type_step"] = step_index
+
             return redirect(url_for(
                 'create_subfolder',
                 type_name=new_type_name,
@@ -751,7 +767,14 @@ def create_type():
                 if os.path.isdir(f"./types/{t}") and t != "time"
             ])
             session["type_folders"] = type_folders
+
             new_step = type_folders.index(type_name) if type_name in type_folders else 0
+
+            # 🔁 Set session flags to loop back after this step
+            session["type_just_created"] = type_name
+            session["loopback_to_add_type"] = True
+            session["created_type_step"] = new_step
+
             return redirect(url_for("person_step_dynamic", step=new_step))
         else:
             return redirect(url_for('index'))
