@@ -22,6 +22,12 @@
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     }
 
+    .top-skip {
+      text-align: right;
+      margin-top: -10px;
+      margin-bottom: 10px;
+    }
+
     .flash-container {
       display: flex;
       justify-content: center;
@@ -314,6 +320,13 @@
         <div><strong>Time:</strong> {{ time_selection.date_value }}</div>
       {% endif %}
     </div>
+
+<div class="top-skip" style="text-align: center; margin-bottom: 20px;">
+  <a href="{{ url_for('person_step_dynamic', step=next_step) }}"
+     class="primary-button">
+    ⏭️ Skip This Section
+  </a>
+</div>
 
     <form method="POST">
       {% for group in label_groups_list %}
