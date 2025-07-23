@@ -680,9 +680,22 @@ def add_type_prompt():
         try:
             os.makedirs(labels_path)
             os.makedirs(biographies_path)
+
+            # Create higher-level JSON metadata
+            type_json_path = os.path.join("types", f"{new_type_name}.json")
+            if not os.path.exists(type_json_path):
+                metadata = {
+                    "display_name": new_type_name.replace("_", " ").title(),
+                    "description": f"Entries for {new_type_name.replace('_', ' ')}.",
+                    "short_description": f"A category for {new_type_name.replace('_', ' ')}.",
+                    "enabled": True
+                }
+                with open(type_json_path, "w") as f:
+                    json.dump(metadata, f, indent=2)
+
             flash(f"New type '{new_type_name}' created successfully.", "success")
 
-            # Determine step index based on alphabetical order of types
+            # Determine wizard step index
             all_types = sorted([
                 t for t in os.listdir("types")
                 if os.path.isdir(os.path.join("types", t)) and t != "time"
@@ -718,10 +731,21 @@ def create_type():
         os.makedirs(label_folder, exist_ok=True)
         os.makedirs(bio_folder, exist_ok=True)
 
+        # Create higher-level JSON metadata
+        type_json_path = f"./types/{type_name}.json"
+        if not os.path.exists(type_json_path):
+            metadata = {
+                "display_name": type_name.replace("_", " ").title(),
+                "description": f"Entries for {type_name.replace('_', ' ')}.",
+                "short_description": f"A category for {type_name.replace('_', ' ')}.",
+                "enabled": True
+            }
+            with open(type_json_path, "w") as f:
+                json.dump(metadata, f, indent=2)
+
         flash(f"New type '{type_name}' created successfully!", "success")
 
         if return_to_wizard:
-            # Refresh session step list and jump back into wizard flow
             type_folders = sorted([
                 t for t in os.listdir("./types")
                 if os.path.isdir(f"./types/{t}") and t != "time"
