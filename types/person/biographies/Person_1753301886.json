@@ -1,0 +1,35 @@
+{
+    "person_id": "Person_1753301886",
+    "name": "Teddy",
+    "dob": "2025-07-14",
+    "created": "2025-07-23T21:18:06.038621+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "infant",
+                "confidence": 100,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "infant"
+            },
+            "created": "2025-07-23T21:18:09.304953",
+            "buildings": [
+                {
+                    "id": "semi_detached",
+                    "confidence": 100,
+                    "label_type": "house"
+                },
+                {
+                    "id": "cathedral",
+                    "confidence": 50,
+                    "label_type": "religious"
+                },
+                {
+                    "id": "uni",
+                    "confidence": 48,
+                    "label_type": "educational_buildings"
+                }
+            ]
+        }
+    ]
+}

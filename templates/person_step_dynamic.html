@@ -386,24 +386,43 @@
       {% endfor %}
 
       {% if biography_options %}
-        <div class="label-group-box">
-          <div class="label-title">Linked {{ current_type.replace('_', ' ')|title }} Biography</div>
+  <div class="label-group-box">
+    <div class="label-title">Linked {{ current_type.replace('_', ' ')|title }} Biography</div>
 
-          <select name="selected_id_biography" class="form-control">
-            <option value="">-- Select Existing Biography --</option>
-            {% for option in biography_options %}
-              <option value="{{ option.id }}">{{ option.display }}</option>
-            {% endfor %}
-          </select>
+    <!-- Search bar -->
+    <input type="text"
+           class="label-search"
+           placeholder="Search {{ current_type.replace('_', ' ')|title }} Biography..."
+           oninput="filterLabels(this, 'biography')"
+           data-group="biography">
 
-          <div style="margin-top: 10px;">
-            <a href="{{ url_for('search_or_add_biography', type_name=current_type, return_url=request.url) }}"
-              class="add-entry-button">
-              ➕ Search or Create {{ current_type.replace('_', ' ')|title }} Biography
-            </a>
-          </div>
+    <!-- Hidden input for selection -->
+    <input type="hidden" name="selected_id_biography" id="input_biography" class="group-selection-tracker" value="">
+
+    <!-- Card-style options -->
+    <div class="label-options">
+      {% for option in biography_options %}
+        <div class="label-card"
+             data-group="biography"
+             data-value="{{ option.id }}"
+             onclick="toggleLabelSelection(this)">
+          <div><strong>{{ option.display.replace('_', ' ')|title }}</strong></div>
+          {% if option.description %}
+            <div class="label-description">{{ option.description }}</div>
+          {% endif %}
         </div>
-      {% endif %}
+      {% endfor %}
+    </div>
+
+    <!-- Search or Create biography link -->
+    <div style="text-align: center; margin-top: 14px;">
+      <a href="{{ url_for('search_or_add_biography', type_name=current_type, return_url=request.url) }}"
+         class="add-entry-button">
+        ➕ Search or Create {{ current_type.replace('_', ' ')|title }} Biography
+      </a>
+    </div>
+  </div>
+{% endif %}
 
     <div class="bottom-card">
       <div class="button-row">

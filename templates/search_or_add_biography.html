@@ -3,6 +3,74 @@
 <head>
   <title>Search or Add Biography – {{ type_name.title() }}</title>
   <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    .bio-grid {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .bio-card {
+      background: white;
+      border: 2px solid #ccc;
+      border-radius: 10px;
+      padding: 20px;
+      width: 260px;
+      text-align: center;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    }
+
+    .bio-card strong {
+      font-size: 1.1em;
+      display: block;
+      margin-bottom: 6px;
+      color: #333;
+    }
+
+    .bio-card small {
+      display: block;
+      margin-bottom: 12px;
+      color: #666;
+    }
+
+    .bio-card a {
+      text-decoration: none;
+      font-weight: bold;
+      color: #2e7d32;
+    }
+
+    .add-form {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #ddd;
+    }
+
+    input[type="text"], textarea {
+      width: 100%;
+      max-width: 400px;
+      padding: 10px;
+      margin: 10px auto;
+      display: block;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+
+    .button {
+      padding: 10px 20px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .button:hover {
+      background: #388e3c;
+    }
+  </style>
 </head>
 <body>
   <div class="box">
@@ -10,31 +78,31 @@
 
     <form method="post" action="{{ url_for('search_or_add_biography', type_name=type_name, return_url=return_url) }}">
       <input type="text" name="search_query" placeholder="Search by name..." value="{{ query }}">
-      <button type="submit">Search</button>
+      <button type="submit" class="button">Search</button>
     </form>
 
     {% if results %}
-      <h3>Matches Found:</h3>
-      <ul>
+      <div class="bio-grid">
         {% for item in results %}
-          <li>
-            <strong>{{ item.display }}</strong><br>
-            <small>{{ item.description }}</small><br>
-            <a href="{{ return_url }}#bio_{{ item.id }}">
-              ✅ Use This Biography
-            </a>
-          </li>
+          <div class="bio-card" id="bio_{{ item.id }}">
+            <strong>{{ item.display }}</strong>
+            <small>{{ item.description }}</small>
+            <a href="{{ return_url }}#bio_{{ item.id }}">✅ Use This Biography</a>
+          </div>
         {% endfor %}
-      </ul>
+      </div>
+    {% else %}
+      <p style="margin-top: 20px; color: #888;">No matching biographies found.</p>
     {% endif %}
 
-    <hr>
-    <h2>➕ Add New Biography</h2>
-    <form method="post" action="{{ url_for('search_or_add_biography', type_name=type_name, return_url=return_url) }}">
-      <input type="text" name="new_bio_name" placeholder="Name" required><br>
-      <textarea name="new_bio_description" placeholder="Short description (optional)"></textarea><br>
-      <button type="submit">Create Biography</button>
-    </form>
+    <div class="add-form">
+      <h2>➕ Add New Biography</h2>
+      <form method="post" action="{{ url_for('search_or_add_biography', type_name=type_name, return_url=return_url) }}">
+        <input type="text" name="new_bio_name" placeholder="Name" required>
+        <textarea name="new_bio_description" placeholder="Short description (optional)"></textarea>
+        <button type="submit" class="button">Create Biography</button>
+      </form>
+    </div>
 
     <p style="margin-top: 20px;">
       <a href="{{ return_url }}">⬅️ Back to Label Selection</a>

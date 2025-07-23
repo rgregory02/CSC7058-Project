@@ -537,7 +537,14 @@ def person_step_dynamic(step):
         for f in os.listdir(bio_path):
             if f.endswith(".json"):
                 bio_id = f[:-5]
-                display_name = bio_id.replace("_", " ")
+                filepath = os.path.join(bio_path, f)
+                try:
+                    with open(filepath, "r") as file:
+                        data = json.load(file)
+                    display_name = data.get("name", bio_id.replace("_", " "))
+                except Exception as e:
+                    print(f"[ERROR] Could not load biography file {f}: {e}")
+                    display_name = bio_id.replace("_", " ")
                 biography_options.append({"id": bio_id, "display": display_name})
 
     label_groups_list = []
@@ -668,19 +675,21 @@ def search_or_add_biography(type_name):
 
     matched = []
     query = ""
-    return_url = request.args.get("return_url", url_for("index"))  # Default fallback
+    return_url = request.args.get("return_url", url_for("index"))
 
+    # Handle POST actions
     if request.method == "POST":
         if "search_query" in request.form:
             query = request.form["search_query"].strip().lower()
             for f in os.listdir(bio_folder):
                 if f.endswith(".json") and query in f.lower():
                     bio_id = f[:-5]
-                    with open(os.path.join(bio_folder, f), "r") as file:
+                    filepath = os.path.join(bio_folder, f)
+                    with open(filepath, "r") as file:
                         data = json.load(file)
                     matched.append({
                         "id": bio_id,
-                        "display": data.get("name", bio_id),
+                        "display": data.get("name", bio_id),  # ✅ Use name if present
                         "description": data.get("description", "")
                     })
 
@@ -700,14 +709,30 @@ def search_or_add_biography(type_name):
                     json.dump(new_bio, f, indent=2)
 
                 flash(f"Biography '{name}' created successfully.", "success")
-                return redirect(return_url)  # ✅ Send user back to wizard step
+                return redirect(return_url)
             else:
                 flash("A biography with this name already exists.", "error")
 
-    return render_template("search_or_add_biography.html", 
-                           type_name=type_name, 
-                           query=query, 
-                           results=matched, 
+    # Load and filter matching biographies (always done)
+    for f in os.listdir(bio_folder):
+        if f.endswith(".json"):
+            bio_id = f[:-5]
+            with open(os.path.join(bio_folder, f), "r") as file:
+                data = json.load(file)
+
+            display_name = data.get("name", bio_id)
+            description = data.get("description", "")
+            if not query or query in display_name.lower():
+                matched.append({
+                    "id": bio_id,
+                    "display": display_name,
+                    "description": description
+                })
+
+    return render_template("search_or_add_biography.html",
+                           type_name=type_name,
+                           query=query,
+                           results=matched,
                            return_url=return_url)
 
 @app.route("/person_step/add_type_prompt", methods=["GET", "POST"])
