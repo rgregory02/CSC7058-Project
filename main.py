@@ -34,7 +34,8 @@ from utils import (
     uk_datetime,
     display_dob_uk,
     resolve_entities,
-    LIFE_STAGE_ORDER
+    LIFE_STAGE_ORDER,
+    collect_label_groups
 )
 
 app = Flask(__name__)
@@ -547,79 +548,7 @@ def person_step_dynamic(step):
                     display_name = bio_id.replace("_", " ")
                 biography_options.append({"id": bio_id, "display": display_name})
 
-        label_groups_list = []
-        seen_keys = set()
-
-        if os.path.exists(label_base_path):
-            for main_folder in os.listdir(label_base_path):
-                if main_folder.startswith('.') or main_folder == "undefined":
-                    continue
-                main_folder_path = os.path.join(label_base_path, main_folder)
-                if not os.path.isdir(main_folder_path):
-                    continue
-
-                # Check if main_folder contains JSONs directly
-                direct_values = []
-                for file in os.listdir(main_folder_path):
-                    if file.endswith(".json") and not os.path.isdir(os.path.join(main_folder_path, file)):
-                        base = file[:-5]
-                        json_path = os.path.join(main_folder_path, file)
-                        img_path = os.path.join(main_folder_path, f"{base}.jpg")
-                        try:
-                            data = load_json_as_dict(json_path)
-                            label = {
-                                "id": base,
-                                "display": data.get("properties", {}).get("name", base),
-                                "label_type": main_folder
-                            }
-                            if os.path.exists(img_path):
-                                label["image"] = f"/types/{current_type}/labels/{main_folder}/{base}.jpg"
-                            if "description" in data:
-                                label["description"] = data["description"]
-                            direct_values.append(label)
-                        except Exception as e:
-                            print(f"[ERROR] Reading label {file}: {e}")
-                
-                if direct_values:
-                    label_groups_list.append({
-                        "key": main_folder,
-                        "label": main_folder.replace("_", " ").title(),
-                        "options": direct_values
-                    })
-
-                # Now check for nested subfolders (e.g. work_building/hospital/)
-                for subfolder in os.listdir(main_folder_path):
-                    subfolder_path = os.path.join(main_folder_path, subfolder)
-                    if not os.path.isdir(subfolder_path):
-                        continue
-
-                    sub_values = []
-                    for file in os.listdir(subfolder_path):
-                        if file.endswith(".json"):
-                            base = file[:-5]
-                            json_path = os.path.join(subfolder_path, file)
-                            img_path = os.path.join(subfolder_path, f"{base}.jpg")
-                            try:
-                                data = load_json_as_dict(json_path)
-                                label = {
-                                    "id": base,
-                                    "display": data.get("properties", {}).get("name", base),
-                                    "label_type": f"{main_folder}/{subfolder}"
-                                }
-                                if os.path.exists(img_path):
-                                    label["image"] = f"/types/{current_type}/labels/{main_folder}/{subfolder}/{base}.jpg"
-                                if "description" in data:
-                                    label["description"] = data["description"]
-                                sub_values.append(label)
-                            except Exception as e:
-                                print(f"[ERROR] Reading nested label {file}: {e}")
-
-                    if sub_values:
-                        label_groups_list.append({
-                            "key": f"{main_folder}/{subfolder}",
-                            "label": f"{main_folder.replace('_', ' ').title()} – {subfolder.replace('_', ' ').title()}",
-                            "options": sub_values
-                        })
+        label_groups_list = collect_label_groups(label_base_path, current_type)
 
         suggested_biographies = {}
 

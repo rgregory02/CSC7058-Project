@@ -205,3 +205,50 @@ LIFE_STAGE_ORDER = {
     "nineties": 95,
     "hundreds": 105
 }
+
+def collect_label_groups(label_base_path, current_type):
+    label_groups_list = []
+    seen_keys = set()
+
+    for root, dirs, files in os.walk(label_base_path):
+        if root == label_base_path:
+            continue  # Skip root level
+
+        rel_path = os.path.relpath(root, label_base_path)  # e.g., "hospital"
+        key = rel_path.replace("/", "_")  # key used in forms
+
+        if not key or key in seen_keys:
+            continue
+        seen_keys.add(key)
+
+        values = []
+        for file in files:
+            if not file.endswith(".json"):
+                continue
+            base = file[:-5]
+            json_path = os.path.join(root, file)
+            img_path = os.path.join(root, f"{base}.jpg")
+
+            try:
+                data = load_json_as_dict(json_path)
+                label = {
+                    "id": base,
+                    "display": data.get("properties", {}).get("name", base),
+                    "label_type": key
+                }
+                if os.path.exists(img_path):
+                    label["image"] = f"/types/{current_type}/labels/{rel_path}/{base}.jpg"
+                if "description" in data:
+                    label["description"] = data["description"]
+                values.append(label)
+            except Exception as e:
+                print(f"[ERROR] Reading label {file}: {e}")
+
+        if values:
+            label_groups_list.append({
+                "key": key,
+                "label": rel_path.replace("_", " ").title(),
+                "options": values
+            })
+
+    return label_groups_list
