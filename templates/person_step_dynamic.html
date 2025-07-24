@@ -360,6 +360,50 @@
                     <div class="label-description">{{ item.description }}</div>
                   {% endif %}
                 </div>
+
+{% if suggested_biographies.get(group.key) %}
+  <div class="label-group-box">
+    <div class="label-title">Suggested {{ group.label.replace('_', ' ')|title }} Biographies</div>
+
+    <!-- Search bar -->
+    <input type="text"
+           class="label-search"
+           placeholder="Search {{ group.label.replace('_', ' ')|title }} Biographies..."
+           oninput="filterLabels(this, '{{ group.key }}_bio')"
+           data-group="{{ group.key }}_bio">
+
+    <!-- Hidden input for selection -->
+    <input type="hidden"
+           name="selected_id_{{ group.key }}_bio"
+           id="input_{{ group.key }}_bio"
+           class="group-selection-tracker"
+           value="">
+
+    <!-- Card-style biography options -->
+    <div class="label-options">
+      {% for option in suggested_biographies[group.key] %}
+        <div class="label-card"
+             data-group="{{ group.key }}_bio"
+             data-value="{{ option.id }}"
+             onclick="toggleLabelSelection(this)">
+          <div><strong>{{ option.display.replace('_', ' ')|title }}</strong></div>
+          {% if option.description %}
+            <div class="label-description">{{ option.description }}</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+
+    <!-- Optional: Add link to create/search -->
+    <div style="text-align: center; margin-top: 14px;">
+      <a href="{{ url_for('search_or_add_biography', type_name=current_type, return_url=request.url) }}"
+         class="add-entry-button">
+        ➕ Search or Create {{ group.label.replace('_', ' ')|title }} Biography
+      </a>
+    </div>
+  </div>
+{% endif %}
+
               {% endfor %}
             {% else %}
               <div class="no-labels-message">No labels added yet for this category.</div>
@@ -384,6 +428,8 @@
           </div>
         </div>
       {% endfor %}
+
+      
 
       {% if biography_options %}
   <div class="label-group-box">
