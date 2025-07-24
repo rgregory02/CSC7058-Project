@@ -492,6 +492,7 @@ def person_step_time(person_id):
         edit_entry_index=session.get("edit_entry_index")
     )
 
+
 @app.route("/person_step/dynamic/<int:step>", methods=["GET", "POST"])
 def person_step_dynamic(step):
     person_id = session.get("person_id")
@@ -505,7 +506,6 @@ def person_step_dynamic(step):
     person_data = load_json_as_dict(person_file)
     person_data.setdefault("entries", [])
 
-    # Only add a new time entry if one hasn't already been added by the time route
     if step == 0 and session.get("time_step_in_progress") and session.get("time_selection") and "entry_index" not in session:
         new_entry = {
             "time": session["time_selection"],
@@ -516,15 +516,13 @@ def person_step_dynamic(step):
         save_dict_as_json(person_file, person_data)
         session["time_step_in_progress"] = False
 
-    # Determine label type folders
     type_folders = sorted([
         t for t in os.listdir("./types")
         if os.path.isdir(f"./types/{t}") and t != "time"
     ])
     if step >= len(type_folders):
         return redirect(url_for("add_type_prompt"))
-    
-    # If this step matches the one just created, flag that it must stop after submission
+
     if session.get("created_type_step") == step:
         session.pop("created_type_step", None)
         session["force_stop_after_this_step"] = True
@@ -540,75 +538,53 @@ def person_step_dynamic(step):
                 bio_id = f[:-5]
                 filepath = os.path.join(bio_path, f)
                 try:
-                    with open(filepath, "r") as file:
-                        data = json.load(file)
+                    data = load_json_as_dict(filepath)
                     display_name = data.get("name", bio_id.replace("_", " "))
                 except Exception as e:
                     print(f"[ERROR] Could not load biography file {f}: {e}")
                     display_name = bio_id.replace("_", " ")
                 biography_options.append({"id": bio_id, "display": display_name})
 
-        label_groups_list = collect_label_groups(label_base_path, current_type)
+    label_groups_list = collect_label_groups(label_base_path, current_type)
 
-        suggested_biographies = {}
-
-        for group in label_groups_list:
-            key = group["key"]
-            suggestions_from = set()
-
-            for item in group["options"]:
-                label_json_path = os.path.join(label_base_path, key, f"{item['id']}.json")
-                try:
-                    label_data = load_json_as_dict(label_json_path)
-                    suggested_type = label_data.get("properties", {}).get("suggests_biographies_from")
-                    if suggested_type:
-                        suggestions_from.add(suggested_type)
-                except Exception as e:
-                    print(f"[ERROR] Reading label {item['id']} for suggestions: {e}")
-
-            for s_type in suggestions_from:
-                bio_path = os.path.join("types", s_type, "biographies")
-                if os.path.exists(bio_path):
-                    bios = []
-                    for root, _, files in os.walk(bio_path):  # ✅ RECURSIVE walk
-                        for f in files:
-                            if f.endswith(".json"):
-                                try:
-                                    full_path = os.path.join(root, f)
-                                    bio_id = os.path.splitext(os.path.basename(f))[0]  # Just the filename
-                                    bio_data = load_json_as_dict(full_path)
-                                    bios.append({
-                                        "id": bio_id,
-                                        "display": bio_data.get("name", bio_id),
-                                        "description": bio_data.get("description", "")
-                                    })
-                                except Exception as e:
-                                    print(f"[ERROR] Reading biography {f}: {e}")
-                    if bios:
-                        suggested_biographies[key] = bios
-
-        # Preload existing values
-        existing_labels = {}
-        entry_index = session.get("entry_index")
-        if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
-            labels_list = person_data["entries"][entry_index].get(current_type, [])
-            for label in labels_list:
-                if "label_type" not in label:
-                    for group in label_groups_list:
-                        if any(opt["id"] == label["id"] for opt in group["options"]):
-                            label["label_type"] = group["key"]
-                            break
-                label_type = label.get("label_type")
-                if label_type:
-                    existing_labels[label_type] = {
-                        "label": label.get("id"),
-                        "confidence": label.get("confidence", 100)
-                    }
+    suggested_biographies = {}
+    for group in label_groups_list:
+        key = group["key"]
+        suggestions_from = set()
+        for item in group["options"]:
+            label_json_path = os.path.join(label_base_path, key, f"{item['id']}.json")
+            try:
+                label_data = load_json_as_dict(label_json_path)
+                suggested_type = label_data.get("properties", {}).get("suggests_biographies_from")
+                if suggested_type:
+                    suggestions_from.add(suggested_type)
+            except Exception as e:
+                print(f"[ERROR] Reading label {item['id']} for suggestions: {e}")
+        for s_type in suggestions_from:
+            bios = []
+            bio_path = os.path.join("types", s_type, "biographies")
+            if os.path.exists(bio_path):
+                for root, _, files in os.walk(bio_path):
+                    for f in files:
+                        if f.endswith(".json"):
+                            try:
+                                full_path = os.path.join(root, f)
+                                bio_id = os.path.splitext(os.path.basename(f))[0]
+                                bio_data = load_json_as_dict(full_path)
+                                bios.append({
+                                    "id": bio_id,
+                                    "display": bio_data.get("name", bio_id),
+                                    "description": bio_data.get("description", "")
+                                })
+                            except Exception as e:
+                                print(f"[ERROR] Reading biography {f}: {e}")
+            if bios:
+                suggested_biographies[key] = bios
 
     if request.method == "POST":
         new_entries = []
 
-        # Capture any directly selected biography (legacy field)
+        # Add selected biography (if any)
         selected_bio_id = request.form.get("selected_id_biography")
         if selected_bio_id:
             new_entries.append({
@@ -617,47 +593,55 @@ def person_step_dynamic(step):
                 "source": "biography"
             })
 
-        # Loop through all label groups (including nested ones)
+        # Add only selected labels
         for group in label_groups_list:
-            key = group["key"]  # e.g., "work_building/hospital"
-            form_field_id = f"selected_id_{key}"
-            confidence_field = f"confidence_{key}"
-
-            selected_id = request.form.get(form_field_id)
-            confidence = int(request.form.get(confidence_field, 80))
-
+            key = group["key"]
+            selected_id = request.form.get(f"selected_id_{key}")
             if selected_id:
+                confidence = int(request.form.get(f"confidence_{key}", 80))
                 new_entries.append({
                     "id": selected_id,
                     "confidence": confidence,
-                    "label_type": key  # Preserve full nested path
-                })
-            else:
-                # If nothing selected, we still record the label_type for clarity
-                new_entries.append({
-                    "id": None,
-                    "confidence": 0,
                     "label_type": key
                 })
 
-        # Save to correct person entry
+        # Save if valid
         entry_index = session.get("entry_index")
         if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
-            cleaned_entries = [e for e in new_entries if e["id"]]
-            if cleaned_entries:
-                person_data["entries"][entry_index][current_type] = cleaned_entries
-            else:
-                person_data["entries"][entry_index].pop(current_type, None)
+            person_data["entries"][entry_index][current_type] = new_entries
             save_dict_as_json(person_file, person_data)
 
-        # Redirect after submission or skip
-        if request.form.get("skip") or request.method == "POST":
-            if session.pop("loopback_to_add_type", False) or session.pop("force_stop_after_this_step", False):
-                session.pop("type_just_created", None)
-                return redirect(url_for("add_type_prompt"))
-            else:
-                return redirect(url_for("person_step_dynamic", step=step + 1))
+        # Redirect logic
+        if session.pop("loopback_to_add_type", False) or session.pop("force_stop_after_this_step", False):
+            session.pop("type_just_created", None)
+            return redirect(url_for("add_type_prompt"))
+        else:
+            return redirect(url_for("person_step_dynamic", step=step + 1))
 
+    existing_labels = {}
+    selected_label_ids = set()
+    entry_index = session.get("entry_index")
+    if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
+        labels_list = person_data["entries"][entry_index].get(current_type, [])
+        for label in labels_list:
+            if "label_type" not in label:
+                for group in label_groups_list:
+                    if any(opt["id"] == label["id"] for opt in group["options"]):
+                        label["label_type"] = group["key"]
+                        break
+            label_type = label.get("label_type")
+            if label_type:
+                existing_labels[label_type] = {
+                    "label": label.get("id"),
+                    "confidence": label.get("confidence", 100)
+                }
+                selected_label_ids.add(label_type)
+                selected_label_ids.add(label_type.split("/")[-1])
+                selected_label_ids.add(label.get("id"))
+
+    print("LABEL GROUP KEYS:")
+    for group in label_groups_list:
+        print("-", group["key"])
 
     return render_template(
         "person_step_dynamic.html",
@@ -666,6 +650,7 @@ def person_step_dynamic(step):
         label_groups_list=label_groups_list,
         suggested_biographies=suggested_biographies,
         existing_labels=existing_labels,
+        selected_label_ids=selected_label_ids,
         person_id=person_id,
         skip_allowed=(len(label_groups_list) == 0 and len(biography_options) == 0),
         person_name=person_data.get("name", person_id),

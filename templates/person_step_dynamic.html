@@ -321,191 +321,181 @@
       {% endif %}
     </div>
 
-<div class="top-skip" style="text-align: center; margin-bottom: 20px;">
-  <a href="{{ url_for('person_step_dynamic', step=next_step) }}"
-     class="primary-button">
-    ⏭️ Skip This Section
-  </a>
-</div>
+    <div class="top-skip" style="text-align: center; margin-bottom: 20px;">
+      <a href="{{ url_for('person_step_dynamic', step=next_step) }}"
+         class="primary-button">
+        ⏭️ Skip This Section
+      </a>
+    </div>
 
-    <form method="POST">
-      {% for group in label_groups_list %}
-        {% set selected_id = existing_labels.get(group.key, {}).get('label') %}
-        {% set matched_conf = existing_labels.get(group.key, {}).get('confidence', 100) %}
+<form method="POST">
+  {% for group in label_groups_list %}
+    {% set is_nested = '/' in group.key %}
+    {% set parent_key = '/'.join(group.key.split('/')[:-1]) if is_nested else None %}
+    {% set selected_id = existing_labels.get(group.key, {}).get('label') %}
+    {% set matched_conf = existing_labels.get(group.key, {}).get('confidence', 100) %}
 
-        <div class="label-group-box">
-          <div class="label-title">{{ group.label.replace('_', ' ')|title }}</div>
+     <div class="label-group-box"
+          id="group_{{ group.key }}"
+          {% if is_nested %} data-parent="{{ parent_key }}" style="display: none;" {% endif %}>
+        <div class="label-title">{{ group.label.replace('_', ' ')|title }}</div>
 
-          <!-- 🔍 Add search bar -->
-          <input type="text"
-                class="label-search"
-                placeholder="Search {{ group.label.replace('_', ' ')|title }}..."
-                oninput="filterLabels(this, '{{ group.key }}')"
-                data-group="{{ group.key }}">
+        <input type="text"
+              class="label-search"
+              placeholder="Search {{ group.label.replace('_', ' ')|title }}..."
+              oninput="filterLabels(this, '{{ group.key }}')"
+              data-group="{{ group.key }}">
 
-          <input type="hidden" name="selected_id_{{ group.key }}" id="input_{{ group.key }}"
-                class="group-selection-tracker" value="{{ selected_id or '' }}">
+        <input type="hidden"
+              name="selected_id_{{ group.key }}"
+              id="input_{{ group.key }}"
+              class="group-selection-tracker"
+              value="{{ selected_id or '' }}">
 
-          <div class="label-options">
-            {% if group.options %}
-              {% for item in group.options %}
-                <div class="label-card {% if selected_id == item.id %}selected{% endif %}"
-                    data-group="{{ group.key }}"
-                    data-value="{{ item.id }}"
-                    onclick="toggleLabelSelection(this)"
-                    style="{% if loop.index > 3 %}display: none;{% endif %}">
-                  {% if item.image %}<img src="{{ item.image }}" alt="{{ item.display }}">{% endif %}
-                  <div><strong>{{ item.display.replace('_', ' ')|title }}</strong></div>
-                  {% if item.description %}
-                    <div class="label-description">{{ item.description }}</div>
+        <div class="label-options">
+          {% if group.options %}
+            {% for item in group.options %}
+              <div class="label-card {% if selected_id == item.id %}selected{% endif %}"
+                  data-group="{{ group.key }}"
+                  data-value="{{ item.id }}"
+                  onclick="toggleLabelSelection(this)"
+                  style="{% if loop.index > 3 %}display: none;{% endif %}">
+                {% if item.image %}<img src="{{ item.image }}" alt="{{ item.display }}">{% endif %}
+                <div><strong>{{ item.display.replace('_', ' ')|title }}</strong></div>
+                {% if item.description %}
+                  <div class="label-description">{{ item.description }}</div>
+                {% endif %}
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="no-labels-message">No labels added yet for this category.</div>
+          {% endif %}
+        </div>
+
+        {% if suggested_biographies.get(group.key) %}
+          <div class="label-group-box">
+            <div class="label-title">Suggested {{ group.label.replace('_', ' ')|title }} Biographies</div>
+
+            <input type="text"
+                  class="label-search"
+                  placeholder="Search {{ group.label.replace('_', ' ')|title }} Biographies..."
+                  oninput="filterLabels(this, '{{ group.key }}_bio')"
+                  data-group="{{ group.key }}_bio">
+
+            <input type="hidden"
+                  name="selected_id_{{ group.key }}_bio"
+                  id="input_{{ group.key }}_bio"
+                  class="group-selection-tracker"
+                  value="">
+
+            <div class="label-options">
+              {% for option in suggested_biographies[group.key] %}
+                <div class="label-card"
+                    data-group="{{ group.key }}_bio"
+                    data-value="{{ option.id }}"
+                    onclick="toggleLabelSelection(this)">
+                  <div><strong>{{ option.display.replace('_', ' ')|title }}</strong></div>
+                  {% if option.description %}
+                    <div class="label-description">{{ option.description }}</div>
                   {% endif %}
                 </div>
-
-{% if suggested_biographies.get(group.key) %}
-  <div class="label-group-box">
-    <div class="label-title">Suggested {{ group.label.replace('_', ' ')|title }} Biographies</div>
-
-    <!-- Search bar -->
-    <input type="text"
-           class="label-search"
-           placeholder="Search {{ group.label.replace('_', ' ')|title }} Biographies..."
-           oninput="filterLabels(this, '{{ group.key }}_bio')"
-           data-group="{{ group.key }}_bio">
-
-    <!-- Hidden input for selection -->
-    <input type="hidden"
-           name="selected_id_{{ group.key }}_bio"
-           id="input_{{ group.key }}_bio"
-           class="group-selection-tracker"
-           value="">
-
-    <!-- Card-style biography options -->
-    <div class="label-options">
-      {% for option in suggested_biographies[group.key] %}
-        <div class="label-card"
-             data-group="{{ group.key }}_bio"
-             data-value="{{ option.id }}"
-             onclick="toggleLabelSelection(this)">
-          <div><strong>{{ option.display.replace('_', ' ')|title }}</strong></div>
-          {% if option.description %}
-            <div class="label-description">{{ option.description }}</div>
-          {% endif %}
-        </div>
-      {% endfor %}
-    </div>
-
-    <!-- Optional: Add link to create/search -->
-    <div style="text-align: center; margin-top: 14px;">
-      <a href="{{ url_for('search_or_add_biography', type_name=current_type, return_url=request.url) }}"
-         class="add-entry-button">
-        ➕ Search or Create {{ group.label.replace('_', ' ')|title }} Biography
-      </a>
-    </div>
-  </div>
-{% endif %}
-
               {% endfor %}
-            {% else %}
-              <div class="no-labels-message">No labels added yet for this category.</div>
+            </div>
+
+            <div style="text-align: center; margin-top: 14px;">
+              <a href="{{ url_for('search_or_add_biography', type_name=current_type, return_url=request.url) }}"
+                class="add-entry-button">
+                ➕ Search or Create {{ group.label.replace('_', ' ')|title }} Biography
+              </a>
+            </div>
+          </div>
+        {% endif %}
+
+        {% if group.options %}
+          <div class="confidence-slider">
+            <label for="confidence_{{ group.key }}">🎯 Confidence:</label><br>
+            <input type="range" name="confidence_{{ group.key }}" id="confidence_{{ group.key }}" min="0" max="100"
+                  value="{{ matched_conf }}" oninput="updateConfidence('{{ group.key }}')">
+            <div class="confidence-display">
+              <span id="confidence_display_{{ group.key }}">{{ matched_conf }}%</span>
+              <span id="confidence_level_{{ group.key }}"></span>
+            </div>
+          </div>
+        {% endif %}
+
+        <div style="text-align: center; margin-top: 14px;">
+          <a href="{{ url_for('add_label', type_name=current_type, subfolder_name=group.key, return_url=request.url) }}"
+            class="add-entry-button">➕ Add a New {{ group.label.replace('_', ' ')|title }} Label</a>
+        </div>
+      </div>
+  {% endfor %}
+
+  {# 📚 Fallback biography options (not tied to label group) #}
+  {% if biography_options %}
+    <div class="label-group-box">
+      <div class="label-title">Linked {{ current_type.replace('_', ' ')|title }} Biography</div>
+
+      <input type="text"
+            class="label-search"
+            placeholder="Search {{ current_type.replace('_', ' ')|title }} Biography..."
+            oninput="filterLabels(this, 'biography')"
+            data-group="biography">
+
+      <input type="hidden" name="selected_id_biography" id="input_biography" class="group-selection-tracker" value="">
+
+      <div class="label-options">
+        {% for option in biography_options %}
+          <div class="label-card"
+              data-group="biography"
+              data-value="{{ option.id }}"
+              onclick="toggleLabelSelection(this)">
+            <div><strong>{{ option.display.replace('_', ' ')|title }}</strong></div>
+            {% if option.description %}
+              <div class="label-description">{{ option.description }}</div>
             {% endif %}
           </div>
-
-          {% if group.options %}
-            <div class="confidence-slider">
-              <label for="confidence_{{ group.key }}">🎯 Confidence:</label><br>
-              <input type="range" name="confidence_{{ group.key }}" id="confidence_{{ group.key }}" min="0" max="100"
-                    value="{{ matched_conf }}" oninput="updateConfidence('{{ group.key }}')">
-              <div class="confidence-display">
-                <span id="confidence_display_{{ group.key }}">{{ matched_conf }}%</span>
-                <span id="confidence_level_{{ group.key }}"></span>
-              </div>
-            </div>
-          {% endif %}
-
-          <div style="text-align: center; margin-top: 14px;">
-            <a href="{{ url_for('add_label', type_name=current_type, subfolder_name=group.key, return_url=request.url) }}"
-              class="add-entry-button">➕ Add a New {{ group.label.replace('_', ' ')|title }} Label</a>
-          </div>
-        </div>
-      {% endfor %}
-
-      
-
-      {% if biography_options %}
-  <div class="label-group-box">
-    <div class="label-title">Linked {{ current_type.replace('_', ' ')|title }} Biography</div>
-
-    <!-- Search bar -->
-    <input type="text"
-           class="label-search"
-           placeholder="Search {{ current_type.replace('_', ' ')|title }} Biography..."
-           oninput="filterLabels(this, 'biography')"
-           data-group="biography">
-
-    <!-- Hidden input for selection -->
-    <input type="hidden" name="selected_id_biography" id="input_biography" class="group-selection-tracker" value="">
-
-    <!-- Card-style options -->
-    <div class="label-options">
-      {% for option in biography_options %}
-        <div class="label-card"
-             data-group="biography"
-             data-value="{{ option.id }}"
-             onclick="toggleLabelSelection(this)">
-          <div><strong>{{ option.display.replace('_', ' ')|title }}</strong></div>
-          {% if option.description %}
-            <div class="label-description">{{ option.description }}</div>
-          {% endif %}
-        </div>
-      {% endfor %}
-    </div>
-
-    <!-- Search or Create biography link -->
-    <div style="text-align: center; margin-top: 14px;">
-      <a href="{{ url_for('search_or_add_biography', type_name=current_type, return_url=request.url) }}"
-         class="add-entry-button">
-        ➕ Search or Create {{ current_type.replace('_', ' ')|title }} Biography
-      </a>
-    </div>
-  </div>
-{% endif %}
-
-    <div class="bottom-card">
-      <div class="button-row">
-        <button type="submit" id="saveButton" class="primary-button">
-          ➡️ Move to next page with no labels selected
-        </button>
-
-        {% if skip_allowed %}
-          <a href="{{ url_for('person_step_dynamic', step=next_step) }}"
-            id="skipButton" class="primary-button" style="display: none;">
-            ➡️ Skip to Next Step
-          </a>
-        {% endif %}
+        {% endfor %}
       </div>
 
-      <div class="subfolder-card">
-        <p class="footer-note">
-          🧭 Need to add a label category to the <strong>{{ current_type.replace('_', ' ')|title }}</strong> type?
-        </p>
-
-        <a href="{{ url_for('create_subfolder', type_name=current_type) }}?return_url={{ request.path }}"
-          class="footer-button">
-          📁 Create New Label Subfolder
+      <div style="text-align: center; margin-top: 14px;">
+        <a href="{{ url_for('search_or_add_biography', type_name=current_type, return_url=request.url) }}"
+            class="add-entry-button">
+          ➕ Search or Create {{ current_type.replace('_', ' ')|title }} Biography
         </a>
       </div>
+    </div>
+  {% endif %}
 
-      <div class="navigation-links">
-        <a href="/" class="back-link">🏠 Return Home</a>
-        {% if prev_step is not none %}
-          <a href="{{ url_for('person_step_dynamic', step=prev_step) }}" class="back-link">🔙 Return to Last Step</a>
-        {% else %}
-          <a href="{{ url_for('person_step_time', person_id=person_id) }}" class="back-link">🔙 Return to Time Selection</a>
-        {% endif %}
-      </div>
+  <div class="bottom-card">
+    <div class="button-row">
+      <button type="submit" id="saveButton" class="primary-button">
+        ➡️ Move to next page with no labels selected
+      </button>
+      {% if skip_allowed %}
+        <a href="{{ url_for('person_step_dynamic', step=next_step) }}" id="skipButton"
+           class="primary-button" style="display: none;">
+          ➡️ Skip to Next Step
+        </a>
+      {% endif %}
     </div>
 
-    {% if existing_labels %}
+    <div class="subfolder-card">
+      <p class="footer-note">🧭 Need to add a label category to the <strong>{{ current_type.replace('_', ' ')|title }}</strong> type?</p>
+      <a href="{{ url_for('create_subfolder', type_name=current_type) }}?return_url={{ request.path }}"
+         class="footer-button">📁 Create New Label Subfolder</a>
+    </div>
+
+    <div class="navigation-links">
+      <a href="/" class="back-link">🏠 Return Home</a>
+      {% if prev_step is not none %}
+        <a href="{{ url_for('person_step_dynamic', step=prev_step) }}" class="back-link">🔙 Return to Last Step</a>
+      {% else %}
+        <a href="{{ url_for('person_step_time', person_id=person_id) }}" class="back-link">🔙 Return to Time Selection</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if existing_labels %}
     <hr style="margin-top: 80px; margin-bottom: 30px;">
     <h2 style="margin-bottom: 20px; font-size: 1.3em; color: #444;">Previous Selections</h2>
     <div class="entry-block">
@@ -522,12 +512,12 @@
         </div>
       {% endfor %}
     </div>
-    {% endif %}
+  {% endif %}
 
-    {% if skip_allowed %}
-      <a href="{{ url_for('person_step_dynamic', step=next_step) }}" class="continue-link">Skip this step →</a>
-    {% endif %}
-  </div>
+  {% if skip_allowed %}
+    <a href="{{ url_for('person_step_dynamic', step=next_step) }}" class="continue-link">Skip this step →</a>
+  {% endif %}
+</form>
 
 <script>
   function updateConfidence(key) {
@@ -573,21 +563,37 @@
     const hiddenInput = document.getElementById("input_" + groupKey);
     const currentValue = hiddenInput.value;
     const allCards = document.querySelectorAll(`.label-card[data-group="${groupKey}"]`);
+    const isSelected = currentValue === value;
 
-    if (currentValue === value) {
+    if (isSelected) {
       if (confirm("Are you sure you want to unselect this label?")) {
         hiddenInput.value = "";
         el.classList.remove("selected");
+
+        // 🔻 Hide any nested groups associated with this group
+        document.querySelectorAll(`[data-parent="${groupKey}"]`).forEach(childGroup => {
+          childGroup.style.display = "none";
+          // Optional: Clear sub-selections too
+          const input = childGroup.querySelector('input.group-selection-tracker');
+          if (input) input.value = "";
+        });
       }
     } else {
       allCards.forEach(card => card.classList.remove("selected"));
       hiddenInput.value = value;
       el.classList.add("selected");
+
+      // 🔼 Reveal nested groups
+      document.querySelectorAll(`[data-parent="${groupKey}"]`).forEach(childGroup => {
+        childGroup.style.display = "block";
+      });
     }
 
     updateSaveButtonState();
+    console.log("Clicked groupKey:", groupKey);
+    const nestedGroups = document.querySelectorAll(`[data-parent="${groupKey}"]`);
+    console.log("Found nested groups to show:", nestedGroups.length);
   }
-
   // 🔍 NEW: Filter labels based on search
   function filterLabels(input, groupKey) {
     const query = input.value.toLowerCase();
@@ -613,7 +619,7 @@
 
     updateSaveButtonState();
 
-    // 🔍 NEW: Initial filtering for all label groups
+    // Filter each label group on load
     const allGroups = new Set(
       Array.from(document.querySelectorAll('.label-card')).map(card => card.dataset.group)
     );
@@ -621,6 +627,15 @@
     allGroups.forEach(groupKey => {
       const input = document.querySelector(`.label-search[data-group="${groupKey}"]`);
       if (input) filterLabels(input, groupKey);
+    });
+
+    // 🛡️ Hide all nested groups initially (if parent not selected)
+    document.querySelectorAll('[data-parent]').forEach(childGroup => {
+      const parentKey = childGroup.getAttribute("data-parent");
+      const parentInput = document.getElementById("input_" + parentKey);
+      if (!parentInput || !parentInput.value) {
+        childGroup.style.display = "none";
+      }
     });
   });
 </script>

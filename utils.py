@@ -208,18 +208,15 @@ LIFE_STAGE_ORDER = {
 
 def collect_label_groups(label_base_path, current_type):
     label_groups_list = []
-    seen_keys = set()
 
-    for root, dirs, files in os.walk(label_base_path):
-        if root == label_base_path:
-            continue  # Skip root level
+    # ❌ Skip loading flat .json files directly in the base path
+    # This avoids showing high-level entries like work_building.json
 
-        rel_path = os.path.relpath(root, label_base_path)  # e.g., "hospital"
-        key = rel_path.replace("/", "_")  # key used in forms
-
-        if not key or key in seen_keys:
-            continue
-        seen_keys.add(key)
+    # ✅ Now: recursively walk all subfolders
+    for root, _, files in os.walk(label_base_path):
+        rel_path = os.path.relpath(root, label_base_path)
+        if rel_path == ".":
+            continue  # Skip base directory itself
 
         values = []
         for file in files:
@@ -234,7 +231,7 @@ def collect_label_groups(label_base_path, current_type):
                 label = {
                     "id": base,
                     "display": data.get("properties", {}).get("name", base),
-                    "label_type": key
+                    "label_type": rel_path  # e.g. work_building/hospital
                 }
                 if os.path.exists(img_path):
                     label["image"] = f"/types/{current_type}/labels/{rel_path}/{base}.jpg"
@@ -242,12 +239,12 @@ def collect_label_groups(label_base_path, current_type):
                     label["description"] = data["description"]
                 values.append(label)
             except Exception as e:
-                print(f"[ERROR] Reading label {file}: {e}")
+                print(f"[ERROR] Reading nested label {file}: {e}")
 
         if values:
             label_groups_list.append({
-                "key": key,
-                "label": rel_path.replace("_", " ").title(),
+                "key": rel_path,
+                "label": os.path.basename(root).replace("_", " ").title(),  # Clean display label
                 "options": values
             })
 

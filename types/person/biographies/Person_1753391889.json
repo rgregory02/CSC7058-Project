@@ -1,0 +1,33 @@
+{
+    "person_id": "Person_1753391889",
+    "name": "Teddy",
+    "dob": "2025-07-08",
+    "created": "2025-07-24T22:18:09.316088+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "preteen",
+                "confidence": 1,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "preteen"
+            },
+            "created": "2025-07-24T22:20:50.728978",
+            "buildings": [],
+            "organisations": [],
+            "person": [
+                {
+                    "id": "teacher",
+                    "confidence": 99,
+                    "label_type": "onet_occupation"
+                },
+                {
+                    "id": "0",
+                    "confidence": 98,
+                    "label_type": "celebea_face_hq"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}
