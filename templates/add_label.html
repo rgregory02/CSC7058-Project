@@ -106,6 +106,16 @@
     <textarea id="extra_properties" name="extra_properties" rows="4" placeholder='e.g. {"eye_colour": "green", "importance": "high"}'></textarea>
     <small>Optional additional metadata to include in the label’s <code>properties</code>.</small>
 
+    <!-- NEW FIELD: Add this inside your <form> block, just before the submit button -->
+
+    <label for="suggests_biographies_from">Suggests Biographies From (optional):</label>
+    <input type="text" id="suggests_biographies_from" name="suggests_biographies_from"
+        placeholder="e.g. educational_building">
+    <small>
+    If this label suggests selecting a related biography (e.g. 'university' label suggesting institutions),
+    enter the type name where biographies should be fetched from.
+    </small>
+
     <button type="submit">✅ Save Label</button>
 </form>
 </div>

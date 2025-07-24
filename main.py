@@ -1049,9 +1049,10 @@ def add_label(type_name, subfolder_name):
         image = request.form.get('image', '').strip()
         confidence = request.form.get('confidence', '100').strip()
         source = request.form.get('source', 'user').strip()
+        suggests_biographies_from = request.form.get('suggests_biographies_from', '').strip()
         timestamp = datetime.now(timezone.utc).isoformat()
         extra_properties_raw = request.form.get('extra_properties', '').strip()
-        return_url = request.form.get("return_url", "")  # <- POST form return_url
+        return_url = request.form.get("return_url", "")  # POST return target
 
         label_filename = f"{label_name}.json"
         label_path = os.path.join(labels_dir, label_filename)
@@ -1068,16 +1069,22 @@ def add_label(type_name, subfolder_name):
             flash("❌ Invalid JSON in extra properties. Please check your format.", "error")
             return redirect(request.url)
 
+        # Build label dictionary
+        label_properties = {
+            "value": label_name,
+            "confidence": int(confidence),
+            "source": source,
+            **extra_properties
+        }
+
+        if suggests_biographies_from:
+            label_properties["suggests_biographies_from"] = suggests_biographies_from
+
         new_label_data = {
             "description": description,
             "image": image,
             "created": timestamp,
-            "properties": {
-                "value": label_name,
-                "confidence": int(confidence),
-                "source": source,
-                **extra_properties
-            }
+            "properties": label_properties
         }
 
         with open(label_path, 'w') as f:
@@ -1088,7 +1095,7 @@ def add_label(type_name, subfolder_name):
 
         return redirect(return_url or url_for('add_label', type_name=type_name, subfolder_name=subfolder_name))
 
-    # ✅ FIX: Grab return_url from the query string on GET
+    # Return URL fallback
     return_url = request.args.get("return_url") or request.referrer or ''
     return render_template(
         'add_label.html',

@@ -1,0 +1,50 @@
+{
+    "person_id": "Person_1753303104",
+    "name": "Zelda",
+    "dob": "2025-07-08",
+    "created": "2025-07-23T21:38:24.332819+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "infant",
+                "confidence": 100,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "infant"
+            },
+            "created": "2025-07-23T21:48:14.354432",
+            "buildings": [
+                {
+                    "id": "flat",
+                    "confidence": 2,
+                    "label_type": "house"
+                },
+                {
+                    "id": "school",
+                    "confidence": 1,
+                    "label_type": "educational_buildings"
+                }
+            ],
+            "organisations": [
+                {
+                    "id": "hospital_nhs",
+                    "confidence": 42,
+                    "label_type": "nhs"
+                }
+            ],
+            "person": [
+                {
+                    "id": "Person_1753279179",
+                    "confidence": 100,
+                    "source": "biography"
+                },
+                {
+                    "id": "1",
+                    "confidence": 49,
+                    "label_type": "celebea_face_hq"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}
