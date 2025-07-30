@@ -296,6 +296,20 @@
   background: white;
 }
 
+.bio-folder-title {
+  font-weight: bold;
+  margin-top: 16px;
+  margin-bottom: 6px;
+  color: #2c3e50;
+  font-size: 1.1em;
+}
+
+.label-card.disabled {
+  background: #eee;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
   </style>
 </head>
 
@@ -444,18 +458,45 @@
       <input type="hidden" name="selected_id_biography" id="input_biography" class="group-selection-tracker" value="">
 
       <div class="label-options">
-        {% for option in biography_options %}
-          <div class="label-card"
-              data-group="biography"
-              data-value="{{ option.id }}"
-              onclick="toggleLabelSelection(this)">
-            <div><strong>{{ option.display.replace('_', ' ')|title }}</strong></div>
-            {% if option.description %}
-              <div class="label-description">{{ option.description }}</div>
-            {% endif %}
-          </div>
+  {% set grouped_biographies = {} %}
+  {% for option in biography_options %}
+    {% set folder = option.folder or "" %}
+    {% if grouped_biographies[folder] is not defined %}
+      {% set _ = grouped_biographies.update({folder: []}) %}
+    {% endif %}
+    {% set _ = grouped_biographies[folder].append(option) %}
+  {% endfor %}
+
+  {% for folder, items in grouped_biographies.items() %}
+    <div class="bio-folder-group">
+      {% if folder %}
+        <div class="bio-folder-title">📁 {{ folder.replace('_', ' ')|title }}</div>
+      {% else %}
+        <div class="bio-folder-title">📁 General</div>
+      {% endif %}
+
+      {% if items|length == 1 and not items[0].id %}
+        <div class="label-card disabled">
+          <div><em>No biographies in this folder yet.</em></div>
+        </div>
+      {% else %}
+        {% for option in items %}
+          {% if option.id %}
+            <div class="label-card"
+                data-group="biography"
+                data-value="{{ option.id }}"
+                onclick="toggleLabelSelection(this)">
+              <div><strong>{{ option.display.replace('_', ' ')|title }}</strong></div>
+              {% if option.description %}
+                <div class="label-description">{{ option.description }}</div>
+              {% endif %}
+            </div>
+          {% endif %}
         {% endfor %}
-      </div>
+      {% endif %}
+    </div>
+  {% endfor %}
+</div>
 
       <div style="text-align: center; margin-top: 14px;">
         <a href="{{ url_for('search_or_add_biography', type_name=current_type, return_url=request.url) }}"

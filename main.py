@@ -534,21 +534,40 @@ def person_step_dynamic(step):
     biography_options = []
     if os.path.exists(bio_path):
         for root, _, files in os.walk(bio_path):
+            rel_path = os.path.relpath(root, bio_path)
+            if rel_path == ".":
+                rel_path = ""  # base folder
+            
             for f in files:
                 if f.endswith(".json"):
                     try:
-                        filepath = os.path.join(root, f)
-                        bio_id = os.path.splitext(os.path.basename(f))[0]
-                        data = load_json_as_dict(filepath)
-                        display_name = data.get("name", bio_id.replace("_", " "))
-                        description = data.get("description", "")
+                        full_path = os.path.join(root, f)
+                        bio_id = os.path.splitext(f)[0]
+                        bio_data = load_json_as_dict(full_path)
+                        display_name = bio_data.get("name", bio_id.replace("_", " "))
+                        description = bio_data.get("description", "")
+                        
                         biography_options.append({
                             "id": bio_id,
                             "display": display_name,
-                            "description": description
+                            "description": description,
+                            "folder": rel_path
                         })
                     except Exception as e:
-                        print(f"[BIO ERROR] {f}: {e}")
+                        print(f"[ERROR] Reading biography {f}: {e}")
+
+        # 🧩 Add known subfolders even if empty
+        for subdir, dirs, files in os.walk(bio_path):
+            rel_path = os.path.relpath(subdir, bio_path)
+            if rel_path == ".":
+                continue
+            if not any(b.get("folder") == rel_path for b in biography_options):
+                biography_options.append({
+                    "id": None,
+                    "display": f"(No biographies yet)",
+                    "description": "",
+                    "folder": rel_path
+                })
 
     label_groups_list = collect_label_groups(label_base_path, current_type)
 
