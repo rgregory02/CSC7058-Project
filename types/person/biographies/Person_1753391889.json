@@ -27,6 +27,42 @@
                     "label_type": "celebea_face_hq"
                 }
             ]
+        },
+        {
+            "time": {
+                "label": "forties",
+                "confidence": 92,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "forties"
+            },
+            "created": "2025-07-24T22:26:30.361396",
+            "buildings": [
+                {
+                    "id": "hospital",
+                    "confidence": 100,
+                    "label_type": "work_building"
+                },
+                {
+                    "id": "royal_victoria_hosptial",
+                    "confidence": 100,
+                    "label_type": "work_building/hospital"
+                },
+                {
+                    "id": "flat",
+                    "confidence": 100,
+                    "label_type": "house"
+                }
+            ],
+            "organisations": [],
+            "person": [
+                {
+                    "id": "teacher",
+                    "confidence": 1,
+                    "label_type": "onet_occupation"
+                }
+            ],
+            "vehicle": []
         }
     ],
     "finalised": true

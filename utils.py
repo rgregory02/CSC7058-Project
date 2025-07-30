@@ -209,14 +209,10 @@ LIFE_STAGE_ORDER = {
 def collect_label_groups(label_base_path, current_type):
     label_groups_list = []
 
-    # ❌ Skip loading flat .json files directly in the base path
-    # This avoids showing high-level entries like work_building.json
-
-    # ✅ Now: recursively walk all subfolders
     for root, _, files in os.walk(label_base_path):
         rel_path = os.path.relpath(root, label_base_path)
         if rel_path == ".":
-            continue  # Skip base directory itself
+            continue  # Skip root
 
         values = []
         for file in files:
@@ -241,11 +237,11 @@ def collect_label_groups(label_base_path, current_type):
             except Exception as e:
                 print(f"[ERROR] Reading nested label {file}: {e}")
 
-        if values:
-            label_groups_list.append({
-                "key": rel_path,
-                "label": os.path.basename(root).replace("_", " ").title(),  # Clean display label
-                "options": values
-            })
+        # ✅ Always add the group — even if values is empty
+        label_groups_list.append({
+            "key": rel_path,
+            "label": os.path.basename(root).replace("_", " ").title(),
+            "options": values
+        })
 
     return label_groups_list
