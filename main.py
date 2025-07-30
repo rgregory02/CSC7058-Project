@@ -533,17 +533,22 @@ def person_step_dynamic(step):
 
     biography_options = []
     if os.path.exists(bio_path):
-        for f in os.listdir(bio_path):
-            if f.endswith(".json"):
-                bio_id = f[:-5]
-                filepath = os.path.join(bio_path, f)
-                try:
-                    data = load_json_as_dict(filepath)
-                    display_name = data.get("name", bio_id.replace("_", " "))
-                except Exception as e:
-                    print(f"[ERROR] Could not load biography file {f}: {e}")
-                    display_name = bio_id.replace("_", " ")
-                biography_options.append({"id": bio_id, "display": display_name})
+        for root, _, files in os.walk(bio_path):
+            for f in files:
+                if f.endswith(".json"):
+                    try:
+                        filepath = os.path.join(root, f)
+                        bio_id = os.path.splitext(os.path.basename(f))[0]
+                        data = load_json_as_dict(filepath)
+                        display_name = data.get("name", bio_id.replace("_", " "))
+                        description = data.get("description", "")
+                        biography_options.append({
+                            "id": bio_id,
+                            "display": display_name,
+                            "description": description
+                        })
+                    except Exception as e:
+                        print(f"[BIO ERROR] {f}: {e}")
 
     label_groups_list = collect_label_groups(label_base_path, current_type)
 
@@ -659,7 +664,6 @@ def person_step_dynamic(step):
         prev_step=step - 1 if step > 0 else None,
         step=step
     )
-
 @app.route("/search_or_add_biography/<type_name>", methods=["GET", "POST"])
 def search_or_add_biography(type_name):
     bio_folder = f"./types/{type_name}/biographies"
@@ -673,17 +677,21 @@ def search_or_add_biography(type_name):
     if request.method == "POST":
         if "search_query" in request.form:
             query = request.form["search_query"].strip().lower()
-            for f in os.listdir(bio_folder):
-                if f.endswith(".json") and query in f.lower():
-                    bio_id = f[:-5]
-                    filepath = os.path.join(bio_folder, f)
-                    with open(filepath, "r") as file:
-                        data = json.load(file)
-                    matched.append({
-                        "id": bio_id,
-                        "display": data.get("name", bio_id),  # ✅ Use name if present
-                        "description": data.get("description", "")
-                    })
+            for root, _, files in os.walk(bio_folder):
+                for f in files:
+                    if f.endswith(".json") and query in f.lower():
+                        bio_id = f[:-5]
+                        filepath = os.path.join(root, f)
+                        try:
+                            with open(filepath, "r") as file:
+                                data = json.load(file)
+                            matched.append({
+                                "id": bio_id,
+                                "display": data.get("name", bio_id),
+                                "description": data.get("description", "")
+                            })
+                        except Exception as e:
+                            print(f"[ERROR] Reading biography {filepath}: {e}")
 
         elif "new_bio_name" in request.form:
             name = request.form["new_bio_name"].strip()
@@ -705,21 +713,25 @@ def search_or_add_biography(type_name):
             else:
                 flash("A biography with this name already exists.", "error")
 
-    # Load and filter matching biographies (always done)
-    for f in os.listdir(bio_folder):
-        if f.endswith(".json"):
-            bio_id = f[:-5]
-            with open(os.path.join(bio_folder, f), "r") as file:
-                data = json.load(file)
-
-            display_name = data.get("name", bio_id)
-            description = data.get("description", "")
-            if not query or query in display_name.lower():
-                matched.append({
-                    "id": bio_id,
-                    "display": display_name,
-                    "description": description
-                })
+    # Load and filter all available biographies (even when not searching)
+    for root, _, files in os.walk(bio_folder):
+        for f in files:
+            if f.endswith(".json"):
+                bio_id = f[:-5]
+                filepath = os.path.join(root, f)
+                try:
+                    with open(filepath, "r") as file:
+                        data = json.load(file)
+                    display_name = data.get("name", bio_id)
+                    description = data.get("description", "")
+                    if not query or query in display_name.lower():
+                        matched.append({
+                            "id": bio_id,
+                            "display": display_name,
+                            "description": description
+                        })
+                except Exception as e:
+                    print(f"[ERROR] Reading biography {filepath}: {e}")
 
     return render_template("search_or_add_biography.html",
                            type_name=type_name,

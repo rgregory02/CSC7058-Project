@@ -7,17 +7,22 @@
         {
             "time": {
                 "label": "thirties",
-                "confidence": 28,
+                "confidence": 57,
                 "label_type": "life_stage",
                 "date_value": "",
                 "subvalue": "thirties"
             },
-            "created": "2025-07-30T22:21:02.393041",
+            "created": "2025-07-30T22:36:40.506012",
             "buildings": [
                 {
                     "id": "hospital",
                     "confidence": 100,
                     "label_type": "work_building"
+                },
+                {
+                    "id": "royal_victoria_hosptial",
+                    "confidence": 100,
+                    "label_type": "work_building/hospital"
                 }
             ],
             "organisations": [],
