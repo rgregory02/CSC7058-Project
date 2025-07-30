@@ -614,30 +614,34 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    const sliders = document.querySelectorAll("input[type=range]");
-    sliders.forEach(slider => updateConfidence(slider.id.replace("confidence_", "")));
+  // ✅ Initialise confidence sliders
+  const sliders = document.querySelectorAll("input[type=range]");
+  sliders.forEach(slider => updateConfidence(slider.id.replace("confidence_", "")));
 
-    updateSaveButtonState();
+  updateSaveButtonState();
 
-    // Filter each label group on load
-    const allGroups = new Set(
-      Array.from(document.querySelectorAll('.label-card')).map(card => card.dataset.group)
-    );
-
-    allGroups.forEach(groupKey => {
-      const input = document.querySelector(`.label-search[data-group="${groupKey}"]`);
-      if (input) filterLabels(input, groupKey);
-    });
-
-    // 🛡️ Hide all nested groups initially (if parent not selected)
-    document.querySelectorAll('[data-parent]').forEach(childGroup => {
-      const parentKey = childGroup.getAttribute("data-parent");
-      const parentInput = document.getElementById("input_" + parentKey);
-      if (!parentInput || !parentInput.value) {
-        childGroup.style.display = "none";
-      }
-    });
+  // ✅ Filter labels in each group on load
+  const allGroups = new Set(
+    Array.from(document.querySelectorAll('.label-card')).map(card => card.dataset.group)
+  );
+  allGroups.forEach(groupKey => {
+    const input = document.querySelector(`.label-search[data-group="${groupKey}"]`);
+    if (input) filterLabels(input, groupKey);
   });
+
+  // ✅ Hide or show nested groups based on parent selection
+  document.querySelectorAll('.label-group-box[data-parent]').forEach(childGroup => {
+    const parentKey = childGroup.getAttribute("data-parent");
+    const parentInput = document.getElementById("input_" + parentKey);
+    if (parentInput && parentInput.value) {
+      // ✔️ Show if parent is selected
+      childGroup.style.display = "block";
+    } else {
+      // ❌ Hide if parent not selected
+      childGroup.style.display = "none";
+    }
+  });
+});
 </script>
 </body>
 </html>

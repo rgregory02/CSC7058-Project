@@ -1,0 +1,39 @@
+{
+    "person_id": "Person_1753909681",
+    "name": "Teddy",
+    "dob": "2025-07-07",
+    "created": "2025-07-30T22:08:01.432866+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "thirties",
+                "confidence": 28,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "thirties"
+            },
+            "created": "2025-07-30T22:21:02.393041",
+            "buildings": [
+                {
+                    "id": "hospital",
+                    "confidence": 100,
+                    "label_type": "work_building"
+                }
+            ],
+            "organisations": [],
+            "person": [
+                {
+                    "id": "actor",
+                    "confidence": 81,
+                    "label_type": "onet_occupation"
+                },
+                {
+                    "id": "1",
+                    "confidence": 5,
+                    "label_type": "celebea_face_hq"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}
