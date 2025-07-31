@@ -531,84 +531,99 @@ def person_step_dynamic(step):
     label_base_path = f"./types/{current_type}/labels"
     bio_path = f"./types/{current_type}/biographies"
 
-    biography_options = []
+    grouped_biographies = {}
+    all_bio_folders = []
+
     if os.path.exists(bio_path):
         for root, _, files in os.walk(bio_path):
-            rel_path = os.path.relpath(root, bio_path)
-            if rel_path == ".":
-                rel_path = ""  # base folder
-            
             for f in files:
                 if f.endswith(".json"):
                     try:
-                        full_path = os.path.join(root, f)
-                        bio_id = os.path.splitext(f)[0]
-                        bio_data = load_json_as_dict(full_path)
-                        display_name = bio_data.get("name", bio_id.replace("_", " "))
-                        description = bio_data.get("description", "")
-                        
+                        filepath = os.path.join(root, f)
+                        bio_id = os.path.splitext(os.path.basename(f))[0]
+                        data = load_json_as_dict(filepath)
+                        display_name = data.get("name", bio_id.replace("_", " "))
+                        description = data.get("description", "")
                         biography_options.append({
                             "id": bio_id,
                             "display": display_name,
-                            "description": description,
-                            "folder": rel_path
+                            "description": description
                         })
                     except Exception as e:
-                        print(f"[ERROR] Reading biography {f}: {e}")
-
-        # 🧩 Add known subfolders even if empty
-        for subdir, dirs, files in os.walk(bio_path):
-            rel_path = os.path.relpath(subdir, bio_path)
-            if rel_path == ".":
-                continue
-            if not any(b.get("folder") == rel_path for b in biography_options):
-                biography_options.append({
-                    "id": None,
-                    "display": f"(No biographies yet)",
-                    "description": "",
-                    "folder": rel_path
-                })
+                        print(f"[BIO ERROR] {f}: {e}")
 
     label_groups_list = collect_label_groups(label_base_path, current_type)
 
     suggested_biographies = {}
     for group in label_groups_list:
         key = group["key"]
-        suggestions_from = set()
+
         for item in group["options"]:
-            label_json_path = os.path.join(label_base_path, key, f"{item['id']}.json")
+            label_id = item["id"]
+            full_label_key = f"{key}/{label_id}"
+            safe_key = full_label_key.replace("/", "__")
+
+            label_json_path = os.path.join(label_base_path, *key.split("/"), f"{label_id}.json")
+            if not os.path.exists(label_json_path):
+                print(f"[WARN] Label file not found: {label_json_path}")
+                continue
+
             try:
                 label_data = load_json_as_dict(label_json_path)
                 suggested_type = label_data.get("properties", {}).get("suggests_biographies_from")
+
+                bios = []
+
+                # ✅ 1. Check for direct biography match
+                direct_bio_path = os.path.join("types", current_type, "biographies", *key.split("/"), f"{label_id}.json")
+                print(f"[LOOKING FOR] Direct biography at: {direct_bio_path}")
+                if os.path.exists(direct_bio_path):
+                    try:
+                        bio_data = load_json_as_dict(direct_bio_path)
+                        bios.append({
+                            "id": label_id,
+                            "display": bio_data.get("name", label_id),
+                            "description": bio_data.get("description", "")
+                        })
+                        print(f"[FOUND] Direct match for {label_id}")
+                    except Exception as e:
+                        print(f"[ERROR] Reading direct biography {direct_bio_path}: {e}")
+
+                # ✅ 2. Load from suggested_type if present
                 if suggested_type:
-                    suggestions_from.add(suggested_type)
+                    specific_bio_folder = os.path.join("types", suggested_type, "biographies", *key.split("/"))
+                    print(f"[LOOKING FOR] Suggested bios in: {specific_bio_folder}")
+                    if os.path.exists(specific_bio_folder):
+                        for root, _, files in os.walk(specific_bio_folder):
+                            for f in files:
+                                if f.endswith(".json"):
+                                    try:
+                                        full_path = os.path.join(root, f)
+                                        bio_id = os.path.splitext(f)[0]
+                                        bio_data = load_json_as_dict(full_path)
+                                        bios.append({
+                                            "id": bio_id,
+                                            "display": bio_data.get("name", bio_id),
+                                            "description": bio_data.get("description", "")
+                                        })
+                                    except Exception as e:
+                                        print(f"[ERROR] Reading biography {f}: {e}")
+                    else:
+                        print(f"[MISSING] Suggested bio folder does not exist: {specific_bio_folder}")
+
+                # ✅ 3. Save bios if any were found
+                if bios:
+                    suggested_biographies[safe_key] = bios
+                    print(f"[✔️ MATCH] safe_key: {safe_key} → bios: {[b['id'] for b in bios]}")
+                else:
+                    print(f"[NO BIOS] Found for {safe_key}")
+
             except Exception as e:
-                print(f"[ERROR] Reading label {item['id']} for suggestions: {e}")
-        for s_type in suggestions_from:
-            bios = []
-            bio_path = os.path.join("types", s_type, "biographies")
-            if os.path.exists(bio_path):
-                for root, _, files in os.walk(bio_path):
-                    for f in files:
-                        if f.endswith(".json"):
-                            try:
-                                full_path = os.path.join(root, f)
-                                bio_id = os.path.splitext(os.path.basename(f))[0]
-                                bio_data = load_json_as_dict(full_path)
-                                bios.append({
-                                    "id": bio_id,
-                                    "display": bio_data.get("name", bio_id),
-                                    "description": bio_data.get("description", "")
-                                })
-                            except Exception as e:
-                                print(f"[ERROR] Reading biography {f}: {e}")
-            if bios:
-                suggested_biographies[key] = bios
+                print(f"[ERROR] Reading label {label_id} for suggestions: {e}")
 
     if request.method == "POST":
         new_entries = []
 
-        # Add selected biography (if any)
         selected_bio_id = request.form.get("selected_id_biography")
         if selected_bio_id:
             new_entries.append({
@@ -617,7 +632,6 @@ def person_step_dynamic(step):
                 "source": "biography"
             })
 
-        # Add only selected labels
         for group in label_groups_list:
             key = group["key"]
             selected_id = request.form.get(f"selected_id_{key}")
@@ -629,13 +643,11 @@ def person_step_dynamic(step):
                     "label_type": key
                 })
 
-        # Save if valid
         entry_index = session.get("entry_index")
         if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
             person_data["entries"][entry_index][current_type] = new_entries
             save_dict_as_json(person_file, person_data)
 
-        # Redirect logic
         if session.pop("loopback_to_add_type", False) or session.pop("force_stop_after_this_step", False):
             session.pop("type_just_created", None)
             return redirect(url_for("add_type_prompt"))
@@ -670,19 +682,21 @@ def person_step_dynamic(step):
     return render_template(
         "person_step_dynamic.html",
         current_type=current_type,
-        biography_options=biography_options,
+        grouped_biographies=grouped_biographies,
+        all_bio_folders=all_bio_folders,
         label_groups_list=label_groups_list,
         suggested_biographies=suggested_biographies,
         existing_labels=existing_labels,
         selected_label_ids=selected_label_ids,
         person_id=person_id,
-        skip_allowed=(len(label_groups_list) == 0 and len(biography_options) == 0),
+        skip_allowed=(len(label_groups_list) == 0 and len(grouped_biographies) == 0),
         person_name=person_data.get("name", person_id),
         time_selection=session.get("time_selection"),
         next_step=step + 1,
         prev_step=step - 1 if step > 0 else None,
         step=step
     )
+
 @app.route("/search_or_add_biography/<type_name>", methods=["GET", "POST"])
 def search_or_add_biography(type_name):
     bio_folder = f"./types/{type_name}/biographies"

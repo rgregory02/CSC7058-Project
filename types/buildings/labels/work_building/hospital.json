@@ -1,0 +1,8 @@
+{
+  "id": "hospital",
+  "name": "Hospital",
+  "description": "A healthcare facility",
+  "properties": {
+    "suggests_biographies_from": "buildings"
+  }
+}

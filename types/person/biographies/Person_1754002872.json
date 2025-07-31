@@ -1,0 +1,35 @@
+{
+    "person_id": "Person_1754002872",
+    "name": "Teddy",
+    "dob": "2025-08-04",
+    "created": "2025-08-01T00:01:12.702754+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "childhood",
+                "confidence": 22,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "childhood"
+            },
+            "created": "2025-08-01T00:01:17.988061",
+            "buildings": [
+                {
+                    "id": "hospital",
+                    "confidence": 100,
+                    "label_type": "work_building"
+                },
+                {
+                    "id": "royal_victoria_hospital",
+                    "confidence": 100,
+                    "label_type": "work_building/hospital"
+                },
+                {
+                    "id": "school",
+                    "confidence": 100,
+                    "label_type": "educational_buildings"
+                }
+            ]
+        }
+    ]
+}
