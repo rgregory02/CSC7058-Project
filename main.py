@@ -533,6 +533,7 @@ def person_step_dynamic(step):
 
     grouped_biographies = {}
     all_bio_folders = []
+    biography_options = []
 
     if os.path.exists(bio_path):
         for root, _, files in os.walk(bio_path):
