@@ -1076,7 +1076,7 @@ def save_time_choice():
         session['person_bio_time'] = choice
     return redirect("/person_iframe_wizard?step=1")
 
-@app.route('/add_label/<type_name>/<subfolder_name>', methods=['GET', 'POST'])
+@app.route('/add_label/<type_name>/<path:subfolder_name>', methods=['GET', 'POST'])
 def add_label(type_name, subfolder_name):
     labels_dir = os.path.join('types', type_name, 'labels', subfolder_name)
     os.makedirs(labels_dir, exist_ok=True)
@@ -1091,6 +1091,10 @@ def add_label(type_name, subfolder_name):
         timestamp = datetime.now(timezone.utc).isoformat()
         extra_properties_raw = request.form.get('extra_properties', '').strip()
         return_url = request.form.get("return_url", "")  # POST return target
+
+        # Auto-fill suggests_biographies_from from the first part of subfolder if blank
+        if not suggests_biographies_from and '/' in subfolder_name:
+            suggests_biographies_from = subfolder_name.split('/')[0]
 
         label_filename = f"{label_name}.json"
         label_path = os.path.join(labels_dir, label_filename)
