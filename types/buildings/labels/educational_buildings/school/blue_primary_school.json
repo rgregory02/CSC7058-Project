@@ -3,7 +3,7 @@
   "name": "Blue Primary School",
   "description": "A primary school with a blue theme",
   "properties": {
-    "suggests_biographies_from": "buildings/educational_buildings/school",
+    "suggests_biographies_from": "buildings",
     "value": "blue_primary_school",
     "confidence": 100,
     "source": ""

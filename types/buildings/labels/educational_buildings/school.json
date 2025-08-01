@@ -3,7 +3,7 @@
   "name": "School",
   "description": "An educational institution",
   "properties": {
-    "suggests_biographies_from": "buildings/educational_buildings/school",
+    "suggests_biographies_from": "buildings",
     "value": "school",
     "confidence": 100,
     "source": ""      
