@@ -1,0 +1,36 @@
+{
+    "person_id": "Person_1754009864",
+    "name": "Teddy",
+    "dob": "2025-08-26",
+    "created": "2025-08-01T01:57:44.358520+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "2025-08-12",
+                "confidence": 100,
+                "label_type": "date",
+                "date_value": "2025-08-12",
+                "subvalue": ""
+            },
+            "created": "2025-08-01T01:57:51.208173",
+            "buildings": [
+                {
+                    "id": "hospital",
+                    "confidence": 100,
+                    "label_type": "work_building"
+                },
+                {
+                    "id": "school",
+                    "confidence": 100,
+                    "label_type": "educational_buildings"
+                },
+                {
+                    "id": "blue_primary_school",
+                    "confidence": 100,
+                    "label_type": "educational_buildings/school"
+                }
+            ],
+            "organisations": []
+        }
+    ]
+}

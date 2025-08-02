@@ -1,0 +1,79 @@
+{
+    "person_id": "Person_1754008431",
+    "name": "Teddy",
+    "dob": "2025-08-12",
+    "created": "2025-08-01T01:33:51.045286+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "infant",
+                "confidence": 13,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "infant"
+            },
+            "created": "2025-08-01T01:33:55.212276",
+            "buildings": [
+                {
+                    "id": "hospital",
+                    "confidence": 100,
+                    "label_type": "work_building"
+                },
+                {
+                    "id": "flat",
+                    "confidence": 100,
+                    "label_type": "house"
+                },
+                {
+                    "id": "school",
+                    "confidence": 100,
+                    "label_type": "educational_buildings"
+                },
+                {
+                    "id": "blue_primary_school",
+                    "confidence": 100,
+                    "label_type": "educational_buildings/school"
+                }
+            ],
+            "organisations": [],
+            "person": [
+                {
+                    "id": "testing_agin",
+                    "confidence": 54,
+                    "label_type": "test"
+                }
+            ],
+            "vehicle": [
+                {
+                    "id": "ford",
+                    "confidence": 68,
+                    "label_type": "car"
+                }
+            ]
+        },
+        {
+            "time": {
+                "label": "seventies",
+                "confidence": 57,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "seventies"
+            },
+            "created": "2025-08-01T01:36:55.126737",
+            "buildings": [
+                {
+                    "id": "school",
+                    "confidence": 100,
+                    "label_type": "educational_buildings"
+                },
+                {
+                    "id": "red_school",
+                    "confidence": 100,
+                    "label_type": "educational_buildings/school"
+                }
+            ],
+            "organisations": []
+        }
+    ],
+    "finalised": true
+}

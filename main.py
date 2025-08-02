@@ -492,7 +492,6 @@ def person_step_time(person_id):
         edit_entry_index=session.get("edit_entry_index")
     )
 
-
 @app.route("/person_step/dynamic/<int:step>", methods=["GET", "POST"])
 def person_step_dynamic(step):
     person_id = session.get("person_id")
@@ -575,9 +574,8 @@ def person_step_dynamic(step):
 
                 bios = []
 
-                # ✅ 1. Check for direct biography match
+                # 1. Direct match
                 direct_bio_path = os.path.join("types", current_type, "biographies", *key.split("/"), f"{label_id}.json")
-                print(f"[LOOKING FOR] Direct biography at: {direct_bio_path}")
                 if os.path.exists(direct_bio_path):
                     try:
                         bio_data = load_json_as_dict(direct_bio_path)
@@ -586,14 +584,12 @@ def person_step_dynamic(step):
                             "display": bio_data.get("name", label_id),
                             "description": bio_data.get("description", "")
                         })
-                        print(f"[FOUND] Direct match for {label_id}")
                     except Exception as e:
                         print(f"[ERROR] Reading direct biography {direct_bio_path}: {e}")
 
-                # ✅ 2. Load from suggested_type if present
+                # 2. Suggested type folder
                 if suggested_type:
                     specific_bio_folder = os.path.join("types", suggested_type, "biographies", *key.split("/"))
-                    print(f"[LOOKING FOR] Suggested bios in: {specific_bio_folder}")
                     if os.path.exists(specific_bio_folder):
                         for root, _, files in os.walk(specific_bio_folder):
                             for f in files:
@@ -609,30 +605,47 @@ def person_step_dynamic(step):
                                         })
                                     except Exception as e:
                                         print(f"[ERROR] Reading biography {f}: {e}")
-                    else:
-                        print(f"[MISSING] Suggested bio folder does not exist: {specific_bio_folder}")
 
-                # ✅ 3. Save bios if any were found
                 if bios:
                     suggested_biographies[safe_key] = bios
-                    print(f"[✔️ MATCH] safe_key: {safe_key} → bios: {[b['id'] for b in bios]}")
-                else:
-                    print(f"[NO BIOS] Found for {safe_key}")
 
             except Exception as e:
                 print(f"[ERROR] Reading label {label_id} for suggestions: {e}")
 
+    # Linking person-to-person relationships
+    is_person_type = (current_type == "person")
+    person_biography_options = []
+
+    if is_person_type:
+        for f in os.listdir("./types/person/biographies"):
+            if f.endswith(".json"):
+                bio_id = os.path.splitext(f)[0]
+                if bio_id == person_id:
+                    continue
+                try:
+                    bio_data = load_json_as_dict(os.path.join("./types/person/biographies", f))
+                    person_biography_options.append({
+                        "id": bio_id,
+                        "display": bio_data.get("name", bio_id),
+                        "description": bio_data.get("description", "")
+                    })
+                except Exception as e:
+                    print(f"[ERROR] Loading person biography {f}: {e}")
+
     if request.method == "POST":
         new_entries = []
 
-        selected_bio_id = request.form.get("selected_id_biography")
-        if selected_bio_id:
-            new_entries.append({
-                "id": selected_bio_id,
-                "confidence": 100,
-                "source": "biography"
-            })
+        # 🔹 Normal biography selection (not person)
+        if not is_person_type:
+            selected_bio_id = request.form.get("selected_id_biography")
+            if selected_bio_id:
+                new_entries.append({
+                    "id": selected_bio_id,
+                    "confidence": 100,
+                    "source": "biography"
+                })
 
+        # 🔹 Standard label selections
         for group in label_groups_list:
             key = group["key"]
             selected_id = request.form.get(f"selected_id_{key}")
@@ -642,6 +655,19 @@ def person_step_dynamic(step):
                     "id": selected_id,
                     "confidence": confidence,
                     "label_type": key
+                })
+
+        # 🔹 Person-type: Linked biography + relationship
+        if is_person_type:
+            linked_id = request.form.get("selected_person_biography")
+            relationship = request.form.get("relationship_label", "").strip()
+            if linked_id and relationship:
+                new_entries.append({
+                    "id": linked_id,
+                    "relationship": relationship,
+                    "confidence": 100,
+                    "label_type": "person",
+                    "source": "biography"
                 })
 
         entry_index = session.get("entry_index")
@@ -655,6 +681,7 @@ def person_step_dynamic(step):
         else:
             return redirect(url_for("person_step_dynamic", step=step + 1))
 
+    # Displaying previously selected labels
     existing_labels = {}
     selected_label_ids = set()
     entry_index = session.get("entry_index")
@@ -676,10 +703,6 @@ def person_step_dynamic(step):
                 selected_label_ids.add(label_type.split("/")[-1])
                 selected_label_ids.add(label.get("id"))
 
-    print("LABEL GROUP KEYS:")
-    for group in label_groups_list:
-        print("-", group["key"])
-
     return render_template(
         "person_step_dynamic.html",
         current_type=current_type,
@@ -695,7 +718,9 @@ def person_step_dynamic(step):
         time_selection=session.get("time_selection"),
         next_step=step + 1,
         prev_step=step - 1 if step > 0 else None,
-        step=step
+        step=step,
+        is_person_type=is_person_type,
+        person_biography_options=person_biography_options
     )
 
 @app.route("/search_or_add_biography/<type_name>", methods=["GET", "POST"])

@@ -394,13 +394,6 @@
         {% endif %}
       </div>
 
-      {% if selected_id %}
-        {% set full_key = group.key ~ '/' ~ selected_id %}
-        {% set safe_key = full_key.replace('/', '__') %}
-      {% else %}
-        {% set safe_key = group.key.replace('/', '__') %}
-      {% endif %}
-
       {% if safe_key and suggested_biographies.get(safe_key) %}
         <div class="label-group-box biography-suggestions"
              id="bio_suggestions_{{ safe_key }}_bio"
@@ -463,40 +456,70 @@
     </div>
   {% endfor %}
 
-  <div class="label-group-box biography-suggestions"
-       data-parent-label="{{ current_type }}"
-       style="display: none;">
-    <div class="label-title">Linked {{ current_type.replace('_', ' ')|title }} Biography</div>
+{% if current_type == 'person' %}
+<!-- Hidden input to store selected relationship label -->
+<input type="hidden"
+       name="relationship_label"
+       id="input_relationship"
+       class="group-selection-tracker"
+       value="{{ existing_labels.get('relationship', {}).get('label', '') }}">
 
-    <input type="text"
-           class="label-search"
-           placeholder="Search {{ current_type.replace('_', ' ')|title }} Biography..."
-           oninput="filterLabels(this, 'biography')"
-           data-group="biography">
+<!-- Linked Person Biography Box -->
+<div class="label-group-box biography-suggestions"
+     id="linked_person_bio_box"
+     style="display: none; margin-top: 30px;">
+  <div class="label-title">🧬 Link to Existing Person Biography</div>
 
-    <input type="hidden" name="selected_id_biography" id="input_biography" class="group-selection-tracker" value="">
+  <input type="text"
+         class="label-search"
+         placeholder="Search Person Biographies..."
+         oninput="filterLabels(this, 'linked_person')"
+         data-group="linked_person">
 
-      <div class="label-options">
-        {% for option in biography_options %}
-          <div class="label-card"
-              data-group="biography"
-              data-value="{{ option.id }}"
-              onclick="toggleLabelSelection(this)">
-            <div><strong>{{ option.display.replace('_', ' ')|title }}</strong></div>
-            {% if option.description %}
-              <div class="label-description">{{ option.description }}</div>
-            {% endif %}
-          </div>
-        {% endfor %}
+  <!-- Hidden input for selected linked biography ID -->
+  <input type="hidden"
+         name="selected_person_biography"
+         id="input_linked_person"
+         class="group-selection-tracker"
+         value="{{ existing_linked_bio or '' }}">
+
+  <div class="label-options">
+    {% for option in grouped_biographies.get("person", []) %}
+      <div class="label-card"
+           data-group="linked_person"
+           data-value="{{ option.id }}"
+           onclick="toggleLabelSelection(this)">
+        <div><strong>{{ option.display.replace('_', ' ')|title }}</strong></div>
+        {% if option.description %}
+          <div class="label-description">{{ option.description }}</div>
+        {% endif %}
       </div>
+    {% endfor %}
+  </div>
 
-    <div style="text-align: center; margin-top: 14px;">
-      <a href="{{ url_for('search_or_add_biography', type_name=current_type, return_url=request.url) }}"
-         class="add-entry-button">
-        ➕ Search or Create {{ current_type.replace('_', ' ')|title }} Biography
-      </a>
+  <!-- Confidence Slider for Linked Biography -->
+  <div class="confidence-slider" style="margin-top: 20px;">
+    <label for="confidence_linked_person">🎯 Confidence:</label><br>
+    <input type="range"
+           name="confidence_linked_person"
+           id="confidence_linked_person"
+           min="0"
+           max="100"
+           value="100"
+           oninput="updateConfidence('linked_person')">
+    <div class="confidence-display">
+      <span id="confidence_display_linked_person">100%</span>
+      <span id="confidence_level_linked_person">(Exact)</span>
     </div>
   </div>
+
+  <!-- Add new / search biographies -->
+  <div style="text-align: center; margin-top: 14px;">
+    <a href="{{ url_for('search_or_add_biography', type_name='person', return_url=request.url) }}"
+       class="add-entry-button">➕ Search or Create Person Biography</a>
+  </div>
+</div>
+{% endif %}
 
   <div class="bottom-card">
     <div class="button-row">
@@ -550,6 +573,7 @@
     <a href="{{ url_for('person_step_dynamic', step=next_step) }}" class="continue-link">Skip this step →</a>
   {% endif %}
 </form>
+</body>
 
 <script>
   function makeSafeKey(key) {
@@ -559,9 +583,13 @@
   function updateConfidence(key) {
     const safeKey = makeSafeKey(key);
     const slider = document.getElementById("confidence_" + safeKey);
-    const value = parseInt(slider.value || 0);
-    document.getElementById("confidence_display_" + safeKey).textContent = value + "%";
+    const display = document.getElementById("confidence_display_" + safeKey);
     const level = document.getElementById("confidence_level_" + safeKey);
+    if (!slider || !display || !level) return;
+
+    const value = parseInt(slider.value || 0);
+    display.textContent = value + "%";
+
     if (value === 100) {
       level.textContent = "(Exact)";
       level.style.color = "green";
@@ -608,8 +636,8 @@
         hiddenInput.value = "";
         el.classList.remove("selected");
 
-        // 🔻 Hide nested groups associated with this group
-        document.querySelectorAll(`[data-parent="${groupKey}"]`).forEach(childGroup => {
+        // Hide nested
+        document.querySelectorAll(`[data-parent="${safeKey}"]`).forEach(childGroup => {
           childGroup.style.display = "none";
           const input = childGroup.querySelector('input.group-selection-tracker');
           if (input) input.value = "";
@@ -620,29 +648,36 @@
       hiddenInput.value = value;
       el.classList.add("selected");
 
-      // 🔼 Reveal nested groups
-      document.querySelectorAll(`[data-parent="${groupKey}"]`).forEach(childGroup => {
+      // Show nested
+      document.querySelectorAll(`[data-parent="${safeKey}"]`).forEach(childGroup => {
         childGroup.style.display = "block";
       });
     }
 
     updateSaveButtonState();
     updateBiographyVisibility();
+    updateLinkedPersonBioVisibility();
   }
 
-function updateBiographyVisibility() {
-  document.querySelectorAll('.label-group-box.biography-suggestions').forEach(bioBox => {
-    const safeKeyWithBio = bioBox.getAttribute("data-label-key"); // e.g., "work_building__hospital_bio"
+  function updateBiographyVisibility() {
+    document.querySelectorAll('.label-group-box.biography-suggestions[data-label-key]').forEach(bioBox => {
+      const safeKeyWithBio = bioBox.getAttribute("data-label-key");
+      const rawKey = safeKeyWithBio.replace(/_bio$/, '').replaceAll('__', '/');
+      const inputId = "input_" + makeSafeKey(rawKey);
+      const selected = document.getElementById(inputId)?.value;
+      bioBox.style.display = selected && selected.trim() !== "" ? "block" : "none";
+    });
+  }
 
-    const rawKey = safeKeyWithBio.replace(/_bio$/, '').replaceAll('__', '/'); // -> "work_building/hospital"
-    const inputId = "input_" + makeSafeKey(rawKey); // => e.g. "input_work_building__hospital"
+  function updateLinkedPersonBioVisibility() {
+    const relationshipInput = document.getElementById("input_relationship");
+    const linkedBox = document.getElementById("linked_person_bio_box");
 
-    const selectedLabel = document.getElementById(inputId)?.value;
-    const shouldShow = selectedLabel && selectedLabel.trim() !== "";
-
-    bioBox.style.display = shouldShow ? "block" : "none";
-  });
-}
+    if (relationshipInput && linkedBox) {
+      const selected = relationshipInput.value.trim();
+      linkedBox.style.display = selected ? "block" : "none";
+    }
+  }
 
   function filterLabels(input, groupKey) {
     const query = input.value.toLowerCase();
@@ -663,16 +698,16 @@ function updateBiographyVisibility() {
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    // ✅ Initialise confidence sliders
+    // Init confidence sliders
     const sliders = document.querySelectorAll("input[type=range]");
     sliders.forEach(slider => {
       const key = slider.id.replace("confidence_", "");
-      updateConfidence(key.replaceAll('__', '/'));  // reverse for consistent logic
+      updateConfidence(key.replaceAll('__', '/'));
     });
 
     updateSaveButtonState();
 
-    // ✅ Filter labels on load
+    // Filter each group on load
     const allGroups = new Set(
       Array.from(document.querySelectorAll('.label-card')).map(card => card.dataset.group)
     );
@@ -681,11 +716,10 @@ function updateBiographyVisibility() {
       if (input) filterLabels(input, groupKey);
     });
 
-    // ✅ Reveal nested label groups only if their parent is selected
+    // Reveal nested if parent already selected
     document.querySelectorAll('.label-group-box[data-parent]').forEach(childGroup => {
       const parentKey = childGroup.getAttribute("data-parent");
-      const safeParentKey = makeSafeKey(parentKey);
-      const parentInput = document.getElementById("input_" + safeParentKey);
+      const parentInput = document.getElementById("input_" + parentKey);
       if (parentInput && parentInput.value) {
         childGroup.style.display = "block";
       } else {
@@ -693,8 +727,8 @@ function updateBiographyVisibility() {
       }
     });
 
-    // ✅ Initial visibility check for biographies
     updateBiographyVisibility();
+    updateLinkedPersonBioVisibility();
   });
 </script>
 </body>
