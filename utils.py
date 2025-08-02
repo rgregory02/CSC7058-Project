@@ -245,3 +245,31 @@ def collect_label_groups(label_base_path, current_type):
         })
 
     return label_groups_list
+
+
+def load_grouped_biographies(base_path):
+    grouped = {}
+
+    if not os.path.exists(base_path):
+        return grouped
+
+    for root, _, files in os.walk(base_path):
+        rel_path = os.path.relpath(root, base_path)
+        folder_key = rel_path if rel_path != "." else "root"
+
+        grouped.setdefault(folder_key, [])
+
+        for f in files:
+            if f.endswith(".json"):
+                try:
+                    f_path = os.path.join(root, f)
+                    data = load_json_as_dict(f_path)
+                    grouped[folder_key].append({
+                        "id": os.path.splitext(f)[0],
+                        "display": data.get("name", os.path.splitext(f)[0]),
+                        "description": data.get("description", "")
+                    })
+                except Exception as e:
+                    print(f"[BIO ERROR] {f}: {e}")
+
+    return grouped

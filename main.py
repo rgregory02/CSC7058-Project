@@ -23,6 +23,7 @@ try:
 except ImportError:
     from backports.zoneinfo import ZoneInfo  # Python 3.8 fallback
 from utils import (
+    load_grouped_biographies,
     load_json_as_dict,
     save_dict_as_json,
     get_readable_time,
@@ -530,27 +531,7 @@ def person_step_dynamic(step):
     label_base_path = f"./types/{current_type}/labels"
     bio_path = f"./types/{current_type}/biographies"
 
-    grouped_biographies = {}
-    all_bio_folders = []
-    biography_options = []
-
-    if os.path.exists(bio_path):
-        for root, _, files in os.walk(bio_path):
-            for f in files:
-                if f.endswith(".json"):
-                    try:
-                        filepath = os.path.join(root, f)
-                        bio_id = os.path.splitext(os.path.basename(f))[0]
-                        data = load_json_as_dict(filepath)
-                        display_name = data.get("name", bio_id.replace("_", " "))
-                        description = data.get("description", "")
-                        biography_options.append({
-                            "id": bio_id,
-                            "display": display_name,
-                            "description": description
-                        })
-                    except Exception as e:
-                        print(f"[BIO ERROR] {f}: {e}")
+    grouped_biographies = load_grouped_biographies(bio_path)
 
     label_groups_list = collect_label_groups(label_base_path, current_type)
 
@@ -707,7 +688,6 @@ def person_step_dynamic(step):
         "person_step_dynamic.html",
         current_type=current_type,
         grouped_biographies=grouped_biographies,
-        all_bio_folders=all_bio_folders,
         label_groups_list=label_groups_list,
         suggested_biographies=suggested_biographies,
         existing_labels=existing_labels,

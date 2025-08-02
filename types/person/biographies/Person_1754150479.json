@@ -1,0 +1,60 @@
+{
+    "person_id": "Person_1754150479",
+    "name": "Teddy",
+    "dob": "2025-08-07",
+    "created": "2025-08-02T17:01:19.011640+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "toddler",
+                "confidence": 35,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "toddler"
+            },
+            "created": "2025-08-02T20:45:25.288551",
+            "buildings": [
+                {
+                    "id": "hospital",
+                    "confidence": 100,
+                    "label_type": "work_building"
+                },
+                {
+                    "id": "royal_victoria_hospital",
+                    "confidence": 100,
+                    "label_type": "work_building/hospital"
+                },
+                {
+                    "id": "flat",
+                    "confidence": 100,
+                    "label_type": "house"
+                },
+                {
+                    "id": "school",
+                    "confidence": 100,
+                    "label_type": "educational_buildings"
+                },
+                {
+                    "id": "blue_primary_school",
+                    "confidence": 100,
+                    "label_type": "educational_buildings/school"
+                }
+            ],
+            "organisations": [],
+            "person": [
+                {
+                    "id": "spouse",
+                    "confidence": 100,
+                    "label_type": "relationship"
+                },
+                {
+                    "id": "1",
+                    "confidence": 37,
+                    "label_type": "celebea_face_hq"
+                }
+            ],
+            "vehicle": []
+        }
+    ],
+    "finalised": true
+}

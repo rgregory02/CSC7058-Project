@@ -1,0 +1,45 @@
+{
+    "person_id": "Person_1754164051",
+    "name": "Teddy",
+    "dob": "2025-08-04",
+    "created": "2025-08-02T20:47:31.096266+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "childhood",
+                "confidence": 43,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "childhood"
+            },
+            "created": "2025-08-02T20:47:35.530323",
+            "buildings": [
+                {
+                    "id": "school",
+                    "confidence": 100,
+                    "label_type": "educational_buildings"
+                },
+                {
+                    "id": "red_school",
+                    "confidence": 53,
+                    "label_type": "educational_buildings/school"
+                }
+            ],
+            "organisations": [],
+            "person": [
+                {
+                    "id": "spouse",
+                    "confidence": 100,
+                    "label_type": "relationship"
+                },
+                {
+                    "id": "1",
+                    "confidence": 46,
+                    "label_type": "celebea_face_hq"
+                }
+            ],
+            "vehicle": []
+        }
+    ],
+    "finalised": true
+}

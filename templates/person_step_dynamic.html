@@ -474,7 +474,7 @@
            value="{{ existing_linked_bio or '' }}">
 
     <div class="label-options">
-      {% for option in grouped_biographies.get("person", []) %}
+     {% for option in grouped_biographies.get("root", []) %}
         <div class="label-card"
              data-group="linked_person"
              data-value="{{ option.id }}"
