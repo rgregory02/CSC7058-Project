@@ -310,6 +310,11 @@
   opacity: 0.6;
 }
 
+.selected-card {
+  border: 2px solid #4CAF50;
+  background-color: #f0fff0;
+}
+
   </style>
 </head>
 
@@ -373,6 +378,12 @@
              id="input_{{ safe_key }}"
              class="group-selection-tracker"
              value="{{ selected_id or '' }}">
+
+      <input type="hidden"
+            name="selected_id_{{ group.key }}_bio"
+            id="input_{{ safe_key }}_bio"
+            class="group-selection-tracker"
+            value="">
 
       <div class="label-options">
         {% if group.options %}
@@ -720,6 +731,24 @@
     updateBiographyVisibility();
     updateLinkedPersonBioVisibility();
   });
+
+function selectBiography(id) {
+  const hiddenInput = document.getElementById("selected_id_biography");
+  if (hiddenInput) {
+    hiddenInput.value = id;
+  }
+
+  // Optional: Visual feedback for selection
+  const allCards = document.querySelectorAll(".bio-card");
+  allCards.forEach(c => c.classList.remove("selected-card"));
+  const selectedCard = document.getElementById("bio-card-" + id);
+  if (selectedCard) {
+    selectedCard.classList.add("selected-card");
+  }
+
+  updateSaveButtonState();
+}
+
 </script>
 </body>
 </html>

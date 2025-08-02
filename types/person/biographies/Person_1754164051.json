@@ -39,6 +39,43 @@
                 }
             ],
             "vehicle": []
+        },
+        {
+            "time": {
+                "label": "thirties",
+                "confidence": 28,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "thirties"
+            },
+            "created": "2025-08-02T21:14:57.295628",
+            "buildings": [
+                {
+                    "id": "hospital",
+                    "confidence": 100,
+                    "label_type": "work_building"
+                },
+                {
+                    "id": "royal_victoria_hospital",
+                    "confidence": 100,
+                    "label_type": "work_building/hospital",
+                    "biography": "royal_victoria_hospital"
+                }
+            ],
+            "organisations": [],
+            "person": [
+                {
+                    "id": "spouse",
+                    "confidence": 51,
+                    "label_type": "relationship"
+                },
+                {
+                    "id": "1",
+                    "confidence": 24,
+                    "label_type": "celebea_face_hq"
+                }
+            ],
+            "vehicle": []
         }
     ],
     "finalised": true

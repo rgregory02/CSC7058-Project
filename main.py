@@ -629,14 +629,20 @@ def person_step_dynamic(step):
         # 🔹 Standard label selections
         for group in label_groups_list:
             key = group["key"]
-            selected_id = request.form.get(f"selected_id_{key}")
+            selected_id = request.form.get(f"selected_id_{key}", "").strip()
+            confidence_raw = request.form.get(f"confidence_{key}", "").strip()
+            bio_id = request.form.get(f"selected_id_{key}_bio", "").strip()
+
             if selected_id:
-                confidence = int(request.form.get(f"confidence_{key}", 80))
-                new_entries.append({
+                confidence = int(confidence_raw) if confidence_raw.isdigit() else 100
+                entry = {
                     "id": selected_id,
                     "confidence": confidence,
                     "label_type": key
-                })
+                }
+                if bio_id:
+                    entry["biography"] = bio_id
+                new_entries.append(entry)
 
         # 🔹 Person-type: Linked biography + relationship
         if is_person_type:
