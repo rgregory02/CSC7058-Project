@@ -129,6 +129,16 @@
       color: #555;
       display: block;
     }
+
+    .biography-info {
+  background-color: #eef5f2;
+  border-left: 4px solid #2e7d32;
+  padding: 10px 12px;
+  margin-top: 8px;
+  font-size: 0.95em;
+  color: #333;
+  border-radius: 6px;
+}
   </style>
 </head>
 
@@ -177,36 +187,43 @@
               else 'confidence-medium' if label.confidence >= 34
               else 'confidence-low'
             ) %}
-    <div class="label-block">
-      <div>
-        <strong>
-          {% if label.label_type %}
-            {{ label.label_type.replace("_", " ")|title }}
-          {% else %}
-            Label
-          {% endif %}
-        </strong>
-          {% set display_text = (
-              label.display
-              or label.label
-              or label.id
-              or 'Unnamed'
-          ) %}
-          – {{ display_text.replace("_", " ")|title }}
-      </div>
+            <div class="label-block">
+              <div>
+                <strong>
+                  {{ label.get("label_type", "Label")|replace("_", " ")|title }}
+                </strong>
+                {% set display_text = (
+                  label.get("display")
+                  or label.get("label")
+                  or label.get("id")
+                  or "Unnamed"
+                ) %}
+                – {{ display_text.replace("_", " ")|title }}
+              </div>
 
-      {% if label.confidence is defined %}
-        <div class="confidence-tag {{ label_conf_class }}">
-          Confidence: {{ label.confidence }}%
-        </div>
-      {% endif %}
-      {% if label.description %}
-        <em>{{ label.description }}</em>
-      {% endif %}
-      {% if label.image_url %}
-        <img src="{{ label.image_url }}" alt="{{ label.display or label.label }}">
-      {% endif %}
-    </div>
+              {% if label.get("biography_data") %}
+                <div class="biography-info">
+                  📖 <strong>{{ label.biography_data.get("name", "Unknown") }}</strong><br>
+                  {% if label.biography_data.get("description") %}
+                    <em>{{ label.biography_data.description }}</em><br>
+                  {% endif %}
+                </div>
+              {% endif %}
+
+              {% if label.get("confidence") is defined %}
+                <div class="confidence-tag {{ label_conf_class }}">
+                  Confidence: {{ label.confidence }}%
+                </div>
+              {% endif %}
+
+              {% if label.get("description") %}
+                <em>{{ label.description }}</em>
+              {% endif %}
+
+              {% if label.get("image_url") %}
+                <img src="{{ label.image_url }}" alt="{{ label.get('display') or label.get('label') }}">
+              {% endif %}
+            </div>
           {% endfor %}
         {% endif %}
       {% endfor %}

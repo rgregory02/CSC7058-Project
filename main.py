@@ -616,15 +616,24 @@ def person_step_dynamic(step):
     if request.method == "POST":
         new_entries = []
 
-        # 🔹 Normal biography selection (not person)
+# 🔹 Normal biography selection (not person)
         if not is_person_type:
             selected_bio_id = request.form.get("selected_id_biography")
             if selected_bio_id:
-                new_entries.append({
-                    "id": selected_bio_id,
-                    "confidence": 100,
-                    "source": "biography"
-                })
+                try:
+                    bio_path = os.path.join("types", current_type, "biographies", f"{selected_bio_id}.json")
+                    bio_data = load_json_as_dict(bio_path)
+                    new_entries.append({
+                        "id": selected_bio_id,
+                        "confidence": 100,
+                        "label_type": current_type,  # fallback if nothing else
+                        "source": "biography",
+                        "display": bio_data.get("name", selected_bio_id),
+                        "description": bio_data.get("description", ""),
+                        "image_url": bio_data.get("image", "")
+                    })
+                except Exception as e:
+                    print(f"[ERROR] Loading selected biography {selected_bio_id}: {e}")
 
         # 🔹 Standard label selections
         for group in label_groups_list:

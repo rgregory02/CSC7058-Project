@@ -61,6 +61,48 @@
             "organisations": [],
             "person": [],
             "vehicle": []
+        },
+        {
+            "time": {
+                "label": "nineties",
+                "confidence": 19,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "nineties"
+            },
+            "created": "2025-08-02T21:37:32.360539",
+            "buildings": [
+                {
+                    "id": "hospital",
+                    "confidence": 100,
+                    "label_type": "work_building"
+                },
+                {
+                    "id": "royal_victoria_hospital",
+                    "confidence": 100,
+                    "label_type": "work_building/hospital",
+                    "biography": "royal_victoria_hospital"
+                }
+            ],
+            "organisations": [],
+            "person": [
+                {
+                    "id": "actor",
+                    "confidence": 35,
+                    "label_type": "onet_occupation"
+                },
+                {
+                    "id": "spouse",
+                    "confidence": 100,
+                    "label_type": "relationship"
+                },
+                {
+                    "id": "0",
+                    "confidence": 1,
+                    "label_type": "celebea_face_hq"
+                }
+            ],
+            "vehicle": []
         }
     ],
     "finalised": true
