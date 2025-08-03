@@ -478,7 +478,7 @@
                    data-group="relationship"
                    data-value="{{ rel.id }}"
                    onclick="selectRelationship(this)">
-                <div><strong>{{ rel.display }}</strong></div>
+                <div><strong>{{ rel.display | title }}</strong></div>
               </div>
             {% endfor %}
           </div>

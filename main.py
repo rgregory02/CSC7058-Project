@@ -654,7 +654,7 @@ def person_step_dynamic(step):
                 new_entries.append(entry)
 
         if is_person_type:
-            relationship = request.form.get("relationship_label", "").strip()
+            relationship = request.form.get("relationship_label", "").strip().title()
             bio_id = request.form.get("selected_id_linked_person_bio", "").strip()
             bio_conf_raw = request.form.get("confidence_linked_person", "").strip()
             bio_conf = int(bio_conf_raw) if bio_conf_raw.isdigit() else 100
