@@ -1,0 +1,52 @@
+{
+    "person_id": "Person_1754188801",
+    "name": "Rebecca",
+    "dob": "2025-08-05",
+    "created": "2025-08-03T03:40:01.768713+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "infant",
+                "confidence": 16,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "infant"
+            },
+            "created": "2025-08-03T03:40:05.587350",
+            "buildings": [
+                {
+                    "label_type": "work_building",
+                    "confidence": 100,
+                    "id": "hospital"
+                },
+                {
+                    "label_type": "hospital",
+                    "confidence": 100,
+                    "id": "belfast_city_hospital"
+                }
+            ],
+            "person": [
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 53,
+                    "id": "teacher"
+                },
+                {
+                    "label_type": "relationship",
+                    "confidence": 100,
+                    "id": "child"
+                },
+                {
+                    "id": "Person_1754009864",
+                    "label_type": "linked_person",
+                    "confidence": 100,
+                    "source": "biography",
+                    "display": "Teddy",
+                    "description": "",
+                    "image_url": ""
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}

@@ -1,0 +1,57 @@
+{
+    "person_id": "Person_1754188085",
+    "name": "Teddy",
+    "dob": "2025-08-06",
+    "created": "2025-08-03T03:28:05.395776+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "infant",
+                "confidence": 41,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "infant"
+            },
+            "created": "2025-08-03T03:28:09.264656",
+            "buildings": [
+                {
+                    "label_type": "work_building",
+                    "confidence": 100,
+                    "id": "hospital"
+                },
+                {
+                    "label_type": "hospital",
+                    "confidence": 34,
+                    "id": "belfast_city_hospital"
+                }
+            ],
+            "person": [
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 72,
+                    "id": "teacher"
+                },
+                {
+                    "label_type": "relationship",
+                    "confidence": 100,
+                    "id": "child"
+                },
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 26,
+                    "id": "0"
+                },
+                {
+                    "id": "Person_1754009864",
+                    "label_type": "linked_person",
+                    "confidence": 53,
+                    "source": "biography",
+                    "display": "Teddy",
+                    "description": "",
+                    "image_url": ""
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}

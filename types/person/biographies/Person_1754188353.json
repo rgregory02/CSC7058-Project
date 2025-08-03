@@ -1,0 +1,40 @@
+{
+    "person_id": "Person_1754188353",
+    "name": "Zelda",
+    "dob": "2025-08-25",
+    "created": "2025-08-03T03:32:33.402046+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "infant",
+                "confidence": 40,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "infant"
+            },
+            "created": "2025-08-03T03:32:36.816626",
+            "person": [
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 25,
+                    "id": "teacher"
+                },
+                {
+                    "label_type": "relationship",
+                    "confidence": 100,
+                    "id": "child"
+                },
+                {
+                    "id": "Person_1754009864",
+                    "label_type": "linked_person",
+                    "confidence": 100,
+                    "source": "biography",
+                    "display": "Teddy",
+                    "description": "",
+                    "image_url": ""
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}

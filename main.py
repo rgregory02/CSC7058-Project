@@ -534,6 +534,10 @@ def person_step_dynamic(step):
     grouped_biographies = load_grouped_biographies(bio_path)
     label_groups_list = collect_label_groups(label_base_path, current_type)
 
+    # 🔁 Prevent 'relationship' from being processed as a regular label group
+    if current_type == "person":
+        label_groups_list = [group for group in label_groups_list if not group["key"].endswith("relationship")]
+
     suggested_biographies = {}
     for group in label_groups_list:
         key = group["key"]
@@ -651,19 +655,12 @@ def person_step_dynamic(step):
             bio_conf_raw = request.form.get("confidence_linked_person", "").strip()
             bio_conf = int(bio_conf_raw) if bio_conf_raw.isdigit() else 100
 
-            if relationship:
-                new_entries.append({
-                    "id": relationship,
-                    "confidence": bio_conf,
-                    "label_type": "relationship"
-                })
-
             if bio_id:
                 try:
                     bio_path = os.path.join("types", "person", "biographies", f"{bio_id}.json")
                     bio_data = load_json_as_dict(bio_path)
 
-                    new_entries.append({
+                    combined_entry = {
                         "id": bio_id,
                         "label_type": "linked_person",
                         "confidence": bio_conf,
@@ -671,9 +668,24 @@ def person_step_dynamic(step):
                         "display": bio_data.get("name", bio_id),
                         "description": bio_data.get("description", ""),
                         "image_url": bio_data.get("image", "")
-                    })
+                    }
+
+                    if relationship:
+                        combined_entry["relationship"] = relationship  # ✅ nest here
+
+                    new_entries.append(combined_entry)
+
                 except Exception as e:
                     print("⚠️ Error loading person biography:", e)
+
+            elif relationship:
+                # Only if linked person was not selected
+                new_entries.append({
+                    "label_type": "linked_person",  # 🔁 Use 'linked_person' not 'relationship'
+                    "relationship": relationship,
+                    "confidence": bio_conf,
+                    "id": None
+                })
 
         if new_entries:
             entry_index = session.get("entry_index")
@@ -687,9 +699,9 @@ def person_step_dynamic(step):
             else:
                 return redirect(url_for("person_step_dynamic", step=step + 1))
         else:
-            # Avoid looping if nothing was selected
+                    # Avoid looping if nothing was selected
             return redirect(url_for("person_step_dynamic", step=step + 1))
-
+       
     existing_labels = {}
     selected_label_ids = set()
     relationship_labels = []

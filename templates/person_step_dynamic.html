@@ -466,63 +466,68 @@
       </div>
     </div>
 
- {% if current_type == 'person' and group.key == "relationship" %}
-<div class="label-group-box biography-suggestions"
-     id="linked_person_bio_box"
-     style="margin-top: 30px;">
-  <div class="label-title">🧬 Link to Existing Person Biography</div>
+ {% if current_type == 'person' %}
+  <div class="label-group-box" id="relationship_selector">
+    <div class="label-title">👥 Relationship</div>
 
-  <!-- Hidden input to store selected value -->
-  <input type="hidden"
-         name="selected_id_linked_person_bio"
-         id="input_linked_person_bio"
-         class="group-selection-tracker"
-         value="">
-
-  <!-- Search box -->
-  <input type="text"
-         class="label-search"
-         placeholder="Search Person Biographies..."
-         oninput="filterLabels(this, 'linked_person_bio')"
-         data-group="linked_person_bio">
-
-  <!-- Biography options -->
-  <div class="label-options">
-    {% for option in grouped_biographies.get("root", []) %}
-      <div class="label-card"
-           data-group="linked_person_bio"
-           data-value="{{ option.id }}"
-           id="bio-card-{{ option.id }}"
-           onclick="selectLinkedPersonBio('{{ option.id }}')">
-        <div><strong>{{ option.display.replace('_', ' ')|title }}</strong></div>
-        {% if option.description %}
-          <div class="label-description">{{ option.description }}</div>
-        {% endif %}
-      </div>
-    {% endfor %}
+    <select name="relationship_label" style="width: 100%; padding: 10px;">
+      <option value="">Select Relationship</option>
+      {% for rel in relationship_labels %}
+        <option value="{{ rel.id }}">{{ rel.display }}</option>
+      {% endfor %}
+    </select>
   </div>
 
-  <!-- Confidence slider -->
-  <div class="confidence-slider" style="margin-top: 20px;">
-    <label for="confidence_linked_person">🎯 Confidence:</label><br>
-    <input type="range"
-           name="confidence_linked_person"
-           id="confidence_linked_person"
-           min="0"
-           max="100"
-           value="100"
-           oninput="updateConfidence('linked_person')">
-    <div class="confidence-display">
-      <span id="confidence_display_linked_person">100%</span>
-      <span id="confidence_level_linked_person">(Exact)</span>
+  <div class="label-group-box biography-suggestions" id="linked_person_bio_box" style="margin-top: 30px;">
+    <div class="label-title">🧬 Link to Existing Person Biography</div>
+
+    <input type="hidden"
+           name="selected_id_linked_person_bio"
+           id="input_linked_person_bio"
+           class="group-selection-tracker"
+           value="">
+
+    <input type="text"
+           class="label-search"
+           placeholder="Search Person Biographies..."
+           oninput="filterLabels(this, 'linked_person_bio')"
+           data-group="linked_person_bio">
+
+    <div class="label-options">
+      {% for option in person_biography_options %}
+        <div class="label-card"
+             data-group="linked_person_bio"
+             data-value="{{ option.id }}"
+             id="bio-card-{{ option.id }}"
+             onclick="selectLinkedPersonBio('{{ option.id }}')">
+          <div><strong>{{ option.display.replace('_', ' ')|title }}</strong></div>
+          {% if option.description %}
+            <div class="label-description">{{ option.description }}</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+
+    <div class="confidence-slider" style="margin-top: 20px;">
+      <label for="confidence_linked_person">🎯 Confidence:</label><br>
+      <input type="range"
+             name="confidence_linked_person"
+             id="confidence_linked_person"
+             min="0"
+             max="100"
+             value="100"
+             oninput="updateConfidence('linked_person')">
+      <div class="confidence-display">
+        <span id="confidence_display_linked_person">100%</span>
+        <span id="confidence_level_linked_person">(Exact)</span>
+      </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 14px;">
+      <a href="{{ url_for('search_or_add_biography', type_name='person', return_url=request.url) }}"
+         class="add-entry-button">➕ Search or Create Person Biography</a>
     </div>
   </div>
-
-  <div style="text-align: center; margin-top: 14px;">
-    <a href="{{ url_for('search_or_add_biography', type_name='person', return_url=request.url) }}"
-       class="add-entry-button">➕ Search or Create Person Biography</a>
-  </div>
-</div>
 {% endif %}
   {% endfor %}
 
