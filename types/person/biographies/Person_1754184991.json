@@ -1,0 +1,32 @@
+{
+    "person_id": "Person_1754184991",
+    "name": "Starbucks",
+    "dob": "2025-08-05",
+    "created": "2025-08-03T02:36:31.265390+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "childhood",
+                "confidence": 36,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "childhood"
+            },
+            "created": "2025-08-03T02:36:36.020153",
+            "buildings": [
+                {
+                    "label_type": "educational_buildings",
+                    "confidence": 100,
+                    "id": "2_story_flat"
+                },
+                {
+                    "label_type": "school",
+                    "confidence": 100,
+                    "id": "red_school",
+                    "biography": "blue_primary_school",
+                    "biography_confidence": 100
+                }
+            ]
+        }
+    ]
+}

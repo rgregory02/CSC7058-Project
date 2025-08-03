@@ -1,0 +1,126 @@
+{
+    "person_id": "Person_1754175251",
+    "name": "Teddy",
+    "dob": "2025-08-05",
+    "created": "2025-08-02T23:54:11.134177+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "toddler",
+                "confidence": 7,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "toddler"
+            },
+            "created": "2025-08-02T23:54:16.028084",
+            "buildings": [
+                {
+                    "label_type": "work_building",
+                    "confidence": 48,
+                    "id": "hospital"
+                },
+                {
+                    "label_type": "hospital",
+                    "confidence": 39,
+                    "id": "royal_victoria_hospital",
+                    "biography": "royal_victoria_hospital",
+                    "biography_confidence": 100
+                }
+            ],
+            "organisations": [],
+            "person": [
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 7,
+                    "id": "actor"
+                },
+                {
+                    "label_type": "relationship",
+                    "confidence": 100,
+                    "id": "spouse"
+                }
+            ]
+        },
+        {
+            "time": {
+                "label": "teens",
+                "confidence": 77,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "teens"
+            },
+            "created": "2025-08-02T23:57:28.143690",
+            "person": [
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 27,
+                    "id": "actor"
+                },
+                {
+                    "label_type": "relationship",
+                    "confidence": 100,
+                    "id": "spouse"
+                }
+            ]
+        },
+        {
+            "time": {
+                "label": "twenties",
+                "confidence": 8,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "twenties"
+            },
+            "created": "2025-08-03T00:00:30.261761",
+            "buildings": [
+                {
+                    "label_type": "work_building",
+                    "confidence": 100,
+                    "id": "hospital"
+                },
+                {
+                    "label_type": "hospital",
+                    "confidence": 49,
+                    "id": "belfast_city_hospital",
+                    "biography": "royal_victoria_hospital",
+                    "biography_confidence": 100
+                }
+            ],
+            "person": [
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 51,
+                    "id": "teacher"
+                },
+                {
+                    "label_type": "relationship",
+                    "confidence": 29,
+                    "id": "spouse"
+                }
+            ]
+        },
+        {
+            "time": {
+                "label": "childhood",
+                "confidence": 57,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "childhood"
+            },
+            "created": "2025-08-03T00:06:31.663948",
+            "person": [
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 5,
+                    "id": "teacher"
+                },
+                {
+                    "label_type": "relationship",
+                    "confidence": 100,
+                    "id": "spouse"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}

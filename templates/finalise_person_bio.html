@@ -187,43 +187,54 @@
               else 'confidence-medium' if label.confidence >= 34
               else 'confidence-low'
             ) %}
-            <div class="label-block">
-              <div>
-                <strong>
-                  {{ label.get("label_type", "Label")|replace("_", " ")|title }}
-                </strong>
-                {% set display_text = (
-                  label.get("display")
-                  or label.get("label")
-                  or label.get("id")
-                  or "Unnamed"
-                ) %}
-                – {{ display_text.replace("_", " ")|title }}
-              </div>
+<div class="label-block">
+  {% if type_key == "person" %}
+    <div>
+      <strong>Relationship:</strong>
+      {{ label.get("relationship", "Unknown")|title }}<br>
+      <strong>Person:</strong>
+      {{ label.get("biography_data", {}).get("name", label.get("id", "Unnamed")) }}
+    </div>
+    {% if label.get("biography_data", {}).get("description") %}
+      <em>{{ label.biography_data.description }}</em>
+    {% endif %}
+  {% else %}
+    <div>
+      <strong>
+        {{ label.get("label_type", "Label")|replace("_", " ")|title }}
+      </strong>
+      {% set display_text = (
+        label.get("display")
+        or label.get("label")
+        or label.get("id")
+        or "Unnamed"
+      ) %}
+      – {{ display_text.replace("_", " ")|title }}
+    </div>
+    {% if label.get("biography_data") %}
+      <div class="biography-info">
+        📖 <strong>{{ label.biography_data.get("name", "Unknown") }}</strong><br>
+        {% if label.biography_data.get("description") %}
+          <em>{{ label.biography_data.description }}</em><br>
+        {% endif %}
+      </div>
+    {% endif %}
+  {% endif %}
 
-              {% if label.get("biography_data") %}
-                <div class="biography-info">
-                  📖 <strong>{{ label.biography_data.get("name", "Unknown") }}</strong><br>
-                  {% if label.biography_data.get("description") %}
-                    <em>{{ label.biography_data.description }}</em><br>
-                  {% endif %}
-                </div>
-              {% endif %}
+  {% if label.get("confidence") is defined %}
+    <div class="confidence-tag {{ label_conf_class }}">
+      Confidence: {{ label.confidence }}%
+    </div>
+  {% endif %}
 
-              {% if label.get("confidence") is defined %}
-                <div class="confidence-tag {{ label_conf_class }}">
-                  Confidence: {{ label.confidence }}%
-                </div>
-              {% endif %}
+  {% if label.get("description") %}
+    <em>{{ label.description }}</em>
+  {% endif %}
 
-              {% if label.get("description") %}
-                <em>{{ label.description }}</em>
-              {% endif %}
-
-              {% if label.get("image_url") %}
-                <img src="{{ label.image_url }}" alt="{{ label.get('display') or label.get('label') }}">
-              {% endif %}
-            </div>
+  {% if label.get("image_url") %}
+    <img src="{{ label.image_url }}" alt="{{ label.get('display') or label.get('label') }}">
+  {% endif %}
+</div>
           {% endfor %}
         {% endif %}
       {% endfor %}

@@ -1,0 +1,53 @@
+{
+    "person_id": "Person_1754181371",
+    "name": "Zelda",
+    "dob": "2025-08-11",
+    "created": "2025-08-03T01:36:11.151122+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "childhood",
+                "confidence": 34,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "childhood"
+            },
+            "created": "2025-08-03T01:36:28.797289",
+            "buildings": [
+                {
+                    "label_type": "work_building",
+                    "confidence": 100,
+                    "id": "hospital"
+                },
+                {
+                    "label_type": "hospital",
+                    "confidence": 100,
+                    "id": "royal_victoria_hospital",
+                    "biography": "royal_victoria_hospital",
+                    "biography_confidence": 100
+                }
+            ],
+            "organisations": [
+                {
+                    "label_type": "nhs",
+                    "confidence": 100,
+                    "id": "apartment"
+                }
+            ],
+            "person": [
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 15,
+                    "id": "teacher"
+                },
+                {
+                    "label_type": "relationship",
+                    "confidence": 100,
+                    "id": "spouse"
+                }
+            ],
+            "vehicle": []
+        }
+    ],
+    "finalised": true
+}

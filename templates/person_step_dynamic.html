@@ -466,58 +466,63 @@
       </div>
     </div>
 
-    {% if current_type == 'person' and group.key == "relationship" %}
-  <div class="label-group-box biography-suggestions"
-       id="linked_person_bio_box"
-       style="display: none; margin-top: 30px;">
-    <div class="label-title">🧬 Link to Existing Person Biography</div>
+ {% if current_type == 'person' and group.key == "relationship" %}
+<div class="label-group-box biography-suggestions"
+     id="linked_person_bio_box"
+     style="margin-top: 30px;">
+  <div class="label-title">🧬 Link to Existing Person Biography</div>
 
-    <input type="text"
-           class="label-search"
-           placeholder="Search Person Biographies..."
-           oninput="filterLabels(this, 'linked_person')"
-           data-group="linked_person">
+  <!-- Hidden input to store selected value -->
+  <input type="hidden"
+         name="selected_id_linked_person_bio"
+         id="input_linked_person_bio"
+         class="group-selection-tracker"
+         value="">
 
-    <input type="hidden"
-           name="selected_person_biography"
-           id="input_linked_person"
-           class="group-selection-tracker"
-           value="{{ existing_linked_bio or '' }}">
+  <!-- Search box -->
+  <input type="text"
+         class="label-search"
+         placeholder="Search Person Biographies..."
+         oninput="filterLabels(this, 'linked_person_bio')"
+         data-group="linked_person_bio">
 
-    <div class="label-options">
-     {% for option in grouped_biographies.get("root", []) %}
-        <div class="label-card"
-             data-group="linked_person"
-             data-value="{{ option.id }}"
-             onclick="toggleLabelSelection(this)">
-          <div><strong>{{ option.display.replace('_', ' ')|title }}</strong></div>
-          {% if option.description %}
-            <div class="label-description">{{ option.description }}</div>
-          {% endif %}
-        </div>
-      {% endfor %}
-    </div>
-
-    <div class="confidence-slider" style="margin-top: 20px;">
-      <label for="confidence_linked_person">🎯 Confidence:</label><br>
-      <input type="range"
-             name="confidence_linked_person"
-             id="confidence_linked_person"
-             min="0"
-             max="100"
-             value="100"
-             oninput="updateConfidence('linked_person')">
-      <div class="confidence-display">
-        <span id="confidence_display_linked_person">100%</span>
-        <span id="confidence_level_linked_person">(Exact)</span>
+  <!-- Biography options -->
+  <div class="label-options">
+    {% for option in grouped_biographies.get("root", []) %}
+      <div class="label-card"
+           data-group="linked_person_bio"
+           data-value="{{ option.id }}"
+           id="bio-card-{{ option.id }}"
+           onclick="selectLinkedPersonBio('{{ option.id }}')">
+        <div><strong>{{ option.display.replace('_', ' ')|title }}</strong></div>
+        {% if option.description %}
+          <div class="label-description">{{ option.description }}</div>
+        {% endif %}
       </div>
-    </div>
+    {% endfor %}
+  </div>
 
-    <div style="text-align: center; margin-top: 14px;">
-      <a href="{{ url_for('search_or_add_biography', type_name='person', return_url=request.url) }}"
-         class="add-entry-button">➕ Search or Create Person Biography</a>
+  <!-- Confidence slider -->
+  <div class="confidence-slider" style="margin-top: 20px;">
+    <label for="confidence_linked_person">🎯 Confidence:</label><br>
+    <input type="range"
+           name="confidence_linked_person"
+           id="confidence_linked_person"
+           min="0"
+           max="100"
+           value="100"
+           oninput="updateConfidence('linked_person')">
+    <div class="confidence-display">
+      <span id="confidence_display_linked_person">100%</span>
+      <span id="confidence_level_linked_person">(Exact)</span>
     </div>
   </div>
+
+  <div style="text-align: center; margin-top: 14px;">
+    <a href="{{ url_for('search_or_add_biography', type_name='person', return_url=request.url) }}"
+       class="add-entry-button">➕ Search or Create Person Biography</a>
+  </div>
+</div>
 {% endif %}
   {% endfor %}
 
@@ -624,41 +629,53 @@
   }
 
   function toggleLabelSelection(el) {
-    const groupKey = el.getAttribute("data-group");
-    const safeKey = makeSafeKey(groupKey);
-    const value = el.getAttribute("data-value");
-    const hiddenInput = document.getElementById("input_" + safeKey);
-    const currentValue = hiddenInput.value;
-    const allCards = document.querySelectorAll(`.label-card[data-group="${groupKey}"]`);
-    const isSelected = currentValue === value;
+  const groupKey = el.getAttribute("data-group");
+  const safeKey = makeSafeKey(groupKey);
+  const value = el.getAttribute("data-value");
 
-    if (isSelected) {
-      if (confirm("Are you sure you want to unselect this label?")) {
-        hiddenInput.value = "";
-        el.classList.remove("selected");
+  let hiddenInput = document.getElementById("input_" + safeKey);
 
-        // Hide nested
-        document.querySelectorAll(`[data-parent="${safeKey}"]`).forEach(childGroup => {
-          childGroup.style.display = "none";
-          const input = childGroup.querySelector('input.group-selection-tracker');
-          if (input) input.value = "";
-        });
-      }
-    } else {
-      allCards.forEach(card => card.classList.remove("selected"));
-      hiddenInput.value = value;
-      el.classList.add("selected");
+  // 🔧 Fallback for special case: linked_person → input_linked_person_bio
+  if (!hiddenInput && groupKey === "linked_person") {
+    hiddenInput = document.getElementById("input_linked_person_bio");
+  }
 
-      // Show nested
+  if (!hiddenInput) {
+    console.warn("No hidden input found for group:", groupKey);
+    return;
+  }
+
+  const currentValue = hiddenInput.value;
+  const allCards = document.querySelectorAll(`.label-card[data-group="${groupKey}"]`);
+  const isSelected = currentValue === value;
+
+  if (isSelected) {
+    if (confirm("Are you sure you want to unselect this label?")) {
+      hiddenInput.value = "";
+      el.classList.remove("selected");
+
+      // Hide nested
       document.querySelectorAll(`[data-parent="${safeKey}"]`).forEach(childGroup => {
-        childGroup.style.display = "block";
+        childGroup.style.display = "none";
+        const input = childGroup.querySelector('input.group-selection-tracker');
+        if (input) input.value = "";
       });
     }
+  } else {
+    allCards.forEach(card => card.classList.remove("selected"));
+    hiddenInput.value = value;
+    el.classList.add("selected");
 
-    updateSaveButtonState();
-    updateBiographyVisibility();
-    updateLinkedPersonBioVisibility();
+    // Show nested
+    document.querySelectorAll(`[data-parent="${safeKey}"]`).forEach(childGroup => {
+      childGroup.style.display = "block";
+    });
   }
+
+  updateSaveButtonState();
+  updateBiographyVisibility();
+  updateLinkedPersonBioVisibility();
+}
 
   function updateBiographyVisibility() {
     document.querySelectorAll('.label-group-box.biography-suggestions[data-label-key]').forEach(bioBox => {
@@ -741,6 +758,24 @@ function selectBiography(id) {
   // Optional: Visual feedback for selection
   const allCards = document.querySelectorAll(".bio-card");
   allCards.forEach(c => c.classList.remove("selected-card"));
+  const selectedCard = document.getElementById("bio-card-" + id);
+  if (selectedCard) {
+    selectedCard.classList.add("selected-card");
+  }
+
+  updateSaveButtonState();
+}
+
+function selectLinkedPersonBio(id) {
+  const hiddenInput = document.getElementById("input_linked_person_bio");
+  if (hiddenInput) {
+    hiddenInput.value = id;
+  }
+
+  // Optional visual cue
+  const allCards = document.querySelectorAll(".bio-card");
+  allCards.forEach(c => c.classList.remove("selected-card"));
+
   const selectedCard = document.getElementById("bio-card-" + id);
   if (selectedCard) {
     selectedCard.classList.add("selected-card");

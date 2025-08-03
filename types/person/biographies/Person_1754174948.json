@@ -1,0 +1,51 @@
+{
+    "person_id": "Person_1754174948",
+    "name": "Zelda",
+    "dob": "2025-08-05",
+    "created": "2025-08-02T23:49:08.643953+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "toddler",
+                "confidence": 41,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "toddler"
+            },
+            "created": "2025-08-02T23:49:13.642672",
+            "buildings": [
+                {
+                    "label_type": "work_building",
+                    "confidence": 100,
+                    "id": "hospital"
+                },
+                {
+                    "label_type": "hospital",
+                    "confidence": 42,
+                    "id": "royal_victoria_hospital",
+                    "biography": "royal_victoria_hospital",
+                    "biography_confidence": 100
+                }
+            ],
+            "person": [
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 2,
+                    "id": "actor"
+                },
+                {
+                    "label_type": "relationship",
+                    "confidence": 100,
+                    "id": "spouse"
+                },
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 0,
+                    "id": "1"
+                }
+            ],
+            "vehicle": []
+        }
+    ],
+    "finalised": true
+}

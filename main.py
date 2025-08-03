@@ -532,13 +532,11 @@ def person_step_dynamic(step):
     bio_path = f"./types/{current_type}/biographies"
 
     grouped_biographies = load_grouped_biographies(bio_path)
-
     label_groups_list = collect_label_groups(label_base_path, current_type)
 
     suggested_biographies = {}
     for group in label_groups_list:
         key = group["key"]
-
         for item in group["options"]:
             label_id = item["id"]
             full_label_key = f"{key}/{label_id}"
@@ -546,16 +544,13 @@ def person_step_dynamic(step):
 
             label_json_path = os.path.join(label_base_path, *key.split("/"), f"{label_id}.json")
             if not os.path.exists(label_json_path):
-                print(f"[WARN] Label file not found: {label_json_path}")
                 continue
 
             try:
                 label_data = load_json_as_dict(label_json_path)
                 suggested_type = label_data.get("properties", {}).get("suggests_biographies_from")
-
                 bios = []
 
-                # 1. Direct match
                 direct_bio_path = os.path.join("types", current_type, "biographies", *key.split("/"), f"{label_id}.json")
                 if os.path.exists(direct_bio_path):
                     try:
@@ -565,35 +560,30 @@ def person_step_dynamic(step):
                             "display": bio_data.get("name", label_id),
                             "description": bio_data.get("description", "")
                         })
-                    except Exception as e:
-                        print(f"[ERROR] Reading direct biography {direct_bio_path}: {e}")
+                    except Exception:
+                        pass
 
-                # 2. Suggested type folder
                 if suggested_type:
-                    specific_bio_folder = os.path.join("types", suggested_type, "biographies", *key.split("/"))
-                    if os.path.exists(specific_bio_folder):
-                        for root, _, files in os.walk(specific_bio_folder):
+                    suggested_path = os.path.join("types", suggested_type, "biographies", *key.split("/"))
+                    if os.path.exists(suggested_path):
+                        for root, _, files in os.walk(suggested_path):
                             for f in files:
                                 if f.endswith(".json"):
                                     try:
-                                        full_path = os.path.join(root, f)
-                                        bio_id = os.path.splitext(f)[0]
-                                        bio_data = load_json_as_dict(full_path)
+                                        bio_data = load_json_as_dict(os.path.join(root, f))
                                         bios.append({
-                                            "id": bio_id,
-                                            "display": bio_data.get("name", bio_id),
+                                            "id": os.path.splitext(f)[0],
+                                            "display": bio_data.get("name", f),
                                             "description": bio_data.get("description", "")
                                         })
-                                    except Exception as e:
-                                        print(f"[ERROR] Reading biography {f}: {e}")
+                                    except Exception:
+                                        pass
 
                 if bios:
                     suggested_biographies[safe_key] = bios
+            except Exception:
+                pass
 
-            except Exception as e:
-                print(f"[ERROR] Reading label {label_id} for suggestions: {e}")
-
-    # Linking person-to-person relationships
     is_person_type = (current_type == "person")
     person_biography_options = []
 
@@ -601,22 +591,20 @@ def person_step_dynamic(step):
         for f in os.listdir("./types/person/biographies"):
             if f.endswith(".json"):
                 bio_id = os.path.splitext(f)[0]
-                if bio_id == person_id:
-                    continue
-                try:
-                    bio_data = load_json_as_dict(os.path.join("./types/person/biographies", f))
-                    person_biography_options.append({
-                        "id": bio_id,
-                        "display": bio_data.get("name", bio_id),
-                        "description": bio_data.get("description", "")
-                    })
-                except Exception as e:
-                    print(f"[ERROR] Loading person biography {f}: {e}")
+                if bio_id != person_id:
+                    try:
+                        bio_data = load_json_as_dict(os.path.join("./types/person/biographies", f))
+                        person_biography_options.append({
+                            "id": bio_id,
+                            "display": bio_data.get("name", bio_id),
+                            "description": bio_data.get("description", "")
+                        })
+                    except Exception:
+                        pass
 
     if request.method == "POST":
         new_entries = []
 
-# 🔹 Normal biography selection (not person)
         if not is_person_type:
             selected_bio_id = request.form.get("selected_id_biography")
             if selected_bio_id:
@@ -626,60 +614,85 @@ def person_step_dynamic(step):
                     new_entries.append({
                         "id": selected_bio_id,
                         "confidence": 100,
-                        "label_type": current_type,  # fallback if nothing else
+                        "label_type": current_type,
                         "source": "biography",
                         "display": bio_data.get("name", selected_bio_id),
                         "description": bio_data.get("description", ""),
                         "image_url": bio_data.get("image", "")
                     })
-                except Exception as e:
-                    print(f"[ERROR] Loading selected biography {selected_bio_id}: {e}")
+                except Exception:
+                    pass
 
-        # 🔹 Standard label selections
         for group in label_groups_list:
             key = group["key"]
             selected_id = request.form.get(f"selected_id_{key}", "").strip()
             confidence_raw = request.form.get(f"confidence_{key}", "").strip()
             bio_id = request.form.get(f"selected_id_{key}_bio", "").strip()
+            bio_conf_raw = request.form.get(f"confidence_{key}_bio", "").strip()
 
-            if selected_id:
-                confidence = int(confidence_raw) if confidence_raw.isdigit() else 100
+            confidence = int(confidence_raw) if confidence_raw.isdigit() else 100
+            bio_conf = int(bio_conf_raw) if bio_conf_raw.isdigit() else 100
+
+            if selected_id or bio_id:
                 entry = {
-                    "id": selected_id,
-                    "confidence": confidence,
-                    "label_type": key
+                    "label_type": key.split("/")[-1],
+                    "confidence": confidence
                 }
+                if selected_id:
+                    entry["id"] = selected_id
                 if bio_id:
                     entry["biography"] = bio_id
+                    entry["biography_confidence"] = bio_conf
                 new_entries.append(entry)
 
-        # 🔹 Person-type: Linked biography + relationship
         if is_person_type:
-            linked_id = request.form.get("selected_person_biography")
             relationship = request.form.get("relationship_label", "").strip()
-            if linked_id and relationship:
+            bio_id = request.form.get("selected_id_linked_person_bio", "").strip()
+            bio_conf_raw = request.form.get("confidence_linked_person", "").strip()
+            bio_conf = int(bio_conf_raw) if bio_conf_raw.isdigit() else 100
+
+            if relationship:
                 new_entries.append({
-                    "id": linked_id,
-                    "relationship": relationship,
-                    "confidence": 100,
-                    "label_type": "person",
-                    "source": "biography"
+                    "id": relationship,
+                    "confidence": bio_conf,
+                    "label_type": "relationship"
                 })
 
-        entry_index = session.get("entry_index")
-        if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
-            person_data["entries"][entry_index][current_type] = new_entries
-            save_dict_as_json(person_file, person_data)
+            if bio_id:
+                try:
+                    bio_path = os.path.join("types", "person", "biographies", f"{bio_id}.json")
+                    bio_data = load_json_as_dict(bio_path)
 
-        if session.pop("loopback_to_add_type", False) or session.pop("force_stop_after_this_step", False):
-            session.pop("type_just_created", None)
-            return redirect(url_for("add_type_prompt"))
+                    new_entries.append({
+                        "id": bio_id,
+                        "label_type": "linked_person",
+                        "confidence": bio_conf,
+                        "source": "biography",
+                        "display": bio_data.get("name", bio_id),
+                        "description": bio_data.get("description", ""),
+                        "image_url": bio_data.get("image", "")
+                    })
+                except Exception as e:
+                    print("⚠️ Error loading person biography:", e)
+
+        if new_entries:
+            entry_index = session.get("entry_index")
+            if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
+                person_data["entries"][entry_index][current_type] = new_entries
+                save_dict_as_json(person_file, person_data)
+
+            if session.pop("loopback_to_add_type", False) or session.pop("force_stop_after_this_step", False):
+                session.pop("type_just_created", None)
+                return redirect(url_for("add_type_prompt"))
+            else:
+                return redirect(url_for("person_step_dynamic", step=step + 1))
         else:
+            # Avoid looping if nothing was selected
             return redirect(url_for("person_step_dynamic", step=step + 1))
 
-    # Displaying previously selected labels
     existing_labels = {}
     selected_label_ids = set()
+    relationship_labels = []
     entry_index = session.get("entry_index")
     if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
         labels_list = person_data["entries"][entry_index].get(current_type, [])
@@ -699,6 +712,21 @@ def person_step_dynamic(step):
                 selected_label_ids.add(label_type.split("/")[-1])
                 selected_label_ids.add(label.get("id"))
 
+    if is_person_type:
+        relationship_label_folder = os.path.join(label_base_path, "relationship")
+        if os.path.exists(relationship_label_folder):
+            for f in os.listdir(relationship_label_folder):
+                if f.endswith(".json"):
+                    try:
+                        label_data = load_json_as_dict(os.path.join(relationship_label_folder, f))
+                        relationship_labels.append({
+                            "id": os.path.splitext(f)[0],
+                            "display": label_data.get("name", os.path.splitext(f)[0]),
+                            "description": label_data.get("description", "")
+                        })
+                    except Exception:
+                        pass
+
     return render_template(
         "person_step_dynamic.html",
         current_type=current_type,
@@ -715,7 +743,8 @@ def person_step_dynamic(step):
         prev_step=step - 1 if step > 0 else None,
         step=step,
         is_person_type=is_person_type,
-        person_biography_options=person_biography_options
+        person_biography_options=person_biography_options,
+        relationship_labels=relationship_labels
     )
 
 @app.route("/search_or_add_biography/<type_name>", methods=["GET", "POST"])

@@ -1,0 +1,29 @@
+{
+    "person_id": "Person_1754174486",
+    "name": "Zelda",
+    "dob": "2025-07-29",
+    "created": "2025-08-02T23:41:26.908658+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "preteen",
+                "confidence": 48,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "preteen"
+            },
+            "created": "2025-08-02T23:41:32.490444",
+            "buildings": [],
+            "organisations": [],
+            "person": [
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 3,
+                    "id": "1"
+                }
+            ],
+            "vehicle": []
+        }
+    ],
+    "finalised": true
+}
