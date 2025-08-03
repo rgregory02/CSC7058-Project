@@ -1,0 +1,31 @@
+{
+    "person_id": "Person_1754254406",
+    "name": "Teddy",
+    "dob": "2025-07-28",
+    "created": "2025-08-03T21:53:26.906875+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "infant",
+                "confidence": 21,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "infant"
+            },
+            "created": "2025-08-03T21:53:30.136391",
+            "person": [
+                {
+                    "id": "Person_1754254016",
+                    "label_type": "linked_person",
+                    "confidence": 53,
+                    "source": "biography",
+                    "display": "Zelda",
+                    "description": "",
+                    "image_url": "",
+                    "relationship": "child"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}

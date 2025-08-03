@@ -45,6 +45,10 @@ app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'the_random_string')  #
 app.jinja_env.filters['uk_datetime'] = uk_datetime
 app.jinja_env.filters['display_dob_uk'] = display_dob_uk
 
+@app.context_processor
+def inject_utilities():
+    return dict(get_icon=get_icon)
+
 @app.route('/favicon.ico')
 def favicon():
     return send_from_directory(
@@ -1458,15 +1462,16 @@ def finalise_person_bio():
     entries = person.get("entries", [])
     entry = entries[-1] if entries else {}
 
-    # ✅ Enrich all labels in the latest entry
+    # ✅ Enrich all labels in the latest entry while keeping original metadata (like 'display', 'relationship')
     for type_key, label_group in entry.items():
         if isinstance(label_group, list) and all(isinstance(l, dict) for l in label_group):
             enriched = []
             for label in label_group:
                 try:
                     full = enrich_label_data(label["label_type"], label["id"])
-                    full["confidence"] = label.get("confidence", 100)
-                    enriched.append(full)
+                    merged = {**label, **full}  # merge original + enriched
+                    merged["confidence"] = label.get("confidence", 100)
+                    enriched.append(merged)
                 except Exception as e:
                     print(f"Error enriching label: {label} - {e}")
                     enriched.append(label)

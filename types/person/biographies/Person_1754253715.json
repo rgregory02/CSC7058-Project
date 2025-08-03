@@ -1,0 +1,31 @@
+{
+    "person_id": "Person_1754253715",
+    "name": "Starbucks",
+    "dob": "2025-08-05",
+    "created": "2025-08-03T21:41:55.970341+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "preteen",
+                "confidence": 20,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "preteen"
+            },
+            "created": "2025-08-03T21:42:00.204749",
+            "person": [
+                {
+                    "id": "Person_1754188801",
+                    "label_type": "linked_person",
+                    "confidence": 50,
+                    "source": "biography",
+                    "display": "Rebecca",
+                    "description": "",
+                    "image_url": "",
+                    "relationship": "parent"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}

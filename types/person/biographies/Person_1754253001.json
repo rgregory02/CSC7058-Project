@@ -1,0 +1,55 @@
+{
+    "person_id": "Person_1754253001",
+    "name": "Starbucks",
+    "dob": "2025-08-18",
+    "created": "2025-08-03T21:30:01.125513+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "teens",
+                "confidence": 35,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "teens"
+            },
+            "created": "2025-08-03T21:30:05.440512",
+            "buildings": [
+                {
+                    "label_type": "work_building",
+                    "confidence": 100,
+                    "id": "hospital"
+                },
+                {
+                    "label_type": "hospital",
+                    "confidence": 44,
+                    "id": "royal_victoria_hospital",
+                    "biography": "royal_victoria_hospital",
+                    "biography_confidence": 100
+                }
+            ],
+            "person": [
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 51,
+                    "id": "party_planner"
+                },
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 23,
+                    "id": "0"
+                },
+                {
+                    "id": "Person_1754188801",
+                    "label_type": "linked_person",
+                    "confidence": 100,
+                    "source": "biography",
+                    "display": "Rebecca",
+                    "description": "",
+                    "image_url": "",
+                    "relationship": "parent"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}

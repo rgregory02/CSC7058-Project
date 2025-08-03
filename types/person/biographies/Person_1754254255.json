@@ -1,0 +1,31 @@
+{
+    "person_id": "Person_1754254255",
+    "name": "Starbucks",
+    "dob": "2025-07-30",
+    "created": "2025-08-03T21:50:55.023544+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "2025-08-27",
+                "confidence": 100,
+                "label_type": "date",
+                "date_value": "2025-08-27",
+                "subvalue": ""
+            },
+            "created": "2025-08-03T21:51:01.888377",
+            "person": [
+                {
+                    "id": "Person_1754253263",
+                    "label_type": "linked_person",
+                    "confidence": 100,
+                    "source": "biography",
+                    "display": "Teddy",
+                    "description": "",
+                    "image_url": "",
+                    "relationship": "parent"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}

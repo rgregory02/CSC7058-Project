@@ -160,7 +160,7 @@
     ) %}
 
     <div class="entry-block">
-      <h3>📝 Snapshot of This Entry</h3>
+      <h3>📄 Snapshot of This Entry</h3>
 
       <!-- Time -->
       <p><strong>Time:</strong>
@@ -180,79 +180,72 @@
       {% for type_key, type_data in entry.items() %}
         {% if type_key not in ["time", "created", "status"] %}
           <h4 style="margin-top: 20px;">{{ type_key|replace("_", " ")|title }}</h4>
-          {% if type_key == "person" %}
-            {% set previous_label = None %}
-            {% for label in type_data if label is mapping %}
+
+          {% for label in type_data %}
+            {% if label is mapping %}
+
               {% set label_conf_class = (
                 'confidence-high' if label.confidence >= 67
                 else 'confidence-medium' if label.confidence >= 34
                 else 'confidence-low'
               ) %}
 
-              {% if label.label_type == "linked_person" and previous_label and previous_label.label_type == "relationship" %}
+              {% if type_key == "person" and label.label_type == "linked_person" %}
                 <div class="label-block">
                   <div>
-                    <strong>Relationship:</strong> {{ previous_label.id|title }}
+                    <strong>🧩 Linked Person</strong>
                   </div>
                   <div>
-                    <strong>Person:</strong> {{ label.display or label.id }}
+                    <strong>Relationship:</strong>
+                    {{ label.relationship }}
+                  </div>
+                  <div>
+                    <strong>Person:</strong>
+                    {{ label.display }}
                   </div>
                   {% if label.description %}
                     <em>{{ label.description }}</em>
                   {% endif %}
                   <div class="confidence-tag {{ label_conf_class }}">
-                    Confidence: {{ label.confidence }}%
+                    – Confidence: {{ label.confidence }}%
                   </div>
-                </div>
-                {% set previous_label = None %}
-              {% elif label.label_type != "relationship" %}
-                <div class="label-block">
-                  <strong>{{ label.label_type|replace("_", " ")|title }}</strong> – {{ label.id|title }}
-                  <div class="confidence-tag {{ label_conf_class }}">
-                    Confidence: {{ label.confidence }}%
-                  </div>
-                  {% if label.description %}
-                    <em>{{ label.description }}</em>
+                  {% if label.image_url %}
+                    <img src="{{ label.image_url }}" alt="{{ label.display or label.label or label.id }}">
                   {% endif %}
                 </div>
-                {% set previous_label = None %}
               {% else %}
-                {% set previous_label = label %}
-              {% endif %}
-            {% endfor %}
-          {% else %}
-            {% for label in type_data if label is mapping %}
-              {% set label_conf_class = (
-                'confidence-high' if label.confidence >= 67
-                else 'confidence-medium' if label.confidence >= 34
-                else 'confidence-low'
-              ) %}
-              <div class="label-block">
-                <strong>{{ label.get("label_type", "Label")|replace("_", " ")|title }}</strong>
-                {% set display_text = (
-                  label.get("display") or label.get("label") or label.get("id") or "Unnamed"
-                ) %}
-                – {{ display_text.replace("_", " ")|title }}
-                {% if label.get("biography_data") %}
-                  <div class="biography-info">
-                    📖 <strong>{{ label.biography_data.get("name", "Unknown") }}</strong><br>
-                    {% if label.biography_data.get("description") %}
-                      <em>{{ label.biography_data.description }}</em><br>
-                    {% endif %}
+                <div class="label-block">
+                  <strong>{{ label.get("label_type", "Label")|replace("_", " ")|title }}</strong>
+                  {% set display_text = (
+                    label.get("display") or label.get("label") or label.get("id") or "Unnamed"
+                  ) %}
+                  – {{ display_text.replace("_", " ")|title }}
+                  {% if label.get("biography_data") %}
+                    <div class="biography-info">
+                      📖 <strong>{{ label.biography_data.get("name", "Unknown") }}</strong><br>
+                      {% if label.biography_data.get("description") %}
+                        <em>{{ label.biography_data.description }}</em><br>
+                      {% endif %}
+                    </div>
+                  {% endif %}
+                  <div class="confidence-tag {{ label_conf_class }}">
+                    Confidence: {{ label.confidence }}%
                   </div>
-                {% endif %}
-                <div class="confidence-tag {{ label_conf_class }}">
-                  Confidence: {{ label.confidence }}%
+                  {% if label.description %}
+                    <em>{{ label.description }}</em>
+                  {% endif %}
+                  {% if label.image_url %}
+                    <img src="{{ label.image_url }}" alt="{{ display_text }}">
+                  {% endif %}
                 </div>
-                {% if label.description %}
-                  <em>{{ label.description }}</em>
-                {% endif %}
-                {% if label.image_url %}
-                  <img src="{{ label.image_url }}" alt="{{ display_text }}">
-                {% endif %}
-              </div>
-            {% endfor %}
-          {% endif %}
+              {% endif %}
+
+            {% else %}
+              <!-- DEBUG: Non-mapping label -->
+              <pre style="color: red; font-size: 0.9em;">Non-dict label encountered: {{ label | tojson }}</pre>
+            {% endif %}
+          {% endfor %}
+
         {% endif %}
       {% endfor %}
     </div>
@@ -264,5 +257,4 @@
     </div>
   </div>
 </body>
-
 </html>

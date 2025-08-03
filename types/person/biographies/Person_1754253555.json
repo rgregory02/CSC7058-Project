@@ -1,0 +1,31 @@
+{
+    "person_id": "Person_1754253555",
+    "name": "Teddy",
+    "dob": "2025-08-06",
+    "created": "2025-08-03T21:39:15.739558+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "infant",
+                "confidence": 22,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "infant"
+            },
+            "created": "2025-08-03T21:39:20.305231",
+            "person": [
+                {
+                    "id": "Person_1754188801",
+                    "label_type": "linked_person",
+                    "confidence": 100,
+                    "source": "biography",
+                    "display": "Rebecca",
+                    "description": "",
+                    "image_url": "",
+                    "relationship": "parent"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}

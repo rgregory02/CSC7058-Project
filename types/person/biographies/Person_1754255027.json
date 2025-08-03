@@ -1,0 +1,53 @@
+{
+    "person_id": "Person_1754255027",
+    "name": "Teddy",
+    "dob": "2025-08-04",
+    "created": "2025-08-03T22:03:47.275321+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "preteen",
+                "confidence": 100,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "preteen"
+            },
+            "created": "2025-08-03T22:03:52.458294",
+            "person": [
+                {
+                    "id": "Person_1754188801",
+                    "label_type": "linked_person",
+                    "confidence": 100,
+                    "source": "biography",
+                    "display": "Rebecca",
+                    "description": "",
+                    "image_url": "",
+                    "relationship": "parent"
+                }
+            ]
+        },
+        {
+            "time": {
+                "label": "infant",
+                "confidence": 34,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "infant"
+            },
+            "created": "2025-08-03T22:11:45.795116",
+            "person": [
+                {
+                    "id": "Person_1754253263",
+                    "label_type": "linked_person",
+                    "confidence": 100,
+                    "source": "biography",
+                    "display": "Teddy",
+                    "description": "",
+                    "image_url": "",
+                    "relationship": "parent"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}
