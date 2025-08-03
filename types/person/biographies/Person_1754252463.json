@@ -1,0 +1,55 @@
+{
+    "person_id": "Person_1754252463",
+    "name": "Teddy",
+    "dob": "2025-08-12",
+    "created": "2025-08-03T21:21:03.439728+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "teens",
+                "confidence": 33,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "teens"
+            },
+            "created": "2025-08-03T21:21:14.608915",
+            "buildings": [
+                {
+                    "label_type": "work_building",
+                    "confidence": 100,
+                    "id": "hospital"
+                },
+                {
+                    "label_type": "hospital",
+                    "confidence": 48,
+                    "id": "royal_victoria_hospital",
+                    "biography": "royal_victoria_hospital",
+                    "biography_confidence": 100
+                }
+            ],
+            "person": [
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 35,
+                    "id": "teacher"
+                },
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 47,
+                    "id": "1"
+                },
+                {
+                    "id": "Person_1754188801",
+                    "label_type": "linked_person",
+                    "confidence": 100,
+                    "source": "biography",
+                    "display": "Rebecca",
+                    "description": "",
+                    "image_url": "",
+                    "relationship": "parent"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}
