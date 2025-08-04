@@ -1147,58 +1147,67 @@ def add_label(type_name, subfolder_name):
     os.makedirs(labels_dir, exist_ok=True)
 
     if request.method == 'POST':
-        label_name = request.form['label_name'].strip().replace(' ', '_').lower()
+        # Extract and process core values
+        raw_label_name = request.form['label_name'].strip()
+        label_id = raw_label_name.replace(' ', '_').lower()
+        display_name = raw_label_name.strip().title()
+        label_type = subfolder_name.split('/')[-1] if '/' in subfolder_name else subfolder_name
         description = request.form.get('description', '').strip()
-        image = request.form.get('image', '').strip()
-        confidence = request.form.get('confidence', '100').strip()
+        image_url = request.form.get('image', '').strip()
+        confidence = int(request.form.get('confidence', '100').strip())
         source = request.form.get('source', 'user').strip()
         suggests_biographies_from = request.form.get('suggests_biographies_from', '').strip()
         timestamp = datetime.now(timezone.utc).isoformat()
-        extra_properties_raw = request.form.get('extra_properties', '').strip()
         return_url = request.form.get("return_url", "")  # POST return target
 
         # Auto-fill suggests_biographies_from from the first part of subfolder if blank
         if not suggests_biographies_from and '/' in subfolder_name:
             suggests_biographies_from = subfolder_name.split('/')[0]
 
-        label_filename = f"{label_name}.json"
-        label_path = os.path.join(labels_dir, label_filename)
-
-        # Prevent duplicate labels
-        existing_labels = [f.lower() for f in os.listdir(labels_dir) if f.endswith('.json')]
-        if label_filename.lower() in existing_labels:
-            flash("❌ A label with this name already exists in this subfolder.", "error")
-            return redirect(request.url)
-
+        # Load and validate optional extra properties
+        extra_properties_raw = request.form.get('extra_properties', '').strip()
         try:
             extra_properties = json.loads(extra_properties_raw) if extra_properties_raw else {}
         except json.JSONDecodeError:
             flash("❌ Invalid JSON in extra properties. Please check your format.", "error")
             return redirect(request.url)
 
-        # Build label dictionary
-        label_properties = {
-            "value": label_name,
-            "confidence": int(confidence),
-            "source": source,
-            **extra_properties
-        }
+        # Check for duplicate
+        label_filename = f"{label_id}.json"
+        label_path = os.path.join(labels_dir, label_filename)
+        existing_labels = [f.lower() for f in os.listdir(labels_dir) if f.endswith('.json')]
+        if label_filename.lower() in existing_labels:
+            flash("❌ A label with this name already exists in this subfolder.", "error")
+            return redirect(request.url)
 
-        if suggests_biographies_from:
-            label_properties["suggests_biographies_from"] = suggests_biographies_from
-
-        new_label_data = {
+        # Construct label object with standardised fields
+        label_data = {
+            "id": label_id,
+            "display": display_name,
+            "label_type": label_type,
             "description": description,
-            "image": image,
+            "confidence": confidence,
+            "image_url": image_url,
+            "source": source,
             "created": timestamp,
-            "properties": label_properties
+            "suggests_biographies_from": suggests_biographies_from if suggests_biographies_from else None,
+            "properties": extra_properties
         }
 
-        with open(label_path, 'w') as f:
-            json.dump(new_label_data, f, indent=2)
+        # Remove null-like keys
+        label_data = {k: v for k, v in label_data.items() if v not in [None, ""]}
 
-        pretty_name = label_name.replace('_', ' ').title()
-        flash(f"✅ Label \"{pretty_name}\" added successfully!", "success")
+        # Save label file
+        with open(label_path, 'w') as f:
+            json.dump(label_data, f, indent=2)
+
+        # Automatically create nested label and biography subfolders
+        child_label_subfolder = os.path.join('types', type_name, 'labels', subfolder_name, label_id)
+        child_bio_subfolder = os.path.join('types', type_name, 'biographies', subfolder_name, label_id)
+        os.makedirs(child_label_subfolder, exist_ok=True)
+        os.makedirs(child_bio_subfolder, exist_ok=True)
+        flash(f"✅ Label \"{display_name}\" added successfully!", "success")
+        flash(f"📂 Subfolders created: <code>{child_label_subfolder}</code> and <code>{child_bio_subfolder}</code>", "success")
 
         return redirect(return_url or url_for('add_label', type_name=type_name, subfolder_name=subfolder_name))
 
