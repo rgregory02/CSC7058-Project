@@ -36,7 +36,8 @@ from utils import (
     display_dob_uk,
     resolve_entities,
     LIFE_STAGE_ORDER,
-    collect_label_groups
+    collect_label_groups,
+    load_labels_from_folder
 )
 
 app = Flask(__name__)
@@ -538,9 +539,46 @@ def person_step_dynamic(step):
     grouped_biographies = load_grouped_biographies(bio_path)
     label_groups_list = collect_label_groups(label_base_path, current_type)
 
-    # 🔁 Prevent 'relationship' from being processed as a regular label group
     if current_type == "person":
         label_groups_list = [group for group in label_groups_list if not group["key"].endswith("relationship")]
+
+    # ✅ Dynamically add nested child groups based on selected labels
+    existing_labels = {}
+    selected_label_ids = set()
+    entry_index = session.get("entry_index")
+    if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
+        labels_list = person_data["entries"][entry_index].get(current_type, [])
+        for label in labels_list:
+            if "label_type" not in label:
+                for group in label_groups_list:
+                    if any(opt["id"] == label["id"] for opt in group["options"]):
+                        label["label_type"] = group["key"]
+                        break
+            label_type = label.get("label_type")
+            if label_type:
+                existing_labels[label_type] = {
+                    "label": label.get("id"),
+                    "confidence": label.get("confidence", 100)
+                }
+                selected_label_ids.add(label_type)
+                selected_label_ids.add(label_type.split("/")[-1])
+                selected_label_ids.add(label.get("id"))
+
+    additional_nested_groups = []
+    for group in label_groups_list:
+        key = group["key"]
+        selected_label = existing_labels.get(key, {}).get("label")
+        if selected_label:
+            nested_folder = os.path.join(label_base_path, key, selected_label)
+            if os.path.exists(nested_folder):
+                nested_options = load_labels_from_folder(nested_folder)
+                if nested_options:
+                    nested_group_key = f"{key}/{selected_label}"
+                    additional_nested_groups.append({
+                        "key": nested_group_key,
+                        "options": nested_options
+                    })
+    label_groups_list.extend(additional_nested_groups)
 
     suggested_biographies = {}
     for group in label_groups_list:
@@ -594,7 +632,6 @@ def person_step_dynamic(step):
 
     is_person_type = (current_type == "person")
     person_biography_options = []
-
     if is_person_type:
         for f in os.listdir("./types/person/biographies"):
             if f.endswith(".json"):
@@ -612,7 +649,6 @@ def person_step_dynamic(step):
 
     if request.method == "POST":
         new_entries = []
-
         if not is_person_type:
             selected_bio_id = request.form.get("selected_id_biography")
             if selected_bio_id:
@@ -637,7 +673,6 @@ def person_step_dynamic(step):
             confidence_raw = request.form.get(f"confidence_{key}", "").strip()
             bio_id = request.form.get(f"selected_id_{key}_bio", "").strip()
             bio_conf_raw = request.form.get(f"confidence_{key}_bio", "").strip()
-
             confidence = int(confidence_raw) if confidence_raw.isdigit() else 100
             bio_conf = int(bio_conf_raw) if bio_conf_raw.isdigit() else 100
 
@@ -663,7 +698,6 @@ def person_step_dynamic(step):
                 try:
                     bio_path = os.path.join("types", "person", "biographies", f"{bio_id}.json")
                     bio_data = load_json_as_dict(bio_path)
-
                     combined_entry = {
                         "id": bio_id,
                         "label_type": "linked_person",
@@ -673,19 +707,14 @@ def person_step_dynamic(step):
                         "description": bio_data.get("description", ""),
                         "image_url": bio_data.get("image", "")
                     }
-
                     if relationship:
-                        combined_entry["relationship"] = relationship  # ✅ nest here
-
+                        combined_entry["relationship"] = relationship
                     new_entries.append(combined_entry)
-
                 except Exception as e:
                     print("⚠️ Error loading person biography:", e)
-
             elif relationship:
-                # Only if linked person was not selected
                 new_entries.append({
-                    "label_type": "linked_person",  # 🔁 Use 'linked_person' not 'relationship'
+                    "label_type": "linked_person",
                     "relationship": relationship,
                     "confidence": bio_conf,
                     "id": None
@@ -703,31 +732,9 @@ def person_step_dynamic(step):
             else:
                 return redirect(url_for("person_step_dynamic", step=step + 1))
         else:
-                    # Avoid looping if nothing was selected
             return redirect(url_for("person_step_dynamic", step=step + 1))
-       
-    existing_labels = {}
-    selected_label_ids = set()
-    relationship_labels = []
-    entry_index = session.get("entry_index")
-    if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
-        labels_list = person_data["entries"][entry_index].get(current_type, [])
-        for label in labels_list:
-            if "label_type" not in label:
-                for group in label_groups_list:
-                    if any(opt["id"] == label["id"] for opt in group["options"]):
-                        label["label_type"] = group["key"]
-                        break
-            label_type = label.get("label_type")
-            if label_type:
-                existing_labels[label_type] = {
-                    "label": label.get("id"),
-                    "confidence": label.get("confidence", 100)
-                }
-                selected_label_ids.add(label_type)
-                selected_label_ids.add(label_type.split("/")[-1])
-                selected_label_ids.add(label.get("id"))
 
+    relationship_labels = []
     if is_person_type:
         relationship_label_folder = os.path.join(label_base_path, "relationship")
         if os.path.exists(relationship_label_folder):

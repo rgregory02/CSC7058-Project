@@ -362,15 +362,22 @@
           {% set safe_key = group.key.replace('/', '__') %}
         {% endif %}
 
-        <div class="label-group-box"
-             id="group_{{ safe_key }}"
-             {% if is_nested %} data-parent="{{ parent_key.replace('/', '__') }}" style="display: none;" {% endif %}>
+<div class="label-group-box"
+     id="group_{{ group.key.replace('/', '__') }}"
+     {% if is_nested %}
+       {% set parent_path = group.key.rsplit('/', 1)[0] %}
+       {% set parent_selected_id = existing_labels.get(parent_path, {}).get('label') %}
+       {% set this_folder_name = group.key.split('/')[-1] %}
+       {% set show_nested = this_folder_name == parent_selected_id %}
+       data-parent="{{ parent_path.replace('/', '__') }}"
+       style="{% if not show_nested %}display: none;{% endif %}"
+     {% endif %}>
 
-          <div class="label-title">{{ group.label.replace('_', ' ')|title }}</div>
+          <div class="label-title">{{ group.key.replace('_', ' ')|title }}</div>
 
           <input type="text"
                  class="label-search"
-                 placeholder="Search {{ group.label.replace('_', ' ')|title }}..."
+                 placeholder="Search {{ group.key.replace('_', ' ')|title }}..."
                  oninput="filterLabels(this, '{{ group.key }}')"
                  data-group="{{ group.key }}">
 
@@ -406,11 +413,11 @@
                  id="bio_suggestions_{{ safe_key }}_bio"
                  data-label-key="{{ safe_key }}_bio"
                  style="display: none;">
-              <div class="label-title">Suggested {{ group.label.replace('_', ' ')|title }} Biographies</div>
+              <div class="label-title">Suggested {{ group.key.replace('_', ' ')|title }} Biographies</div>
 
               <input type="text"
                      class="label-search"
-                     placeholder="Search {{ group.label.replace('_', ' ')|title }} Biographies..."
+                     placeholder="Search {{ group.key.replace('_', ' ')|title }} Biographies..."
                      oninput="filterLabels(this, '{{ group.key }}_bio')"
                      data-group="{{ group.key }}_bio">
 
@@ -437,7 +444,7 @@
               <div style="text-align: center; margin-top: 14px;">
                 <a href="{{ url_for('search_or_add_biography', type_name=current_type, return_url=request.url) }}"
                    class="add-entry-button">
-                  ➕ Search or Create {{ group.label.replace('_', ' ')|title }} Biography
+                  ➕ Search or Create {{ group.key.replace('_', ' ')|title }} Biography
                 </a>
               </div>
             </div>
@@ -457,7 +464,7 @@
 
           <div style="text-align: center; margin-top: 14px;">
             <a href="{{ url_for('add_label', type_name=current_type, subfolder_name=group.key, return_url=request.url) }}"
-              class="add-entry-button">➕ Add a New {{ group.label.replace('_', ' ')|title }} Label</a>
+              class="add-entry-button">➕ Add a New {{ group.key.replace('_', ' ')|title }} Label</a>
           </div>
         </div>
       {% endfor %}
@@ -617,54 +624,65 @@
     }
   }
 
-  function toggleLabelSelection(el) {
-    const groupKey = el.getAttribute("data-group");
-    const safeKey = makeSafeKey(groupKey);
-    const value = el.getAttribute("data-value");
+function toggleLabelSelection(el) {
+  const groupKey = el.getAttribute("data-group");
+  const safeKey = makeSafeKey(groupKey);
+  const value = el.getAttribute("data-value");
 
-    let hiddenInput = document.getElementById("input_" + safeKey);
+  let hiddenInput = document.getElementById("input_" + safeKey);
 
-    // 🔧 Fallback for special case: linked_person → input_linked_person_bio
-    if (!hiddenInput && groupKey === "linked_person") {
-      hiddenInput = document.getElementById("input_linked_person_bio");
-    }
+  // 🔧 Fallback for special case: linked_person → input_linked_person_bio
+  if (!hiddenInput && groupKey === "linked_person") {
+    hiddenInput = document.getElementById("input_linked_person_bio");
+  }
 
-    if (!hiddenInput) {
-      console.warn("No hidden input found for group:", groupKey);
-      return;
-    }
+  if (!hiddenInput) {
+    console.warn("No hidden input found for group:", groupKey);
+    return;
+  }
 
-    const currentValue = hiddenInput.value;
-    const allCards = document.querySelectorAll(`.label-card[data-group="${groupKey}"]`);
-    const isSelected = currentValue === value;
+  const currentValue = hiddenInput.value;
+  const allCards = document.querySelectorAll(`.label-card[data-group="${groupKey}"]`);
+  const isSelected = currentValue === value;
 
-    if (isSelected) {
-      if (confirm("Are you sure you want to unselect this label?")) {
-        hiddenInput.value = "";
-        el.classList.remove("selected");
+  if (isSelected) {
+    if (confirm("Are you sure you want to unselect this label?")) {
+      hiddenInput.value = "";
+      el.classList.remove("selected");
 
-        // Hide nested
-        document.querySelectorAll(`[data-parent="${safeKey}"]`).forEach(childGroup => {
-          childGroup.style.display = "none";
-          const input = childGroup.querySelector('input.group-selection-tracker');
-          if (input) input.value = "";
-        });
-      }
-    } else {
-      allCards.forEach(card => card.classList.remove("selected"));
-      hiddenInput.value = value;
-      el.classList.add("selected");
-
-      // Show nested
+      // Hide nested
       document.querySelectorAll(`[data-parent="${safeKey}"]`).forEach(childGroup => {
-        childGroup.style.display = "block";
+        childGroup.style.display = "none";
+        const input = childGroup.querySelector('input.group-selection-tracker');
+        if (input) input.value = "";
+        childGroup.querySelectorAll('.label-card').forEach(c => c.classList.remove("selected"));
       });
     }
+  } else {
+    allCards.forEach(card => card.classList.remove("selected"));
+    hiddenInput.value = value;
+    el.classList.add("selected");
 
-    updateSaveButtonState();
-    updateBiographyVisibility();
-    updateLinkedPersonBioVisibility();
+    // ✅ Show only the matching nested subgroup
+    document.querySelectorAll(`[data-parent="${safeKey}"]`).forEach(childGroup => {
+      const groupId = childGroup.id.replace('group_', ''); // e.g. work_building__hospital
+      const lastSegment = groupId.split('__').pop();       // e.g. hospital
+
+      if (lastSegment === value) {
+        childGroup.style.display = "block";
+      } else {
+        childGroup.style.display = "none";
+        const input = childGroup.querySelector('input.group-selection-tracker');
+        if (input) input.value = "";
+        childGroup.querySelectorAll('.label-card').forEach(c => c.classList.remove("selected"));
+      }
+    });
   }
+
+  updateSaveButtonState();
+  updateBiographyVisibility();
+  updateLinkedPersonBioVisibility();
+}
 
   function updateBiographyVisibility() {
     document.querySelectorAll('.label-group-box.biography-suggestions[data-label-key]').forEach(bioBox => {

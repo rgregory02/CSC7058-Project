@@ -206,6 +206,25 @@ LIFE_STAGE_ORDER = {
     "hundreds": 105
 }
 
+def load_labels_from_folder(folder_path):
+    """
+    Loads all .json label files from a folder and returns a list of label dicts.
+    """
+    labels = []
+    for filename in os.listdir(folder_path):
+        if filename.endswith(".json"):
+            try:
+                file_path = os.path.join(folder_path, filename)
+                data = load_json_as_dict(file_path)
+                labels.append({
+                    "id": os.path.splitext(filename)[0],
+                    "display": data.get("name", os.path.splitext(filename)[0]),
+                    "description": data.get("description", "")
+                })
+            except Exception as e:
+                print(f"[ERROR] Loading label {filename}: {e}")
+    return labels
+
 def collect_label_groups(label_base_path, current_type):
     label_groups_list = []
 
