@@ -1207,7 +1207,7 @@ def add_label(type_name, subfolder_name):
         os.makedirs(child_label_subfolder, exist_ok=True)
         os.makedirs(child_bio_subfolder, exist_ok=True)
         flash(f"✅ Label \"{display_name}\" added successfully!", "success")
-        flash(f"📂 Subfolders created: <code>{child_label_subfolder}</code> and <code>{child_bio_subfolder}</code>", "success")
+        flash(f"📂 Subfolders created under labels and biographies for '{label_id}'.", "success")
 
         return redirect(return_url or url_for('add_label', type_name=type_name, subfolder_name=subfolder_name))
 
