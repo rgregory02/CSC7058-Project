@@ -1,0 +1,18 @@
+{
+    "person_id": "Person_1754425189",
+    "name": "Starbucks",
+    "dob": "2025-07-31",
+    "created": "2025-08-05T21:19:49.673245+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "infant",
+                "confidence": 36,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "infant"
+            },
+            "created": "2025-08-05T21:19:53.812971"
+        }
+    ]
+}

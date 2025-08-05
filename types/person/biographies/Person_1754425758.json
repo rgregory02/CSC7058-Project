@@ -1,0 +1,99 @@
+{
+    "person_id": "Person_1754425758",
+    "name": "Zelda",
+    "dob": "2025-08-11",
+    "created": "2025-08-05T21:29:18.723349+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "twenties",
+                "confidence": 67,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "twenties"
+            },
+            "created": "2025-08-05T21:30:08.057072",
+            "buildings": [
+                {
+                    "label_type": "work_building",
+                    "confidence": 100,
+                    "id": "office"
+                },
+                {
+                    "label_type": "religious",
+                    "confidence": 55,
+                    "id": "cathedral"
+                }
+            ],
+            "organisations": [
+                {
+                    "label_type": "nhs",
+                    "confidence": 100,
+                    "id": "apartment"
+                }
+            ],
+            "person": [
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 60,
+                    "id": "actor"
+                },
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 22,
+                    "id": "0"
+                },
+                {
+                    "id": "Person_1754255027",
+                    "label_type": "linked_person",
+                    "confidence": 100,
+                    "source": "biography",
+                    "display": "Teddy",
+                    "description": "",
+                    "image_url": "",
+                    "relationship": "Child"
+                }
+            ]
+        },
+        {
+            "time": {
+                "label": "toddler",
+                "confidence": 59,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "toddler"
+            },
+            "created": "2025-08-05T21:49:43.899952",
+            "buildings": [
+                {
+                    "label_type": "house",
+                    "confidence": 39,
+                    "id": "flat"
+                },
+                {
+                    "label_type": "educational_buildings",
+                    "confidence": 38,
+                    "id": "2_story_flat"
+                }
+            ],
+            "person": [
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 78,
+                    "id": "actor"
+                }
+            ]
+        },
+        {
+            "time": {
+                "label": "2027-04-20",
+                "confidence": 65,
+                "label_type": "date",
+                "date_value": "2027-04-20",
+                "subvalue": ""
+            },
+            "created": "2025-08-05T21:31:59.187492"
+        }
+    ],
+    "finalised": true
+}

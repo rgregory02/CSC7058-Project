@@ -347,45 +347,73 @@
       </a>
     </div>
 
-    <form method="POST">
-      {% set has_relationship_group = label_groups_list | selectattr("key", "equalto", "relationship") | list | length > 0 %}
-      {% for group in label_groups_list if group.key != "relationship" %}
-        {% set is_nested = '/' in group.key %}
-        {% set parent_key = '/'.join(group.key.split('/')[:-1]) if is_nested else None %}
-        {% set selected_id = existing_labels.get(group.key, {}).get('label') %}
-        {% set matched_conf = existing_labels.get(group.key, {}).get('confidence', 100) %}
+<form method="POST">
+  {% set has_relationship_group = label_groups_list | selectattr("key", "equalto", "relationship") | list | length > 0 %}
+  {% for group in label_groups_list if group.key != "relationship" %}
+    {% set is_nested = '/' in group.key %}
+    {% set parent_key = '/'.join(group.key.split('/')[:-1]) if is_nested else None %}
+    {% set selected_id = existing_labels.get(group.key, {}).get('label') %}
+    {% set matched_conf = existing_labels.get(group.key, {}).get('confidence', 100) %}
+    {% set safe_key = group.key.replace('/', '__') %}
 
-        {% if selected_id %}
-          {% set full_key = group.key ~ '/' ~ selected_id %}
-          {% set safe_key = full_key.replace('/', '__') %}
-        {% else %}
-          {% set safe_key = group.key.replace('/', '__') %}
-        {% endif %}
+    <div class="label-group-box"
+         id="group_{{ safe_key }}"
+         {% if is_nested %}
+           {% set parent_path = group.key.rsplit('/', 1)[0] %}
+           {% set parent_selected_id = existing_labels.get(parent_path, {}).get('label') %}
+           {% set this_folder_name = group.key.split('/')[-1] %}
+           {% set show_nested = this_folder_name == parent_selected_id %}
+           data-parent="{{ parent_path.replace('/', '__') }}"
+           style="{% if not show_nested %}display: none;{% endif %}"
+         {% endif %}>
 
-<div class="label-group-box"
-     id="group_{{ group.key.replace('/', '__') }}"
-     {% if is_nested %}
-       {% set parent_path = group.key.rsplit('/', 1)[0] %}
-       {% set parent_selected_id = existing_labels.get(parent_path, {}).get('label') %}
-       {% set this_folder_name = group.key.split('/')[-1] %}
-       {% set show_nested = this_folder_name == parent_selected_id %}
-       data-parent="{{ parent_path.replace('/', '__') }}"
-       style="{% if not show_nested %}display: none;{% endif %}"
-     {% endif %}>
+      <div class="label-title">{{ group.key.replace('_', ' ')|title }}</div>
 
-          <div class="label-title">{{ group.key.replace('_', ' ')|title }}</div>
+      <input type="text"
+             class="label-search"
+             placeholder="Search {{ group.key.replace('_', ' ')|title }}..."
+             oninput="filterLabels(this, '{{ group.key }}')"
+             data-group="{{ group.key }}">
+
+      <input type="hidden"
+             name="selected_id_{{ group.key }}"
+             id="input_{{ safe_key }}"
+             class="group-selection-tracker"
+             value="{{ selected_id or '' }}">
+
+      <input type="hidden"
+             name="selected_id_{{ group.key }}_bio"
+             id="input_{{ safe_key }}_bio"
+             class="group-selection-tracker"
+             value="">
+
+      <div class="label-options">
+        {% for item in group.options %}
+          <div class="label-card {% if selected_id == item.id %}selected{% endif %}"
+               data-group="{{ group.key }}"
+               data-value="{{ item.id }}"
+               onclick="toggleLabelSelection(this)">
+            {% if item.image %}<img src="{{ item.image }}" alt="{{ item.display }}">{% endif %}
+            <div><strong>{{ item.display.replace('_', ' ')|title }}</strong></div>
+            {% if item.description %}
+              <div class="label-description">{{ item.description }}</div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+
+      {% if suggested_biographies.get(safe_key) %}
+        <div class="label-group-box biography-suggestions"
+             id="bio_suggestions_{{ safe_key }}_bio"
+             data-label-key="{{ safe_key }}_bio"
+             style="display: none;">
+          <div class="label-title">Suggested {{ group.key.replace('_', ' ')|title }} Biographies</div>
 
           <input type="text"
                  class="label-search"
-                 placeholder="Search {{ group.key.replace('_', ' ')|title }}..."
-                 oninput="filterLabels(this, '{{ group.key }}')"
-                 data-group="{{ group.key }}">
-
-          <input type="hidden"
-                 name="selected_id_{{ group.key }}"
-                 id="input_{{ safe_key }}"
-                 class="group-selection-tracker"
-                 value="{{ selected_id or '' }}">
+                 placeholder="Search {{ group.key.replace('_', ' ')|title }} Biographies..."
+                 oninput="filterLabels(this, '{{ group.key }}_bio')"
+                 data-group="{{ group.key }}_bio">
 
           <input type="hidden"
                  name="selected_id_{{ group.key }}_bio"
@@ -394,80 +422,46 @@
                  value="">
 
           <div class="label-options">
-            {% for item in group.options %}
-              <div class="label-card {% if selected_id == item.id %}selected{% endif %}"
-                   data-group="{{ group.key }}"
-                   data-value="{{ item.id }}"
+            {% for option in suggested_biographies[safe_key] %}
+              <div class="label-card"
+                   data-group="{{ group.key }}_bio"
+                   data-value="{{ option.id }}"
                    onclick="toggleLabelSelection(this)">
-                {% if item.image %}<img src="{{ item.image }}" alt="{{ item.display }}">{% endif %}
-                <div><strong>{{ item.display.replace('_', ' ')|title }}</strong></div>
-                {% if item.description %}
-                  <div class="label-description">{{ item.description }}</div>
+                <div><strong>{{ option.display.replace('_', ' ')|title }}</strong></div>
+                {% if option.description %}
+                  <div class="label-description">{{ option.description }}</div>
                 {% endif %}
               </div>
             {% endfor %}
           </div>
 
-          {% if suggested_biographies.get(safe_key) %}
-            <div class="label-group-box biography-suggestions"
-                 id="bio_suggestions_{{ safe_key }}_bio"
-                 data-label-key="{{ safe_key }}_bio"
-                 style="display: none;">
-              <div class="label-title">Suggested {{ group.key.replace('_', ' ')|title }} Biographies</div>
-
-              <input type="text"
-                     class="label-search"
-                     placeholder="Search {{ group.key.replace('_', ' ')|title }} Biographies..."
-                     oninput="filterLabels(this, '{{ group.key }}_bio')"
-                     data-group="{{ group.key }}_bio">
-
-              <input type="hidden"
-                     name="selected_id_{{ group.key }}_bio"
-                     id="input_{{ safe_key }}_bio"
-                     class="group-selection-tracker"
-                     value="">
-
-              <div class="label-options">
-                {% for option in suggested_biographies[safe_key] %}
-                  <div class="label-card"
-                       data-group="{{ group.key }}_bio"
-                       data-value="{{ option.id }}"
-                       onclick="toggleLabelSelection(this)">
-                    <div><strong>{{ option.display.replace('_', ' ')|title }}</strong></div>
-                    {% if option.description %}
-                      <div class="label-description">{{ option.description }}</div>
-                    {% endif %}
-                  </div>
-                {% endfor %}
-              </div>
-
-              <div style="text-align: center; margin-top: 14px;">
-                <a href="{{ url_for('search_or_add_biography', type_name=current_type, return_url=request.url) }}"
-                   class="add-entry-button">
-                  ➕ Search or Create {{ group.key.replace('_', ' ')|title }} Biography
-                </a>
-              </div>
-            </div>
-          {% endif %}
-
-          {% if group.options %}
-            <div class="confidence-slider">
-              <label for="confidence_{{ safe_key }}">🎯 Confidence:</label><br>
-              <input type="range" name="confidence_{{ group.key }}" id="confidence_{{ safe_key }}" min="0" max="100"
-                    value="{{ matched_conf }}" oninput="updateConfidence('{{ safe_key }}')">
-              <div class="confidence-display">
-                <span id="confidence_display_{{ safe_key }}">{{ matched_conf }}%</span>
-                <span id="confidence_level_{{ safe_key }}"></span>
-              </div>
-            </div>
-          {% endif %}
-
           <div style="text-align: center; margin-top: 14px;">
-            <a href="{{ url_for('add_label', type_name=current_type, subfolder_name=group.key, return_url=request.url) }}"
-              class="add-entry-button">➕ Add a New {{ group.key.replace('_', ' ')|title }} Label</a>
+            <a href="{{ url_for('search_or_add_biography', type_name=current_type, return_url=request.url) }}"
+               class="add-entry-button">
+              ➕ Search or Create {{ group.key.replace('_', ' ')|title }} Biography
+            </a>
           </div>
         </div>
-      {% endfor %}
+      {% endif %}
+
+      {% if group.options %}
+        <div class="confidence-slider">
+          <label for="confidence_{{ safe_key }}">🎯 Confidence:</label><br>
+          <input type="range" name="confidence_{{ group.key }}" id="confidence_{{ safe_key }}" min="0" max="100"
+                value="{{ matched_conf }}" oninput="updateConfidence('{{ safe_key }}')">
+          <div class="confidence-display">
+            <span id="confidence_display_{{ safe_key }}">{{ matched_conf }}%</span>
+            <span id="confidence_level_{{ safe_key }}"></span>
+          </div>
+        </div>
+      {% endif %}
+
+      <div style="text-align: center; margin-top: 14px;">
+        <a href="{{ url_for('add_label', type_name=current_type, subfolder_name=group.key, return_url=request.url) }}"
+          class="add-entry-button">➕ Add a New {{ group.key.replace('_', ' ')|title }} Label</a>
+      </div>
+    </div>
+  {% endfor %}
 
       {% if current_type == 'person' %}
         <!-- Relationship Group -->
@@ -631,7 +625,7 @@ function toggleLabelSelection(el) {
 
   let hiddenInput = document.getElementById("input_" + safeKey);
 
-  // 🔧 Fallback for special case: linked_person → input_linked_person_bio
+  // 🔧 Special fallback for linked person
   if (!hiddenInput && groupKey === "linked_person") {
     hiddenInput = document.getElementById("input_linked_person_bio");
   }
@@ -646,27 +640,28 @@ function toggleLabelSelection(el) {
   const isSelected = currentValue === value;
 
   if (isSelected) {
-    if (confirm("Are you sure you want to unselect this label?")) {
-      hiddenInput.value = "";
-      el.classList.remove("selected");
+    // ✅ Allow toggle-off (even in edit mode) without confirmation
+    hiddenInput.value = "";
+    el.classList.remove("selected");
 
-      // Hide nested
-      document.querySelectorAll(`[data-parent="${safeKey}"]`).forEach(childGroup => {
-        childGroup.style.display = "none";
-        const input = childGroup.querySelector('input.group-selection-tracker');
-        if (input) input.value = "";
-        childGroup.querySelectorAll('.label-card').forEach(c => c.classList.remove("selected"));
-      });
-    }
+    // 🔒 Clear any nested subgroups if parent deselected
+    document.querySelectorAll(`[data-parent="${safeKey}"]`).forEach(childGroup => {
+      childGroup.style.display = "none";
+      const input = childGroup.querySelector('input.group-selection-tracker');
+      if (input) input.value = "";
+      childGroup.querySelectorAll('.label-card').forEach(c => c.classList.remove("selected"));
+    });
+
   } else {
+    // ✅ Replace old selection with this one
     allCards.forEach(card => card.classList.remove("selected"));
     hiddenInput.value = value;
     el.classList.add("selected");
 
-    // ✅ Show only the matching nested subgroup
+    // ✅ Show matching nested child only
     document.querySelectorAll(`[data-parent="${safeKey}"]`).forEach(childGroup => {
-      const groupId = childGroup.id.replace('group_', ''); // e.g. work_building__hospital
-      const lastSegment = groupId.split('__').pop();       // e.g. hospital
+      const groupId = childGroup.id.replace('group_', '');
+      const lastSegment = groupId.split('__').pop();
 
       if (lastSegment === value) {
         childGroup.style.display = "block";

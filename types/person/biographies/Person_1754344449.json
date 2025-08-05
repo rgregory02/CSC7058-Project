@@ -6,13 +6,13 @@
     "entries": [
         {
             "time": {
-                "label": "2025-07-31",
-                "confidence": 100,
+                "label": "2025-07-14",
+                "confidence": 46,
                 "label_type": "date",
-                "date_value": "2025-07-31",
+                "date_value": "2025-07-14",
                 "subvalue": ""
             },
-            "created": "2025-08-04T23:17:07.577476",
+            "created": "2025-08-05T21:18:20.348900",
             "buildings": [
                 {
                     "label_type": "work_building",
@@ -47,6 +47,28 @@
                     "description": "",
                     "image_url": "",
                     "relationship": "Child"
+                }
+            ]
+        },
+        {
+            "time": {
+                "label": "teens",
+                "confidence": 39,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "teens"
+            },
+            "created": "2025-08-05T02:09:32.811390",
+            "buildings": [
+                {
+                    "label_type": "car",
+                    "confidence": 100,
+                    "id": "ford"
+                },
+                {
+                    "label_type": "ford",
+                    "confidence": 100,
+                    "id": "ford"
                 }
             ]
         }
