@@ -1,9 +1,9 @@
 {
-  "id": "ford",
-  "display": "Ford",
+  "id": "office",
+  "display": "Office",
   "label_type": "work_building",
   "confidence": 100,
-  "created": "2025-08-05T00:28:14.384685+00:00",
+  "created": "2025-08-04T23:37:48.606220+00:00",
   "properties": {
     "suggests_biographies_from": "buildings"
   }

@@ -581,6 +581,7 @@ def person_step_dynamic(step):
     label_groups_list.extend(additional_nested_groups)
 
     suggested_biographies = {}
+
     for group in label_groups_list:
         key = group["key"]
         for item in group["options"]:
@@ -594,9 +595,13 @@ def person_step_dynamic(step):
 
             try:
                 label_data = load_json_as_dict(label_json_path)
-                suggested_type = label_data.get("properties", {}).get("suggests_biographies_from")
+                suggested_type = (
+                    label_data.get("properties", {}).get("suggests_biographies_from")
+                    or label_data.get("suggests_biographies_from")
+                )
                 bios = []
 
+                # ✅ Add direct same-folder biography
                 direct_bio_path = os.path.join("types", current_type, "biographies", *key.split("/"), f"{label_id}.json")
                 if os.path.exists(direct_bio_path):
                     try:
@@ -610,13 +615,37 @@ def person_step_dynamic(step):
                         pass
 
                 if suggested_type:
-                    suggested_path = os.path.join("types", suggested_type, "biographies", *key.split("/"))
-                    if os.path.exists(suggested_path):
-                        for root, _, files in os.walk(suggested_path):
-                            for f in files:
-                                if f.endswith(".json"):
+                    full_path = os.path.join("types", suggested_type)
+
+                    fallback_paths = [
+                        full_path,
+                        os.path.dirname(full_path),
+                        os.path.join("types", suggested_type.split("/")[0], "biographies")
+                    ]
+
+                    for path in fallback_paths:
+                        # ✅ Make sure we are in a 'biographies' directory
+                        if not path.startswith("types") or "biographies" not in path:
+                            continue
+
+                        if os.path.exists(path):
+                            for root, _, files in os.walk(path):
+                                for f in files:
+                                    if not f.endswith(".json"):
+                                        continue
+
+                                    file_path = os.path.join(root, f)
+
+                                    # ✅ Skip if it's a label file (by checking against labels path)
+                                    if "labels" in file_path:
+                                        continue
+
+                                    # ✅ Optional: match filename or folder to label_id (to reduce overmatching)
+                                    if label_id not in root and os.path.splitext(f)[0] != label_id:
+                                        continue
+
                                     try:
-                                        bio_data = load_json_as_dict(os.path.join(root, f))
+                                        bio_data = load_json_as_dict(file_path)
                                         bios.append({
                                             "id": os.path.splitext(f)[0],
                                             "display": bio_data.get("name", f),
@@ -625,10 +654,12 @@ def person_step_dynamic(step):
                                     except Exception:
                                         pass
 
-                if bios:
-                    suggested_biographies[safe_key] = bios
-            except Exception:
-                pass
+                            if bios:
+                                suggested_biographies[safe_key] = bios
+                                break  # ✅ Stop after first match
+
+            except Exception as e:
+                print(f"[Suggestion Error] Failed to process label '{label_id}': {e}")
 
     is_person_type = (current_type == "person")
     person_biography_options = []
@@ -1163,13 +1194,8 @@ def add_label(type_name, subfolder_name):
         image_url = request.form.get('image', '').strip()
         confidence = int(request.form.get('confidence', '100').strip())
         source = request.form.get('source', 'user').strip()
-        suggests_biographies_from = request.form.get('suggests_biographies_from', '').strip()
         timestamp = datetime.now(timezone.utc).isoformat()
-        return_url = request.form.get("return_url", "")  # POST return target
-
-        # Auto-fill suggests_biographies_from from the first part of subfolder if blank
-        if not suggests_biographies_from and '/' in subfolder_name:
-            suggests_biographies_from = subfolder_name.split('/')[0]
+        return_url = request.form.get("return_url", "")
 
         # Load and validate optional extra properties
         extra_properties_raw = request.form.get('extra_properties', '').strip()
@@ -1178,6 +1204,11 @@ def add_label(type_name, subfolder_name):
         except json.JSONDecodeError:
             flash("❌ Invalid JSON in extra properties. Please check your format.", "error")
             return redirect(request.url)
+
+        # Auto-fill suggests_biographies_from into properties if not present
+        if "suggests_biographies_from" not in extra_properties:
+            bio_path = f"{type_name}/{subfolder_name}/{label_id}".replace('//', '/')
+            extra_properties["suggests_biographies_from"] = bio_path
 
         # Check for duplicate
         label_filename = f"{label_id}.json"
@@ -1197,7 +1228,6 @@ def add_label(type_name, subfolder_name):
             "image_url": image_url,
             "source": source,
             "created": timestamp,
-            "suggests_biographies_from": suggests_biographies_from if suggests_biographies_from else None,
             "properties": extra_properties
         }
 
@@ -1213,6 +1243,21 @@ def add_label(type_name, subfolder_name):
         child_bio_subfolder = os.path.join('types', type_name, 'biographies', subfolder_name, label_id)
         os.makedirs(child_label_subfolder, exist_ok=True)
         os.makedirs(child_bio_subfolder, exist_ok=True)
+
+        # Create stub biography matching the label_id
+        stub_filename = f"{label_id}.json"
+        stub_path = os.path.join(child_bio_subfolder, stub_filename)
+        if not os.path.exists(stub_path):
+            stub_data = {
+                "id": label_id,
+                "name": display_name,
+                "description": f"Auto-generated biography stub for label: {display_name}",
+                "source": "auto-generated from label",
+                "entries": []
+            }
+            with open(stub_path, 'w') as f:
+                json.dump(stub_data, f, indent=2)
+
         flash(f"✅ Label \"{display_name}\" added successfully!", "success")
         flash(f"📂 Subfolders created under labels and biographies for '{label_id}'.", "success")
 

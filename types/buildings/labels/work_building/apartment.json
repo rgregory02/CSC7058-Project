@@ -1,0 +1,10 @@
+{
+  "id": "apartment",
+  "display": "Apartment",
+  "label_type": "work_building",
+  "confidence": 100,
+  "created": "2025-08-05T00:33:12.978838+00:00",
+  "properties": {
+    "suggests_biographies_from": "buildings/work_building/apartment"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "id": "manualtest",
+  "display": "Manualtest",
+  "label_type": "manual",
+  "confidence": 100,
+  "created": "2025-08-04T23:51:10.083823+00:00",
+  "properties": {
+    "suggests_biographies_from": "buildings/work_building/manual"
+  }
+}

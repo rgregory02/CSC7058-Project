@@ -12,7 +12,44 @@
                 "date_value": "2025-07-31",
                 "subvalue": ""
             },
-            "created": "2025-08-04T23:17:07.577476"
+            "created": "2025-08-04T23:17:07.577476",
+            "buildings": [
+                {
+                    "label_type": "work_building",
+                    "confidence": 100,
+                    "id": "hospital"
+                },
+                {
+                    "label_type": "hospital",
+                    "confidence": 100,
+                    "id": "royal_victoria_hospital",
+                    "biography": "royal_victoria_hospital",
+                    "biography_confidence": 100
+                }
+            ],
+            "person": [
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 50,
+                    "id": "party_planner"
+                },
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 45,
+                    "id": "1"
+                },
+                {
+                    "id": "Person_1754255027",
+                    "label_type": "linked_person",
+                    "confidence": 100,
+                    "source": "biography",
+                    "display": "Teddy",
+                    "description": "",
+                    "image_url": "",
+                    "relationship": "Child"
+                }
+            ]
         }
-    ]
+    ],
+    "finalised": true
 }

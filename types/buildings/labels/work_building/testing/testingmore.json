@@ -1,0 +1,10 @@
+{
+  "id": "testingmore",
+  "display": "Testingmore",
+  "label_type": "testing",
+  "confidence": 100,
+  "created": "2025-08-05T00:52:17.369463+00:00",
+  "properties": {
+    "suggests_biographies_from": "buildings"
+  }
+}

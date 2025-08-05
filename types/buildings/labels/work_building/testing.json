@@ -1,9 +1,9 @@
 {
-  "id": "ford",
-  "display": "Ford",
+  "id": "testing",
+  "display": "Testing",
   "label_type": "work_building",
   "confidence": 100,
-  "created": "2025-08-05T00:28:14.384685+00:00",
+  "created": "2025-08-05T00:52:06.750126+00:00",
   "properties": {
     "suggests_biographies_from": "buildings"
   }

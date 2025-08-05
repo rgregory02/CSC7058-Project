@@ -1,0 +1,9 @@
+{
+  "id": "wfh_-_house",
+  "display": "Wfh - House",
+  "label_type": "wfh",
+  "confidence": 100,
+  "created": "2025-08-04T23:46:10.938313+00:00",
+  "suggests_biographies_from": "work_building",
+  "properties": {}
+}

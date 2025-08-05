@@ -1,0 +1,8 @@
+{
+  "id": "small_office",
+  "display": "Small Office",
+  "label_type": "office",
+  "confidence": 100,
+  "created": "2025-08-04T23:38:30.647667+00:00",
+  "suggests_biographies_from": "buildings/work_building/office",  "properties": {}
+}
