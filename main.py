@@ -751,17 +751,15 @@ def person_step_dynamic(step):
                     "id": None
                 })
 
-        if new_entries:
-            entry_index = session.get("entry_index")
-            if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
-                person_data["entries"][entry_index][current_type] = new_entries
-                save_dict_as_json(person_file, person_data)
+        entry_index = session.get("entry_index")
+        if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
+            # ✅ Always overwrite the current step’s labels, even if empty
+            person_data["entries"][entry_index][current_type] = new_entries
+            save_dict_as_json(person_file, person_data)
 
-            if session.pop("loopback_to_add_type", False) or session.pop("force_stop_after_this_step", False):
-                session.pop("type_just_created", None)
-                return redirect(url_for("add_type_prompt"))
-            else:
-                return redirect(url_for("person_step_dynamic", step=step + 1))
+        if session.pop("loopback_to_add_type", False) or session.pop("force_stop_after_this_step", False):
+            session.pop("type_just_created", None)
+            return redirect(url_for("add_type_prompt"))
         else:
             return redirect(url_for("person_step_dynamic", step=step + 1))
 
