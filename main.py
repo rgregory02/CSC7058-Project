@@ -700,7 +700,8 @@ def person_step_dynamic(step):
                         entry = {
                             "id": label["id"],
                             "label_type": label.get("label_type", current_type),
-                            "confidence": int(label.get("confidence", 100))
+                            "confidence": int(label.get("confidence", 100)),
+                            "source": "gpt"
                         }
                         new_entries.append(entry)
             else:
@@ -1049,9 +1050,11 @@ def person_add_timepoint(person_id):
     """
     Resets session state so the next time period starts fresh.
     """
-    session["time_step_in_progress"] = False  # Start a new timepoint
-    session["time_selection"] = None  # Optional: clear previous label preview
-    session["person_id"] = person_id  # Ensure person_id remains in session
+    session.pop("entry_index", None)            # Prevent overwrite of previous entry
+    session.pop("edit_entry_index", None)       # Ensure edit mode is cleared
+    session.pop("time_selection", None)         # Optional: clear time preview
+    session["time_step_in_progress"] = False    # Clear any in-progress flags
+    session["person_id"] = person_id            # Ensure person ID is retained
     return redirect(url_for("person_step_time", person_id=person_id))
 
 @app.route("/person_delete_entry/<person_id>/<int:entry_index>")
