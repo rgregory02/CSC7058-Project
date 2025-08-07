@@ -4,10 +4,17 @@ import shutil  # For moving files and folders
 import time  # For unique timestamps
 import re
 
+
 from flask import Flask, Response, jsonify, request, url_for, redirect, render_template, flash, get_flashed_messages, send_from_directory, render_template_string, session
 from markupsafe import Markup, escape
 from urllib.parse import quote, unquote
 from datetime import datetime, timezone, timedelta
+from openai import OpenAI
+from dotenv import load_dotenv
+from requests import get
+
+load_dotenv()
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def safe_date(x):
     try:
@@ -37,7 +44,8 @@ from utils import (
     resolve_entities,
     LIFE_STAGE_ORDER,
     collect_label_groups,
-    load_labels_from_folder
+    load_labels_from_folder,
+    suggest_labels_from_text
 )
 
 app = Flask(__name__)
@@ -798,6 +806,28 @@ def person_step_dynamic(step):
         person_biography_options=person_biography_options,
         relationship_labels=relationship_labels
     )
+
+@app.route("/suggest_labels", methods=["POST"])
+def suggest_labels():
+    data = request.get_json()
+    user_text = data.get("text")
+    type_name = data.get("type")  # e.g. 'person', 'buildings', 'organisation'
+
+    if not user_text or not type_name:
+        return jsonify({"error": "Missing input"}), 400
+
+    try:
+        suggestions = suggest_labels_from_text(user_text, type_name)
+        print(f"[SUGGEST] Input: {user_text} → Suggested IDs: {suggestions}")
+        return jsonify({"suggestions": suggestions or []})  # Always return list
+
+    except Exception as e:
+        print(f"[OpenAI ERROR] {e}")
+        return jsonify({
+            "suggestions": [],
+            "error": str(e)
+        }), 500
+
 
 @app.route("/search_or_add_biography/<type_name>", methods=["GET", "POST"])
 def search_or_add_biography(type_name):

@@ -315,6 +315,40 @@
   background-color: #f0fff0;
 }
 
+.label-group-box textarea {
+  font-family: inherit;
+  font-size: 1em;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  resize: vertical;
+}
+
+.label-group-box button.primary-button {
+  background-color: #007bff;
+  border: none;
+  padding: 10px 16px;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+}
+  .suggested-label {
+    display: inline-block;
+    margin: 6px 6px 0 0;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 18px;
+    background-color: #007bff;
+    color: white;
+    font-size: 0.9em;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+
+  .suggested-label:hover {
+    background-color: #0056b3;
+  }
+
   </style>
 </head>
 
@@ -392,6 +426,7 @@
           <div class="label-card {% if selected_id == item.id %}selected{% endif %}"
                data-group="{{ group.key }}"
                data-value="{{ item.id }}"
+               data-id="{{ item.id }}"
                onclick="toggleLabelSelection(this)">
             {% if item.image %}<img src="{{ item.image }}" alt="{{ item.display }}">{% endif %}
             <div><strong>{{ item.display.replace('_', ' ')|title }}</strong></div>
@@ -426,6 +461,7 @@
               <div class="label-card"
                    data-group="{{ group.key }}_bio"
                    data-value="{{ option.id }}"
+                   data-id="{{ option.id }}"
                    onclick="toggleLabelSelection(this)">
                 <div><strong>{{ option.display.replace('_', ' ')|title }}</strong></div>
                 {% if option.description %}
@@ -478,6 +514,7 @@
               <div class="label-card {% if existing_labels.get('relationship', {}).get('label') == rel.id %}selected{% endif %}"
                    data-group="relationship"
                    data-value="{{ rel.id }}"
+                   data-id="{{ rel.id }}"
                    onclick="selectRelationship(this)">
                 <div><strong>{{ rel.display | title }}</strong></div>
               </div>
@@ -507,6 +544,7 @@
                    data-group="linked_person_bio"
                    data-value="{{ option.id }}"
                    id="bio-card-{{ option.id }}"
+                   data-id="{{ option.id }}" 
                    onclick="selectLinkedPersonBio('{{ option.id }}')">
                 <div><strong>{{ option.display.replace('_', ' ')|title }}</strong></div>
                 {% if option.description %}
@@ -537,6 +575,22 @@
           </div>
         </div>
       {% endif %}
+
+
+<div class="label-group-box" style="margin-bottom: 50px; padding: 20px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 10px;">
+  <h3 style="margin-top: 0;">🤖 Need help choosing labels?</h3>
+  <p style="margin-bottom: 8px;">Describe this person briefly, and we’ll suggest relevant labels for <strong>{{ current_type.replace('_', ' ') }}</strong>.</p>
+
+  <textarea id="labelPromptInput" placeholder="e.g. Works in healthcare, loves design and teamwork" rows="3" style="width: 100%; padding: 10px; font-size: 1em;"></textarea>
+
+  <button type="button" class="primary-button" style="margin-top: 10px;" onclick="getLabelSuggestions()">🔍 Suggest Labels</button>
+
+  <div id="labelSuggestionsOutput" style="margin-top: 16px;"></div>
+
+  <p style="font-size: 0.85em; color: #777; margin-top: 8px;">
+    You can still select your own labels manually.
+  </p>
+</div>
 
       <!-- Buttons & Navigation -->
       <div class="bottom-card">
@@ -806,6 +860,99 @@ function toggleLabelSelection(el) {
     updateLinkedPersonBioVisibility();
     updateSaveButtonState();
   }
+
+function getLabelSuggestions(event) {
+  if (event) event.preventDefault();
+
+  const input = document.getElementById("labelPromptInput").value.trim();
+  const output = document.getElementById("labelSuggestionsOutput");
+
+  if (!input) {
+    output.innerHTML = `<p style="color:red;">Please enter a description first.</p>`;
+    return;
+  }
+
+  output.innerHTML = `<p>🔍 Thinking...</p>`;
+
+  fetch("/suggest_labels", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text: input,
+      type: "{{ current_type }}"
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.error) {
+      output.innerHTML = `<p style="color:red;">⚠️ ${data.error}</p>`;
+    } else if (data.suggestions && data.suggestions.length > 0) {
+      const labelHTML = data.suggestions.map(labelId =>
+        `<button class="suggested-label" type="button" onclick="selectSuggestedLabel('${labelId}')">${labelId}</button>`
+      ).join(" ");
+      output.innerHTML = `<p><strong>Suggested Labels:</strong></p>${labelHTML}`;
+
+      // ✅ Auto-highlight cards matching suggestions
+      highlightSuggestedLabels(data.suggestions);
+    } else {
+      output.innerHTML = `<p>❓ No matching labels found.</p>`;
+    }
+  })
+  .catch(err => {
+    output.innerHTML = `<p style="color:red;">❌ Error: ${err.message}</p>`;
+  });
+}
+
+function selectSuggestedLabel(labelId) {
+  const card = document.querySelector(`.label-card[data-id="${labelId}"]`);
+  if (card) {
+    card.classList.add("selected");
+
+    const group = card.dataset.group;
+    const value = card.dataset.value;
+
+    if (group && value) {
+      const existingInput = document.querySelector(`input[name="selected_id_${group}"][value="${value}"]`);
+      if (!existingInput) {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = `selected_id_${group}`;
+        input.value = value;
+        const form = card.closest("form");
+        if (form) {
+          form.appendChild(input);
+        }
+      }
+    }
+  }
+}
+
+function highlightSuggestedLabels(suggestedIds) {
+  suggestedIds.forEach(id => {
+    const card = document.querySelector(`.label-card[data-id="${id}"]`);
+    if (card) {
+      card.classList.add("selected");
+
+      const group = card.dataset.group;
+      const value = card.dataset.value;
+
+      if (group && value) {
+        const hiddenInput = document.querySelector(`input[name="selected_id_${group}"][value="${value}"]`);
+        if (!hiddenInput) {
+          const input = document.createElement("input");
+          input.type = "hidden";
+          input.name = `selected_id_${group}`;
+          input.value = value;
+          const form = card.closest("form");
+          if (form) {
+            form.appendChild(input);
+          }
+        }
+      }
+    }
+  });
+}
+
 </script>
 </body>
 </html>

@@ -1,8 +1,14 @@
 {
   "id": "hospital",
-  "name": "Hospital",
-  "description": "A healthcare facility",
+  "label_type": "work_building/hospital",
+  "display": "Hospital",
+  "description": "General hospital.",
+  "image_url": "",
+  "created": "2025-07-21T12:27:38.466019+00:00",
   "properties": {
-    "suggests_biographies_from": "buildings"
+    "value": "hospital",
+    "confidence": 100,
+    "source": "",
+    "suggests_biographies_from": "buildings/work_building/hospital"
   }
 }

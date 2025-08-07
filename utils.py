@@ -1,6 +1,11 @@
 import os
 import json
 from datetime import datetime
+from openai import OpenAI
+import os
+import glob
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def load_json_as_dict(file_path):
     """
@@ -292,3 +297,91 @@ def load_grouped_biographies(base_path):
                     print(f"[BIO ERROR] {f}: {e}")
 
     return grouped
+
+def get_label_descriptions_for_type(type_name):
+    """Load all label metadata (id, display, description, label_type) for the given type."""
+
+    label_folder = f"./types/{type_name}/labels"
+    label_data = []
+
+    for filepath in glob.glob(f"{label_folder}/**/*.json", recursive=True):
+        filename = os.path.splitext(os.path.basename(filepath))[0]
+        rel_path = os.path.relpath(filepath, label_folder)
+        label_type = os.path.dirname(rel_path).replace("\\", "/")  # e.g., "work_building/hospital"
+
+        try:
+            with open(filepath, "r") as f:
+                data = json.load(f)
+
+            if not isinstance(data, dict):
+                print(f"[⚠️ Skipped non-dict JSON] {filepath} → type={type(data).__name__}")
+                continue
+
+            label_id = data.get("id", filename)
+            display = data.get("display") or data.get("label") or data.get("properties", {}).get("name", filename)
+            description = data.get("description", "")
+
+            # Require ID and Display at minimum
+            if not label_id or not display:
+                print(f"[⚠️ Skipped incomplete label] {filepath} → Missing id or display")
+                continue
+
+            label_data.append({
+                "id": label_id,
+                "display": display,
+                "description": description,
+                "label_type": label_type
+            })
+        except Exception as e:
+            print(f"[❌ Error reading label file] {filepath}: {e}")
+
+    return label_data
+
+def suggest_labels_from_text(user_input, type_name):
+    """Use GPT to suggest labels based on user input and label metadata."""
+    label_data = get_label_descriptions_for_type(type_name)
+
+    if not label_data:
+        print(f"[🚫 No label data found] for type: {type_name}")
+        return []
+
+    # ⬇️ Add this to inspect label metadata passed into the prompt
+    print(f"[🔎 Prompt label data] {json.dumps(label_data, indent=2)}")
+
+    # ⬇️ Build the GPT prompt
+    prompt = f"""You are a helpful assistant that suggests labels from a dataset.
+
+Available labels:
+{json.dumps(label_data, indent=2)}
+
+The user has described the person/thing as:
+\"\"\"{user_input}\"\"\"
+
+From the list above, return the top 5 most relevant label `id` values (not display names).
+Respond ONLY as a JSON array like: ["label_id_1", "label_id_2"]
+"""
+
+    # ⬇️ Add this print to show the final prompt going to GPT
+    print(f"[🧠 Final Prompt Sent]\n{prompt}")
+
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": "You match descriptions to label IDs from metadata."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.4,
+    )
+
+    try:
+        content = response.choices[0].message.content
+        print(f"[🧠 GPT Raw Response] {content}")
+
+        # ✅ Strip triple backticks (if present)
+        content = content.strip().strip("```json").strip("```").strip()
+
+        suggestions = json.loads(content)
+        return suggestions if isinstance(suggestions, list) else []
+    except Exception as e:
+        print(f"[❌ Error parsing GPT response] {e}")
+        return []

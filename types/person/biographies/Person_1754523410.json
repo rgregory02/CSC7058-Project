@@ -1,0 +1,45 @@
+{
+    "person_id": "Person_1754523410",
+    "name": "Starbucks",
+    "dob": "2025-08-06",
+    "created": "2025-08-07T00:36:50.595153+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "infant",
+                "confidence": 44,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "infant"
+            },
+            "created": "2025-08-07T00:37:37.827274",
+            "buildings": [
+                {
+                    "label_type": "work_building",
+                    "confidence": 100,
+                    "id": "office"
+                },
+                {
+                    "label_type": "office",
+                    "confidence": 100,
+                    "id": "small_office",
+                    "biography": "office",
+                    "biography_confidence": 100
+                }
+            ],
+            "person": [
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 83,
+                    "id": "actor"
+                },
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 49,
+                    "id": "1"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}
