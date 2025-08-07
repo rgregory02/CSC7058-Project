@@ -590,6 +590,34 @@ def person_step_dynamic(step):
                 selected_label_ids.add(label_type.split("/")[-1])
                 selected_label_ids.add(label.get("id"))
 
+    # Build a quick lookup of what was selected per raw label_type
+    selected_by_type = {}
+    selected_conf_by_type = {}
+    if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
+        for entry in person_data["entries"][entry_index].get(current_type, []):
+            lt = entry.get("label_type")
+            if lt:
+                selected_by_type[lt] = entry.get("id")
+                selected_conf_by_type[lt] = entry.get("confidence", 100)
+
+    # Augment `existing_labels` for nested keys
+    for group in list(label_groups_list):
+        key = group["key"]  # e.g. "work_building/hospital"
+        if "/" not in key:
+            continue
+
+        parent_type, child_type = key.split("/", 1)
+        parent_selected_id = selected_by_type.get(parent_type)
+        if parent_selected_id and parent_selected_id == child_type:
+            child_selected_id = selected_by_type.get(child_type)
+            if child_selected_id:
+                existing_labels[key] = {
+                    "label": child_selected_id,
+                    "confidence": selected_conf_by_type.get(child_type, 100),
+                }
+                selected_label_ids.add(key)
+                selected_label_ids.add(child_selected_id)
+
     additional_nested_groups = []
     for group in label_groups_list:
         key = group["key"]
