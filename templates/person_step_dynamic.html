@@ -740,22 +740,26 @@
     }
   }
 
-  function updateSaveButtonState() {
-    const selectionTrackers = document.querySelectorAll('.group-selection-tracker');
-    const saveButton = document.getElementById('saveButton');
+function updateSaveButtonState() {
+  const selectionTrackers = document.querySelectorAll('.group-selection-tracker');
+  const gptInput = document.getElementById('gpt_selected_labels_json');
+  const saveButton = document.getElementById('saveButton');
 
-    const hasSelection = Array.from(selectionTrackers).some(input => input.value.trim() !== '');
+  const hasManualSelection = Array.from(selectionTrackers).some(input => input.value.trim() !== '');
+  const hasGPTSelection = gptInput && gptInput.value && gptInput.value !== '{}' && gptInput.value !== 'null';
 
-    if (saveButton) {
-      if (hasSelection) {
-        saveButton.textContent = '✅ Save All Selections';
-        saveButton.style.backgroundColor = '#4CAF50';
-      } else {
-        saveButton.textContent = '➡️ Move to next page with no labels selected';
-        saveButton.style.backgroundColor = '#6c63ff';
-      }
+  const hasSelection = hasManualSelection || hasGPTSelection;
+
+  if (saveButton) {
+    if (hasSelection) {
+      saveButton.textContent = '✅ Save All Selections';
+      saveButton.style.backgroundColor = '#4CAF50';
+    } else {
+      saveButton.textContent = '➡️ Move to next page with no labels selected';
+      saveButton.style.backgroundColor = '#6c63ff';
     }
   }
+}
 
 function toggleLabelSelection(el) {
   const groupKey = el.getAttribute("data-group");
@@ -1068,6 +1072,7 @@ function createSuggestionCard(labelId, labelType) {
     }
 
     updateHiddenGPTInput();
+    updateSaveButtonState();
   });
 
   return card;
@@ -1076,6 +1081,7 @@ function createSuggestionCard(labelId, labelType) {
 function createConfidenceSlider(labelId, prettyLabel) {
   const wrapper = document.createElement("div");
   wrapper.className = "gpt-confidence-wrapper";
+  wrapper.classList.add("selected-label-card");
   wrapper.id = `confidence-wrapper-${labelId}`;
   wrapper.innerHTML = `
     <div class="confidence-label-header">
@@ -1094,6 +1100,7 @@ function createConfidenceSlider(labelId, prettyLabel) {
     selectedGPTLabels[labelId].confidence = val;
     valueDisplay.textContent = `${val}%${val === 100 ? " (Exact)" : ""}`;
     updateHiddenGPTInput();
+    updateSaveButtonState();
   });
 
   return wrapper;
@@ -1139,6 +1146,10 @@ function getLabelSuggestions() {
   });
 }
 
+
+document.addEventListener("DOMContentLoaded", function () {
+  updateSaveButtonState();
+});
 
 </script>
 </body>

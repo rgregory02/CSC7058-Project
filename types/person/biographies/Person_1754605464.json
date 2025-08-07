@@ -1,0 +1,75 @@
+{
+    "person_id": "Person_1754605464",
+    "name": "Teddy",
+    "dob": "2025-08-11",
+    "created": "2025-08-07T23:24:24.797275+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "infant",
+                "confidence": 13,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "infant"
+            },
+            "created": "2025-08-07T23:24:28.527998",
+            "buildings": [],
+            "person": [
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 61,
+                    "id": "actor"
+                },
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 39,
+                    "id": "1"
+                },
+                {
+                    "id": "Person_1754604958",
+                    "label_type": "linked_person",
+                    "confidence": 52,
+                    "source": "biography",
+                    "display": "Starbucks",
+                    "description": "",
+                    "image_url": "",
+                    "relationship": "Child"
+                }
+            ]
+        },
+        {
+            "time": {
+                "label": "forties",
+                "confidence": 59,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "forties"
+            },
+            "created": "2025-08-07T23:30:43.216146",
+            "buildings": [],
+            "person": [
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 100,
+                    "id": "party_planner"
+                },
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 100,
+                    "id": "0"
+                },
+                {
+                    "id": "Person_1754425758",
+                    "label_type": "linked_person",
+                    "confidence": 100,
+                    "source": "biography",
+                    "display": "Zelda",
+                    "description": "",
+                    "image_url": "",
+                    "relationship": "Child"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}

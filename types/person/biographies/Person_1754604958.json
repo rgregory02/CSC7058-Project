@@ -1,0 +1,37 @@
+{
+    "person_id": "Person_1754604958",
+    "name": "Starbucks",
+    "dob": "2025-07-28",
+    "created": "2025-08-07T23:15:58.502155+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "infant",
+                "confidence": 46,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "infant"
+            },
+            "created": "2025-08-07T23:16:01.733002",
+            "buildings": [],
+            "person": [
+                {
+                    "id": "parent",
+                    "label_type": "person",
+                    "confidence": 74,
+                    "source": "gpt"
+                },
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 66,
+                    "id": "party_planner"
+                },
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 43,
+                    "id": "1"
+                }
+            ]
+        }
+    ]
+}
