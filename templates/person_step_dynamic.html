@@ -349,6 +349,82 @@
     background-color: #0056b3;
   }
 
+<style>
+.suggested-labels-container {
+  margin-top: 10px;
+}
+.suggested-label-chip {
+  display: inline-block;
+  background-color: #007bff;
+  color: white;
+  font-weight: bold;
+  padding: 6px 12px;
+  border-radius: 16px;
+  margin: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.suggested-label-chip.selected {
+  background-color: #28a745;
+  position: relative;
+}
+.suggested-label-chip.selected::after {
+  content: " ✓";
+  font-weight: bold;
+}
+.help-hint {
+  font-size: 0.85em;
+  color: #666;
+  margin-top: 6px;
+}
+.gpt-confidence-wrapper {
+  background: #f0f8ff;
+  padding: 10px 15px;
+  border: 1px solid #a0cbe8;
+  border-radius: 10px;
+  margin: 10px 0;
+  max-width: 400px;
+}
+.confidence-label-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.confidence-slider {
+  width: 100%;
+}
+
+  .suggested-label-card {
+    display: inline-block;
+    width: 220px;
+    padding: 16px;
+    margin: 10px;
+    border-radius: 10px;
+    border: 2px solid #ccc;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s ease-in-out;
+    text-align: center;
+  }
+
+  .suggested-label-card.selected {
+    background: #e8fce8;
+    border-color: #4caf50;
+  }
+
+  .suggested-label-card .tick {
+    font-size: 1.2em;
+    color: green;
+    float: right;
+  }
+
+  .confidence-wrapper {
+    margin-top: 10px;
+    text-align: left;
+  }
+
+</style>
+
   </style>
 </head>
 
@@ -581,11 +657,20 @@
   <h3 style="margin-top: 0;">🤖 Need help choosing labels?</h3>
   <p style="margin-bottom: 8px;">Describe this person briefly, and we’ll suggest relevant labels for <strong>{{ current_type.replace('_', ' ') }}</strong>.</p>
 
-  <textarea id="labelPromptInput" placeholder="e.g. Works in healthcare, loves design and teamwork" rows="3" style="width: 100%; padding: 10px; font-size: 1em;"></textarea>
+  <textarea id="labelPromptInput" name="label_prompt_text" placeholder="e.g. Works in healthcare, loves design and teamwork" rows="3" style="width: 100%; padding: 10px; font-size: 1em;"></textarea>
 
   <button type="button" class="primary-button" style="margin-top: 10px;" onclick="getLabelSuggestions()">🔍 Suggest Labels</button>
 
-  <div id="labelSuggestionsOutput" style="margin-top: 16px;"></div>
+  <!-- Where label cards will appear -->
+ <div id="labelSuggestionsOutput" class="suggested-label-cards-container">
+  <!-- JS will inject suggestion cards here -->
+</div>
+
+  <!-- Confidence sliders and tick display -->
+  <div id="gpt-selected-labels-with-confidence" style="margin-top: 20px;"></div>
+
+  <!-- Hidden field to store selected label objects -->
+  <input type="hidden" name="gpt_selected_labels_json" id="gpt_selected_labels_json" value="[]">
 
   <p style="font-size: 0.85em; color: #777; margin-top: 8px;">
     You can still select your own labels manually.
@@ -952,6 +1037,108 @@ function highlightSuggestedLabels(suggestedIds) {
     }
   });
 }
+
+function prettifyLabel(labelId) {
+  return labelId.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function createSuggestionCard(labelId, labelType) {
+  const pretty = prettifyLabel(labelId);
+  const card = document.createElement("div");
+  card.className = "suggested-label-card";
+  card.setAttribute("data-label-id", labelId);
+  card.setAttribute("data-label-type", labelType);
+  card.innerHTML = `<span class="label-text">${pretty}</span>`;
+
+  card.addEventListener("click", () => {
+    card.classList.toggle("selected");
+    const isSelected = card.classList.contains("selected");
+
+    if (isSelected) {
+      const sliderWrapper = createConfidenceSlider(labelId, pretty);
+      document.getElementById("gpt-selected-labels-with-confidence").appendChild(sliderWrapper);
+      selectedGPTLabels[labelId] = {
+        id: labelId,
+        confidence: 100,
+        label_type: labelType
+      };
+    } else {
+      document.querySelector(`#confidence-wrapper-${labelId}`)?.remove();
+      delete selectedGPTLabels[labelId];
+    }
+
+    updateHiddenGPTInput();
+  });
+
+  return card;
+}
+
+function createConfidenceSlider(labelId, prettyLabel) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "gpt-confidence-wrapper";
+  wrapper.id = `confidence-wrapper-${labelId}`;
+  wrapper.innerHTML = `
+    <div class="confidence-label-header">
+      <span class="tick-label">✅ ${prettyLabel}</span>
+      <label for="confidence-${labelId}">🎯 Confidence:</label>
+    </div>
+    <input type="range" min="0" max="100" value="100" class="confidence-slider" id="confidence-${labelId}">
+    <span id="confidence-value-${labelId}">100% (Exact)</span>
+  `;
+
+  const slider = wrapper.querySelector(`#confidence-${labelId}`);
+  const valueDisplay = wrapper.querySelector(`#confidence-value-${labelId}`);
+
+  slider.addEventListener("input", () => {
+    const val = parseInt(slider.value);
+    selectedGPTLabels[labelId].confidence = val;
+    valueDisplay.textContent = `${val}%${val === 100 ? " (Exact)" : ""}`;
+    updateHiddenGPTInput();
+  });
+
+  return wrapper;
+}
+
+function updateHiddenGPTInput() {
+  const hidden = document.getElementById("gpt_selected_labels_json");
+  hidden.value = JSON.stringify(Object.values(selectedGPTLabels));
+
+  const skipBtn = document.querySelector(".top-skip");
+  if (Object.keys(selectedGPTLabels).length > 0 && skipBtn) {
+    skipBtn.style.display = "none";
+  }
+}
+
+const selectedGPTLabels = {};
+
+function getLabelSuggestions() {
+  const inputText = document.getElementById("labelPromptInput").value;
+  const currentType = "{{ current_type }}";  // Injected by Jinja
+  if (!inputText.trim()) return;
+
+  fetch("/suggest_labels", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: inputText, type: currentType })
+  })
+  .then(res => res.json())
+  .then(data => {
+    const suggestions = data.suggestions || [];
+    const output = document.getElementById("labelSuggestionsOutput");
+    output.innerHTML = "";
+
+    suggestions.forEach(labelId => {
+      const labelType = labelId.includes("/") ? labelId.split("/")[0] : currentType;
+      const card = createSuggestionCard(labelId, labelType);
+      output.appendChild(card);
+    });
+  })
+  .catch(err => {
+    console.error("Error suggesting labels:", err);
+    alert("Failed to get label suggestions.");
+  });
+}
+
 
 </script>
 </body>

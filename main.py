@@ -688,6 +688,23 @@ def person_step_dynamic(step):
 
     if request.method == "POST":
         new_entries = []
+
+        # ✅ Handle GPT-suggested labels (from hidden input)
+        gpt_labels_raw = request.form.get("gpt_selected_labels_json", "")
+        if gpt_labels_raw:
+            try:
+                gpt_labels = json.loads(gpt_labels_raw)
+                for label in gpt_labels:
+                    if isinstance(label, dict) and "id" in label:
+                        new_entries.append({
+                            "id": label["id"],
+                            "label_type": label.get("label_type", current_type),
+                            "confidence": label.get("confidence", 100),
+                            "source": "gpt"
+                        })
+            except Exception as e:
+                print(f"[GPT Label Error] Failed to parse suggestions: {e}")
+                
         if not is_person_type:
             selected_bio_id = request.form.get("selected_id_biography")
             if selected_bio_id:
