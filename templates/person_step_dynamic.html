@@ -423,9 +423,21 @@
     text-align: left;
   }
 
-</style>
+  .label-card[data-source="gpt"].selected {
+  border: 2px dashed #9c27b0;
+}
 
-  </style>
+.gpt-badge {
+  background: #9c27b0;
+  color: white;
+  font-size: 0.75em;
+  padding: 2px 6px;
+  border-radius: 5px;
+  margin-top: 6px;
+  display: inline-block;
+}
+
+</style>
 </head>
 
 <body>
@@ -499,17 +511,25 @@
 
       <div class="label-options">
         {% for item in group.options %}
-          <div class="label-card {% if selected_id == item.id %}selected{% endif %}"
-               data-group="{{ group.key }}"
-               data-value="{{ item.id }}"
-               data-id="{{ item.id }}"
-               onclick="toggleLabelSelection(this)">
-            {% if item.image %}<img src="{{ item.image }}" alt="{{ item.display }}">{% endif %}
-            <div><strong>{{ item.display.replace('_', ' ')|title }}</strong></div>
-            {% if item.description %}
-              <div class="label-description">{{ item.description }}</div>
-            {% endif %}
-          </div>
+{% set is_selected = selected_id == item.id %}
+{% set source = existing_labels.get(group.key, {}).get('source', '') %}
+<div class="label-card {% if is_selected %}selected{% endif %}"
+     data-group="{{ group.key }}"
+     data-value="{{ item.id }}"
+     data-id="{{ item.id }}"
+     data-source="{{ source }}"
+     onclick="toggleLabelSelection(this)">
+  {% if item.image %}
+    <img src="{{ item.image }}" alt="{{ item.display }}">
+  {% endif %}
+  <div><strong>{{ item.display.replace('_', ' ')|title }}</strong></div>
+  {% if item.description %}
+    <div class="label-description">{{ item.description }}</div>
+  {% endif %}
+  {% if is_selected and source == "gpt" %}
+    <div class="gpt-badge">🤖 GPT</div>
+  {% endif %}
+</div>
         {% endfor %}
       </div>
 
@@ -745,19 +765,30 @@ function updateSaveButtonState() {
   const gptInput = document.getElementById('gpt_selected_labels_json');
   const saveButton = document.getElementById('saveButton');
 
-  const hasManualSelection = Array.from(selectionTrackers).some(input => input.value.trim() !== '');
-  const hasGPTSelection = gptInput && gptInput.value && gptInput.value !== '{}' && gptInput.value !== 'null';
+  const hasManualSelection = Array.from(selectionTrackers).some(
+    (input) => (input.value || "").trim() !== ""
+  );
+
+  // ✅ Treat GPT selections as real only if the hidden field is a non-empty JSON array
+  const hasGPTSelection = (() => {
+    try {
+      const arr = JSON.parse(gptInput?.value || "[]");
+      return Array.isArray(arr) && arr.length > 0;
+    } catch {
+      return false;
+    }
+  })();
 
   const hasSelection = hasManualSelection || hasGPTSelection;
 
-  if (saveButton) {
-    if (hasSelection) {
-      saveButton.textContent = '✅ Save All Selections';
-      saveButton.style.backgroundColor = '#4CAF50';
-    } else {
-      saveButton.textContent = '➡️ Move to next page with no labels selected';
-      saveButton.style.backgroundColor = '#6c63ff';
-    }
+  if (!saveButton) return;
+
+  if (hasSelection) {
+    saveButton.textContent = '✅ Save All Selections';
+    saveButton.style.backgroundColor = '#4CAF50';
+  } else {
+    saveButton.textContent = '➡️ Move to next page with no labels selected';
+    saveButton.style.backgroundColor = '#6c63ff';
   }
 }
 
@@ -1147,9 +1178,44 @@ function getLabelSuggestions() {
 }
 
 
+// Mark saved selections as green on load (parents + children)
+function preselectSavedLabelCards() {
+  document.querySelectorAll('input.group-selection-tracker[id^="input_"]').forEach(hidden => {
+    const value = hidden.value?.trim();
+    if (!value) return;
+
+    const safeKey = hidden.id.replace(/^input_/, "");     // e.g. work_building__office
+    const groupKey = safeKey.replaceAll("__", "/");       // -> work_building/office
+
+    const card = document.querySelector(
+      `.label-card[data-group="${groupKey}"][data-value="${CSS.escape(value)}"]`
+    );
+    if (card) card.classList.add("selected");
+  });
+}
+
+// Only show the nested group that matches the parent's selected id
+function enforceNestedVisibilityOnLoad() {
+  document.querySelectorAll('.label-group-box[data-parent]').forEach(childGroup => {
+    const parentSafe = childGroup.getAttribute("data-parent"); // e.g. "work_building"
+    const parentInput = document.getElementById("input_" + parentSafe);
+    const parentSelected = parentInput ? (parentInput.value || "").trim() : "";
+
+    const thisSafeKey = childGroup.id.replace(/^group_/, "");  // e.g. work_building__office
+    const thisFolderName = thisSafeKey.split("__").pop();      // -> "office"
+
+    childGroup.style.display = (parentSelected && thisFolderName === parentSelected)
+      ? "block"
+      : "none";
+  });
+}
+
 document.addEventListener("DOMContentLoaded", function () {
+  preselectSavedLabelCards();        // NEW
+  enforceNestedVisibilityOnLoad(); 
   updateSaveButtonState();
 });
+
 
 </script>
 </body>

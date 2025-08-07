@@ -547,6 +547,24 @@ def person_step_dynamic(step):
     grouped_biographies = load_grouped_biographies(bio_path)
     label_groups_list = collect_label_groups(label_base_path, current_type)
 
+    # OPTIONAL: if you still build additional_nested_groups elsewhere,
+    # guard against duplicates before extending:
+    existing_keys = {g["key"] for g in label_groups_list}
+    if 'additional_nested_groups' in locals():
+        for g in additional_nested_groups:
+            if g["key"] not in existing_keys:
+                label_groups_list.append(g)
+                existing_keys.add(g["key"])
+
+    # Hard dedupe just in case:
+    seen = set()
+    deduped = []
+    for g in label_groups_list:
+        if g["key"] not in seen:
+            deduped.append(g)
+            seen.add(g["key"])
+    label_groups_list = deduped
+
     if current_type == "person":
         label_groups_list = [group for group in label_groups_list if not group["key"].endswith("relationship")]
 
@@ -587,6 +605,14 @@ def person_step_dynamic(step):
                         "options": nested_options
                     })
     label_groups_list.extend(additional_nested_groups)
+
+    seen = set()
+    deduped = []
+    for g in label_groups_list:
+        if g["key"] not in seen:
+            deduped.append(g)
+            seen.add(g["key"])
+    label_groups_list = deduped
 
     suggested_biographies = {}
 
