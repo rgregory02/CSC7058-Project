@@ -942,9 +942,13 @@ def suggest_labels():
 def most_like(person_id):
     import math
 
-    def extract_vector(person_data):
-        vector = {}
+    def extract_by_time(person_data):
+        time_vectors = {}
         for entry in person_data.get("entries", []):
+            time_key = entry.get("time", {}).get("subvalue") or entry.get("time", {}).get("date_value") or "unknown"
+            if time_key not in time_vectors:
+                time_vectors[time_key] = {}
+
             for key, values in entry.items():
                 if key in ["time", "created", "status"]:
                     continue
@@ -956,13 +960,13 @@ def most_like(person_id):
                         confidence = label.get("confidence", 100)
                         if label_type and label_id:
                             vector_key = f"{label_type}/{label_id}"
-                            vector[vector_key] = {
+                            time_vectors[time_key][vector_key] = {
                                 "confidence": confidence,
                                 "label_type": label_type,
                                 "id": label_id,
                                 "display": display
                             }
-        return vector
+        return time_vectors
 
     # Load target
     target_path = f"./types/person/biographies/{person_id}.json"
@@ -970,7 +974,7 @@ def most_like(person_id):
         return f"Person {person_id} not found", 404
 
     target_data = load_json_as_dict(target_path)
-    target_vector = extract_vector(target_data)
+    target_by_time = extract_by_time(target_data)
 
     scores = []
 
@@ -982,44 +986,49 @@ def most_like(person_id):
             continue
 
         other_data = load_json_as_dict(f"./types/person/biographies/{filename}")
-        other_vector = extract_vector(other_data)
+        other_by_time = extract_by_time(other_data)
 
-        all_keys = set(target_vector.keys()) | set(other_vector.keys())
+        # Compare only overlapping time periods
+        shared_times = set(target_by_time.keys()) & set(other_by_time.keys())
         total_error = 0
         count = 0
+        matched_by_time = {}
 
-        for key in all_keys:
-            t_val = target_vector.get(key, {}).get("confidence", 0)
-            o_val = other_vector.get(key, {}).get("confidence", 0)
-            error = ((t_val - o_val) / 100) ** 2
-            total_error += error
-            count += 1
+        for time_key in shared_times:
+            t_vec = target_by_time[time_key]
+            o_vec = other_by_time[time_key]
+            all_keys = set(t_vec.keys()) | set(o_vec.keys())
+
+            for key in all_keys:
+                t_val = t_vec.get(key, {}).get("confidence", 0)
+                o_val = o_vec.get(key, {}).get("confidence", 0)
+                error = ((t_val - o_val) / 100) ** 2
+                total_error += error
+                count += 1
+
+                if key in t_vec and key in o_vec:
+                    if time_key not in matched_by_time:
+                        matched_by_time[time_key] = []
+                    matched_by_time[time_key].append({
+                        "label_type": t_vec[key].get("label_type", ""),
+                        "display": t_vec[key].get("display", key.split("/")[-1]),
+                        "confidence_1": t_val,
+                        "confidence_2": o_val
+                    })
 
         if count == 0:
             continue
 
         mse = total_error / count
 
-        # Get shared matches for display
-        shared_labels = []
-        for key in target_vector:
-            if key in other_vector:
-                shared_labels.append({
-                    "display": target_vector[key].get("display", key.split("/")[-1]),
-                    "label_type": target_vector[key].get("label_type", ""),
-                    "confidence_1": target_vector[key].get("confidence"),
-                    "confidence_2": other_vector[key].get("confidence"),
-                })
-
         scores.append({
             "person_id": other_id,
             "mse": mse,
             "name": other_data.get("name", other_id),
             "dob": other_data.get("dob", "Unknown"),
-            "shared_labels": shared_labels[:5]  # limit to top 5
+            "shared_labels_by_time": matched_by_time
         })
 
-    # Sort by similarity (lowest MSE)
     scores.sort(key=lambda x: x["mse"])
     top_matches = scores[:5]
 

@@ -42,6 +42,15 @@
       margin-top: 40px;
       font-weight: bold;
     }
+    .time-period {
+      margin-top: 10px;
+      font-weight: bold;
+      color: #2a4a75;
+    }
+    ul {
+      margin: 0;
+      padding-left: 20px;
+    }
   </style>
 </head>
 <body>
@@ -52,20 +61,24 @@
       {% for match in matches %}
         <div class="match-block">
           <h3>{{ match.name }}</h3>
-          <p>📅 DOB: {{ match.dob }}<br>📉 MSE Similarity Score: <strong>{{ "%.4f"|format(match.mse) }}</strong></p>
+<p>📅 DOB: {{ match.dob | display_dob_uk }}<br>
+📉 MSE Similarity Score: <strong>{{ "%.4f"|format(match.mse) }}</strong></p>
 
-          {% if match.shared_labels %}
-            <div><strong>🎯 Top Shared Labels:</strong></div>
-            <ul>
-              {% for label in match.shared_labels %}
-                <li class="label-info">
-                  {{ label.label_type.replace("_", " ")|title }} – {{ label.display }}
-                  <div class="confidence-row">
-                    Confidence (You): {{ label.confidence_1 }}% | (Them): {{ label.confidence_2 }}%
-                  </div>
-                </li>
-              {% endfor %}
-            </ul>
+          {% if match.shared_labels_by_time %}
+            <div><strong>🎯 Shared Labels by Time Period:</strong></div>
+            {% for time_key, labels in match.shared_labels_by_time.items() %}
+              <div class="time-period">{{ time_key.replace("_", " ")|title }}</div>
+              <ul>
+                {% for label in labels %}
+                  <li class="label-info">
+                    {{ label.label_type.replace("_", " ")|title }} – {{ label.display }}
+                    <div class="confidence-row">
+                      Confidence (You): {{ label.confidence_1 }}% | (Them): {{ label.confidence_2 }}%
+                    </div>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% endfor %}
           {% endif %}
         </div>
       {% endfor %}

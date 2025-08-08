@@ -39,6 +39,40 @@
                     "relationship": "Spouse"
                 }
             ]
+        },
+        {
+            "time": {
+                "label": "childhood",
+                "confidence": 100,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "childhood"
+            },
+            "created": "2025-08-08T04:26:15.610095",
+            "buildings": [
+                {
+                    "label_type": "house",
+                    "confidence": 100,
+                    "id": "semi_detached"
+                }
+            ],
+            "person": [
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 100,
+                    "id": "1"
+                },
+                {
+                    "id": "Person_134800433",
+                    "label_type": "linked_person",
+                    "confidence": 100,
+                    "source": "biography",
+                    "display": "Test Person 1",
+                    "description": "",
+                    "image_url": "",
+                    "relationship": "Parent"
+                }
+            ]
         }
     ],
     "finalised": true
