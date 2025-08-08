@@ -593,82 +593,85 @@
     </div>
   {% endfor %}
 
-      {% if current_type == 'person' %}
-        <!-- Relationship Group -->
-        <div class="label-group-box" id="relationship_selector">
-          <div class="label-title">👥 Relationship</div>
+{% if current_type == 'person' %}
+  <!-- Relationship Group -->
+  <div class="label-group-box" id="relationship_selector">
+    <div class="label-title">👥 Relationship</div>
 
-          <input type="hidden"
-                 name="relationship_label"
-                 id="input_relationship"
-                 value="{{ existing_labels.get('relationship', {}).get('label', '') }}">
+    <input type="hidden"
+           name="relationship_label"
+           id="input_relationship"
+           value="{{ existing_bio_selections.get('relationship_label', '') }}">
 
-          <div class="label-options">
-            {% for rel in relationship_labels %}
-              <div class="label-card {% if existing_labels.get('relationship', {}).get('label') == rel.id %}selected{% endif %}"
-                   data-group="relationship"
-                   data-value="{{ rel.id }}"
-                   data-id="{{ rel.id }}"
-                   onclick="selectRelationship(this)">
-                <div><strong>{{ rel.display | title }}</strong></div>
-              </div>
-            {% endfor %}
-          </div>
+    <div class="label-options">
+      {% for rel in relationship_labels %}
+        <div class="label-card {% if existing_bio_selections.get('relationship_label') == rel.id %}selected{% endif %}"
+             data-group="relationship"
+             data-value="{{ rel.id }}"
+             data-id="{{ rel.id }}"
+             onclick="selectRelationship(this)">
+          <div><strong>{{ rel.display | title }}</strong></div>
         </div>
+      {% endfor %}
+    </div>
+  </div>
 
-        <!-- Biography Link (only visible when relationship is selected) -->
-        <div class="label-group-box biography-suggestions" id="linked_person_bio_box" style="margin-top: 30px; display: none;">
-          <div class="label-title">🧬 Link to Existing Person Biography</div>
+  <!-- Biography Link (only visible when relationship is selected) -->
+  <div class="label-group-box biography-suggestions" id="linked_person_bio_box" style="margin-top: 30px; display: none;">
+    <div class="label-title">🧬 Link to Existing Person Biography</div>
 
-          <input type="hidden"
-                 name="selected_id_linked_person_bio"
-                 id="input_linked_person_bio"
-                 class="group-selection-tracker"
-                 value="">
+    <input type="hidden"
+           name="selected_id_linked_person_bio"
+           id="input_linked_person_bio"
+           class="group-selection-tracker"
+           value="{{ existing_bio_selections.get('linked_person_bio', '') }}">
 
-          <input type="text"
-                 class="label-search"
-                 placeholder="Search Person Biographies..."
-                 oninput="filterLabels(this, 'linked_person_bio')"
-                 data-group="linked_person_bio">
+    <input type="text"
+           class="label-search"
+           placeholder="Search Person Biographies..."
+           oninput="filterLabels(this, 'linked_person_bio')"
+           data-group="linked_person_bio">
 
-          <div class="label-options">
-            {% for option in person_biography_options %}
-              <div class="label-card"
-                   data-group="linked_person_bio"
-                   data-value="{{ option.id }}"
-                   id="bio-card-{{ option.id }}"
-                   data-id="{{ option.id }}" 
-                   onclick="selectLinkedPersonBio('{{ option.id }}')">
-                <div><strong>{{ option.display.replace('_', ' ')|title }}</strong></div>
-                {% if option.description %}
-                  <div class="label-description">{{ option.description }}</div>
-                {% endif %}
-              </div>
-            {% endfor %}
-          </div>
-
-          <div class="confidence-slider" style="margin-top: 20px;">
-            <label for="confidence_linked_person">🎯 Confidence:</label><br>
-            <input type="range"
-                   name="confidence_linked_person"
-                   id="confidence_linked_person"
-                   min="0"
-                   max="100"
-                   value="100"
-                   oninput="updateConfidence('linked_person')">
-            <div class="confidence-display">
-              <span id="confidence_display_linked_person">100%</span>
-              <span id="confidence_level_linked_person">(Exact)</span>
-            </div>
-          </div>
-
-          <div style="text-align: center; margin-top: 14px;">
-            <a href="{{ url_for('search_or_add_biography', type_name='person', return_url=request.url) }}"
-               class="add-entry-button">➕ Search or Create Person Biography</a>
-          </div>
+    <div class="label-options">
+      {% for option in person_biography_options %}
+        <div class="label-card {% if existing_bio_selections.get('linked_person_bio') == option.id %}selected{% endif %}"
+             data-group="linked_person_bio"
+             data-value="{{ option.id }}"
+             id="bio-card-{{ option.id }}"
+             data-id="{{ option.id }}"
+             onclick="selectLinkedPersonBio('{{ option.id }}')">
+          <div><strong>{{ option.display.replace('_', ' ')|title }}</strong></div>
+          {% if option.description %}
+            <div class="label-description">{{ option.description }}</div>
+          {% endif %}
         </div>
-      {% endif %}
+      {% endfor %}
+    </div>
+
+    <div class="confidence-slider" style="margin-top: 20px;">
+      <label for="confidence_linked_person">🎯 Confidence:</label><br>
+      <input type="range"
+             name="confidence_linked_person"
+             id="confidence_linked_person"
+             min="0"
+             max="100"
+             value="{{ existing_bio_selections.get('linked_person_confidence', 100) }}"
+             oninput="updateConfidence('linked_person')">
+      <div class="confidence-display">
+        <span id="confidence_display_linked_person">{{ existing_bio_selections.get('linked_person_confidence', 100) }}%</span>
+        <span id="confidence_level_linked_person">
+          {% set conf = existing_bio_selections.get('linked_person_confidence', 100) | int %}
+          {% if conf == 100 %}(Exact){% elif conf >= 67 %}(High){% elif conf >= 34 %}(Medium){% else %}(Low){% endif %}
+        </span>
+      </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 14px;">
+      <a href="{{ url_for('search_or_add_biography', type_name='person', return_url=request.url) }}"
+         class="add-entry-button">➕ Search or Create Person Biography</a>
+    </div>
+  </div>
+{% endif %}
 
 
 <div class="label-group-box" style="margin-bottom: 50px; padding: 20px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 10px;">

@@ -12,7 +12,7 @@
                 "date_value": "",
                 "subvalue": "infant"
             },
-            "created": "2025-08-08T02:01:34.956368",
+            "created": "2025-08-08T02:05:04.017340",
             "buildings": [
                 {
                     "label_type": "work_building",
@@ -37,6 +37,16 @@
                     "label_type": "celebea_face_hq",
                     "confidence": 47,
                     "id": "1"
+                },
+                {
+                    "id": "Person_1754425758",
+                    "label_type": "linked_person",
+                    "confidence": 49,
+                    "source": "biography",
+                    "display": "Zelda",
+                    "description": "",
+                    "image_url": "",
+                    "relationship": "Parent"
                 }
             ]
         }

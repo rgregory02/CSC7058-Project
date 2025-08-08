@@ -867,9 +867,16 @@ def person_step_dynamic(step):
         for entry in person_data["entries"][entry_index].get(current_type, []):
             label_id = entry.get("id")
             bio_id = entry.get("biography")
+            label_type = entry.get("label_type")
+
+            if label_type == "linked_person":
+                if bio_id:
+                    existing_bio_selections["linked_person_bio"] = bio_id
+                relationship = entry.get("relationship")
+                if relationship:
+                    existing_bio_selections["relationship_label"] = relationship.lower()
 
             if bio_id and label_id:
-                # Try to match this label_id with the group that contains it
                 for group in label_groups_list:
                     if any(opt["id"] == label_id for opt in group.get("options", [])):
                         full_key = f"{group['key']}_bio"
