@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Most Like {{ person_name }}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    body {
+      font-family: "Segoe UI", sans-serif;
+      background: #f5f7f8;
+      padding: 40px;
+    }
+    .card {
+      background: white;
+      max-width: 800px;
+      margin: auto;
+      padding: 30px 40px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    h1 {
+      text-align: center;
+      font-size: 28px;
+      margin-bottom: 30px;
+    }
+    .match-block {
+      border-top: 1px solid #ccc;
+      padding: 20px 0;
+    }
+    .label-info {
+      font-size: 0.9em;
+      margin-top: 5px;
+      color: #333;
+    }
+    .confidence-row {
+      font-size: 0.85em;
+      color: #666;
+    }
+    .back-link {
+      display: block;
+      text-align: center;
+      margin-top: 40px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🧠 Most Like {{ person_name }}</h1>
+
+    {% if matches %}
+      {% for match in matches %}
+        <div class="match-block">
+          <h3>{{ match.name }}</h3>
+          <p>📅 DOB: {{ match.dob }}<br>📉 MSE Similarity Score: <strong>{{ "%.4f"|format(match.mse) }}</strong></p>
+
+          {% if match.shared_labels %}
+            <div><strong>🎯 Top Shared Labels:</strong></div>
+            <ul>
+              {% for label in match.shared_labels %}
+                <li class="label-info">
+                  {{ label.label_type.replace("_", " ")|title }} – {{ label.display }}
+                  <div class="confidence-row">
+                    Confidence (You): {{ label.confidence_1 }}% | (Them): {{ label.confidence_2 }}%
+                  </div>
+                </li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        </div>
+      {% endfor %}
+    {% else %}
+      <p>No similar people found.</p>
+    {% endif %}
+
+    <a href="/" class="back-link">← Back to Home</a>
+  </div>
+</body>
+</html>

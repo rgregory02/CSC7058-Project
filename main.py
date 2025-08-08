@@ -202,12 +202,6 @@ def api_search_person_bios():
 
     return jsonify(matches[:10])  # Return only first 10 matches for speed
 
-from flask import request, session, redirect, url_for, render_template
-from utils import load_json_as_dict, save_dict_as_json, display_dob_uk
-from datetime import datetime
-from zoneinfo import ZoneInfo
-import os
-import time
 
 @app.route('/person_iframe_wizard')
 def person_iframe_wizard():
@@ -943,6 +937,95 @@ def suggest_labels():
             "error": str(e)
         }), 500
 
+
+@app.route("/most_like/<person_id>")
+def most_like(person_id):
+    import math
+
+    def extract_vector(person_data):
+        vector = {}
+        for entry in person_data.get("entries", []):
+            for key, values in entry.items():
+                if key in ["time", "created", "status"]:
+                    continue
+                if isinstance(values, list):
+                    for label in values:
+                        label_type = label.get("label_type")
+                        label_id = label.get("id")
+                        display = label.get("display", "")
+                        confidence = label.get("confidence", 100)
+                        if label_type and label_id:
+                            vector_key = f"{label_type}/{label_id}"
+                            vector[vector_key] = {
+                                "confidence": confidence,
+                                "label_type": label_type,
+                                "id": label_id,
+                                "display": display
+                            }
+        return vector
+
+    # Load target
+    target_path = f"./types/person/biographies/{person_id}.json"
+    if not os.path.exists(target_path):
+        return f"Person {person_id} not found", 404
+
+    target_data = load_json_as_dict(target_path)
+    target_vector = extract_vector(target_data)
+
+    scores = []
+
+    for filename in os.listdir("./types/person/biographies"):
+        if not filename.endswith(".json"):
+            continue
+        other_id = filename.replace(".json", "")
+        if other_id == person_id:
+            continue
+
+        other_data = load_json_as_dict(f"./types/person/biographies/{filename}")
+        other_vector = extract_vector(other_data)
+
+        all_keys = set(target_vector.keys()) | set(other_vector.keys())
+        total_error = 0
+        count = 0
+
+        for key in all_keys:
+            t_val = target_vector.get(key, {}).get("confidence", 0)
+            o_val = other_vector.get(key, {}).get("confidence", 0)
+            error = ((t_val - o_val) / 100) ** 2
+            total_error += error
+            count += 1
+
+        if count == 0:
+            continue
+
+        mse = total_error / count
+
+        # Get shared matches for display
+        shared_labels = []
+        for key in target_vector:
+            if key in other_vector:
+                shared_labels.append({
+                    "display": target_vector[key].get("display", key.split("/")[-1]),
+                    "label_type": target_vector[key].get("label_type", ""),
+                    "confidence_1": target_vector[key].get("confidence"),
+                    "confidence_2": other_vector[key].get("confidence"),
+                })
+
+        scores.append({
+            "person_id": other_id,
+            "mse": mse,
+            "name": other_data.get("name", other_id),
+            "dob": other_data.get("dob", "Unknown"),
+            "shared_labels": shared_labels[:5]  # limit to top 5
+        })
+
+    # Sort by similarity (lowest MSE)
+    scores.sort(key=lambda x: x["mse"])
+    top_matches = scores[:5]
+
+    return render_template("most_like_results.html",
+                           person_name=target_data.get("name", person_id),
+                           matches=top_matches)
 
 @app.route("/search_or_add_biography/<type_name>", methods=["GET", "POST"])
 def search_or_add_biography(type_name):

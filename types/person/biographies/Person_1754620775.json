@@ -1,0 +1,40 @@
+{
+    "person_id": "Person_1754620775",
+    "name": "Sherlock Holmes",
+    "dob": "1940-10-19",
+    "created": "2025-08-08T03:39:35.069593+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "infant",
+                "confidence": 100,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "infant"
+            },
+            "created": "2025-08-08T03:39:41.688027",
+            "buildings": [
+                {
+                    "id": "flat",
+                    "label_type": "buildings",
+                    "confidence": 74,
+                    "source": "gpt"
+                }
+            ],
+            "person": [
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 57,
+                    "id": "party_planner"
+                },
+                {
+                    "label_type": "linked_person",
+                    "relationship": "Parent",
+                    "confidence": 100,
+                    "id": null
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}

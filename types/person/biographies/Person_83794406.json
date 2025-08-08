@@ -1,0 +1,63 @@
+{
+  "id": "Person_83794406",
+  "name": "Emma Watson",
+  "dob": "1983-01-01",
+  "entries": [
+    {
+      "time": {
+        "subvalue": "teenage_years",
+        "confidence": 79
+      },
+      "created": "2025-08-08T03:07:46.597174",
+      "status": "active",
+      "relationship": [
+        {
+          "label_type": "relationship",
+          "id": "spouse",
+          "display": "Spouse",
+          "confidence": 100
+        }
+      ],
+      "vehicle/car": [
+        {
+          "label_type": "vehicle/car",
+          "id": "red_ford",
+          "display": "Red Ford",
+          "confidence": 70
+        }
+      ]
+    },
+    {
+      "time": {
+        "subvalue": "present",
+        "confidence": 93
+      },
+      "created": "2025-08-08T03:07:46.597198",
+      "status": "active",
+      "vehicle/car": [
+        {
+          "label_type": "vehicle/car",
+          "id": "red_ford",
+          "display": "Red Ford",
+          "confidence": 70
+        }
+      ],
+      "onet_occupation": [
+        {
+          "label_type": "onet_occupation",
+          "id": "doctor",
+          "display": "Doctor",
+          "confidence": 95
+        }
+      ],
+      "relationship": [
+        {
+          "label_type": "relationship",
+          "id": "spouse",
+          "display": "Spouse",
+          "confidence": 100
+        }
+      ]
+    }
+  ]
+}
