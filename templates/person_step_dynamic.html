@@ -620,11 +620,11 @@
   <div class="label-group-box biography-suggestions" id="linked_person_bio_box" style="margin-top: 30px; display: none;">
     <div class="label-title">🧬 Link to Existing Person Biography</div>
 
-    <input type="hidden"
-           name="selected_id_linked_person_bio"
-           id="input_linked_person_bio"
-           class="group-selection-tracker"
-           value="{{ existing_bio_selections.get('linked_person_bio', '') }}">
+<input type="hidden"
+       name="selected_id_linked_person_bio"
+       id="input_linked_person_bio"
+       class="group-selection-tracker"
+       value="{{ existing_labels.get('linked_person', {}).get('id', '') }}">
 
     <input type="text"
            class="label-search"
@@ -634,12 +634,12 @@
 
     <div class="label-options">
       {% for option in person_biography_options %}
-        <div class="label-card {% if existing_bio_selections.get('linked_person_bio') == option.id %}selected{% endif %}"
-             data-group="linked_person_bio"
-             data-value="{{ option.id }}"
-             id="bio-card-{{ option.id }}"
-             data-id="{{ option.id }}"
-             onclick="selectLinkedPersonBio('{{ option.id }}')">
+<div class="label-card{% if existing_bio_selections.get('linked_person_bio') == option.id %} selected{% endif %}"
+     data-group="linked_person_bio"
+     data-value="{{ option.id }}"
+     id="bio-card-{{ option.id }}"
+     data-id="{{ option.id }}"
+     onclick="selectLinkedPersonBio('{{ option.id }}')">
           <div><strong>{{ option.display.replace('_', ' ')|title }}</strong></div>
           {% if option.description %}
             <div class="label-description">{{ option.description }}</div>
@@ -1243,10 +1243,24 @@ function enforceNestedVisibilityOnLoad() {
 }
 
 document.addEventListener("DOMContentLoaded", function () {
-  preselectSavedLabelCards();        // NEW
-  enforceNestedVisibilityOnLoad(); 
+  preselectSavedLabelCards();
+  enforceNestedVisibilityOnLoad();
   updateSaveButtonState();
   updateBiographyVisibility();
+
+  // ✅ Also highlight linked person bio on edit
+  const selectedId = document.getElementById("input_linked_person_bio").value;
+  if (selectedId) {
+    const selectedCard = document.getElementById("bio-card-" + selectedId);
+    if (selectedCard) {
+      selectedCard.classList.add("selected");
+    }
+
+    const bioBox = document.getElementById("linked_person_bio_box");
+    if (bioBox) {
+      bioBox.style.display = "block";
+    }
+  }
 });
 
 

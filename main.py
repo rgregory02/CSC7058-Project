@@ -870,8 +870,11 @@ def person_step_dynamic(step):
             label_type = entry.get("label_type")
 
             if label_type == "linked_person":
+                # fallback to entry["id"] if biography not present
+                bio_id = entry.get("biography") or entry.get("id")
                 if bio_id:
                     existing_bio_selections["linked_person_bio"] = bio_id
+
                 relationship = entry.get("relationship")
                 if relationship:
                     existing_bio_selections["relationship_label"] = relationship.lower()
@@ -882,6 +885,9 @@ def person_step_dynamic(step):
                         full_key = f"{group['key']}_bio"
                         existing_bio_selections[full_key] = bio_id
                         break
+
+            print("linked_person_bio in selections:", existing_bio_selections.get("linked_person_bio"))
+            print("person_biography_options:", [o["id"] for o in person_biography_options])
 
     return render_template(
         "person_step_dynamic.html",
