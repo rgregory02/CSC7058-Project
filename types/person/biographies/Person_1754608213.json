@@ -12,25 +12,17 @@
                 "date_value": "",
                 "subvalue": "childhood"
             },
-            "created": "2025-08-08T00:29:09.967169",
+            "created": "2025-08-08T00:41:14.338957",
             "buildings": [
-                {
-                    "id": "cathedral",
-                    "label_type": "buildings",
-                    "confidence": 100,
-                    "source": "gpt"
-                },
                 {
                     "label_type": "work_building",
                     "confidence": 100,
                     "id": "hospital"
                 },
                 {
-                    "label_type": "hospital",
+                    "label_type": "religious",
                     "confidence": 100,
-                    "id": "royal_victoria_hospital",
-                    "biography": "royal_victoria_hospital",
-                    "biography_confidence": 100
+                    "id": "cathedral"
                 }
             ],
             "person": [

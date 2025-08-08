@@ -503,12 +503,6 @@
              class="group-selection-tracker"
              value="{{ selected_id or '' }}">
 
-      <input type="hidden"
-             name="selected_id_{{ group.key }}_bio"
-             id="input_{{ safe_key }}_bio"
-             class="group-selection-tracker"
-             value="">
-
       <div class="label-options">
         {% for item in group.options %}
 {% set is_selected = selected_id == item.id %}
@@ -533,48 +527,52 @@
         {% endfor %}
       </div>
 
-      {% if suggested_biographies.get(safe_key) %}
-        <div class="label-group-box biography-suggestions"
-             id="bio_suggestions_{{ safe_key }}_bio"
-             data-label-key="{{ safe_key }}_bio"
-             style="display: none;">
-          <div class="label-title">Suggested {{ group.key.replace('_', ' ')|title }} Biographies</div>
+{% set nested_key = group.key.replace('/', '__') %}
+{% set full_key = group.key + '_bio' %}
+{% if suggested_biographies.get(nested_key) %}
+  <div class="label-group-box biography-suggestions"
+       id="bio_suggestions_{{ nested_key }}_bio"
+       data-label-key="{{ nested_key }}_bio"
+       style="display: none;">
 
-          <input type="text"
-                 class="label-search"
-                 placeholder="Search {{ group.key.replace('_', ' ')|title }} Biographies..."
-                 oninput="filterLabels(this, '{{ group.key }}_bio')"
-                 data-group="{{ group.key }}_bio">
+    <div class="label-title">Suggested {{ group.key.replace('_', ' ')|title }} Biographies</div>
 
-          <input type="hidden"
-                 name="selected_id_{{ group.key }}_bio"
-                 id="input_{{ safe_key }}_bio"
-                 class="group-selection-tracker"
-                 value="">
+    <input type="text"
+           class="label-search"
+           placeholder="Search {{ group.key.replace('_', ' ')|title }} Biographies..."
+           oninput="filterLabels(this, '{{ nested_key }}_bio')"
+           data-group="{{ nested_key }}_bio">
 
-          <div class="label-options">
-            {% for option in suggested_biographies[safe_key] %}
-              <div class="label-card"
-                   data-group="{{ group.key }}_bio"
-                   data-value="{{ option.id }}"
-                   data-id="{{ option.id }}"
-                   onclick="toggleLabelSelection(this)">
-                <div><strong>{{ option.display.replace('_', ' ')|title }}</strong></div>
-                {% if option.description %}
-                  <div class="label-description">{{ option.description }}</div>
-                {% endif %}
-              </div>
-            {% endfor %}
-          </div>
+    <input type="hidden"
+           name="selected_id_{{ full_key }}"
+           id="input_{{ nested_key }}_bio"
+           class="group-selection-tracker"
+           value="{{ existing_bio_selections.get(full_key, '') }}">
 
-          <div style="text-align: center; margin-top: 14px;">
-            <a href="{{ url_for('search_or_add_biography', type_name=current_type, return_url=request.url) }}"
-               class="add-entry-button">
-              ➕ Search or Create {{ group.key.replace('_', ' ')|title }} Biography
-            </a>
-          </div>
+    <div class="label-options">
+      {% for option in suggested_biographies[nested_key] %}
+        {% set is_selected = existing_bio_selections.get(full_key, '') == option.id %}
+        <div class="label-card{% if is_selected %} selected{% endif %}"
+             data-group="{{ nested_key }}_bio"
+             data-value="{{ option.id }}"
+             data-id="{{ option.id }}"
+             onclick="toggleLabelSelection(this)">
+          <div><strong>{{ option.display.replace('_', ' ')|title }}</strong></div>
+          {% if option.description %}
+            <div class="label-description">{{ option.description }}</div>
+          {% endif %}
         </div>
-      {% endif %}
+      {% endfor %}
+    </div>
+
+    <div style="text-align: center; margin-top: 14px;">
+      <a href="{{ url_for('search_or_add_biography', type_name=current_type, return_url=request.url) }}"
+         class="add-entry-button">
+        ➕ Search or Create {{ group.key.replace('_', ' ')|title }} Biography
+      </a>
+    </div>
+  </div>
+{% endif %}
 
       {% if group.options %}
         <div class="confidence-slider">
@@ -818,6 +816,12 @@ function toggleLabelSelection(el) {
     hiddenInput.value = "";
     el.classList.remove("selected");
 
+    // Hide biography suggestion box too
+    const bioBox = document.getElementById("bio_suggestions_" + safeKey);
+    if (bioBox) {
+      bioBox.style.display = "none";
+}
+
     // 🔒 Clear any nested subgroups if parent deselected
     document.querySelectorAll(`[data-parent="${safeKey}"]`).forEach(childGroup => {
       childGroup.style.display = "none";
@@ -826,11 +830,13 @@ function toggleLabelSelection(el) {
       childGroup.querySelectorAll('.label-card').forEach(c => c.classList.remove("selected"));
     });
 
+
   } else {
     // ✅ Replace old selection with this one
     allCards.forEach(card => card.classList.remove("selected"));
     hiddenInput.value = value;
     el.classList.add("selected");
+    
 
     // ✅ Show matching nested child only
     document.querySelectorAll(`[data-parent="${safeKey}"]`).forEach(childGroup => {
@@ -846,6 +852,11 @@ function toggleLabelSelection(el) {
         childGroup.querySelectorAll('.label-card').forEach(c => c.classList.remove("selected"));
       }
     });
+    // ✅ Show biography suggestions box if available
+    const bioBox = document.getElementById("bio_suggestions_" + safeKey);
+    if (bioBox) {
+      bioBox.style.display = "block";
+    }
   }
 
   updateSaveButtonState();
@@ -853,15 +864,28 @@ function toggleLabelSelection(el) {
   updateLinkedPersonBioVisibility();
 }
 
-  function updateBiographyVisibility() {
-    document.querySelectorAll('.label-group-box.biography-suggestions[data-label-key]').forEach(bioBox => {
-      const safeKeyWithBio = bioBox.getAttribute("data-label-key");
-      const rawKey = safeKeyWithBio.replace(/_bio$/, '').replaceAll('__', '/');
-      const inputId = "input_" + makeSafeKey(rawKey);
-      const selected = document.getElementById(inputId)?.value;
-      bioBox.style.display = selected && selected.trim() !== "" ? "block" : "none";
-    });
-  }
+function updateBiographyVisibility() {
+  document.querySelectorAll('.label-group-box.biography-suggestions[data-label-key]').forEach(bioBox => {
+    const safeKeyWithBio = bioBox.getAttribute("data-label-key");  // e.g. work_building__hospital_bio
+    const rawKey = safeKeyWithBio.replace(/_bio$/, '').replaceAll('__', '/');  // e.g. work_building/hospital
+    const inputId = "input_" + makeSafeKey(rawKey);  // e.g. input_work_building__hospital
+    const bioInputId = inputId + "_bio";  // e.g. input_work_building__hospital_bio
+
+    const selectedLabel = document.getElementById(inputId)?.value;
+    const selectedBio = document.getElementById(bioInputId)?.value;
+
+    // Show/hide the suggestion box
+    bioBox.style.display = selectedLabel && selectedLabel.trim() !== "" ? "block" : "none";
+
+    // Highlight the selected biography card if it exists
+    if (selectedBio) {
+      const matchingCard = bioBox.querySelector(`.label-card[data-id="${selectedBio}"]`);
+      if (matchingCard) {
+        matchingCard.classList.add("selected");
+      }
+    }
+  });
+}
 
   function updateLinkedPersonBioVisibility() {
     const relationshipInput = document.getElementById("input_relationship");
@@ -1214,6 +1238,7 @@ document.addEventListener("DOMContentLoaded", function () {
   preselectSavedLabelCards();        // NEW
   enforceNestedVisibilityOnLoad(); 
   updateSaveButtonState();
+  updateBiographyVisibility();
 });
 
 

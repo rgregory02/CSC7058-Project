@@ -1,0 +1,45 @@
+{
+    "person_id": "Person_1754610296",
+    "name": "Teddy",
+    "dob": "2025-08-04",
+    "created": "2025-08-08T00:44:56.237464+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "infant",
+                "confidence": 37,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "infant"
+            },
+            "created": "2025-08-08T02:01:34.956368",
+            "buildings": [
+                {
+                    "label_type": "work_building",
+                    "confidence": 100,
+                    "id": "hospital"
+                },
+                {
+                    "label_type": "hospital",
+                    "confidence": 54,
+                    "id": "royal_victoria_hospital",
+                    "biography": "royal_victoria_hospital",
+                    "biography_confidence": 100
+                }
+            ],
+            "person": [
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 61,
+                    "id": "actor"
+                },
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 47,
+                    "id": "1"
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}

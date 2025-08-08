@@ -862,6 +862,20 @@ def person_step_dynamic(step):
                     except Exception:
                         pass
 
+    existing_bio_selections = {}
+    if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
+        for entry in person_data["entries"][entry_index].get(current_type, []):
+            label_id = entry.get("id")
+            bio_id = entry.get("biography")
+
+            if bio_id and label_id:
+                # Try to match this label_id with the group that contains it
+                for group in label_groups_list:
+                    if any(opt["id"] == label_id for opt in group.get("options", [])):
+                        full_key = f"{group['key']}_bio"
+                        existing_bio_selections[full_key] = bio_id
+                        break
+
     return render_template(
         "person_step_dynamic.html",
         current_type=current_type,
@@ -879,7 +893,8 @@ def person_step_dynamic(step):
         step=step,
         is_person_type=is_person_type,
         person_biography_options=person_biography_options,
-        relationship_labels=relationship_labels
+        relationship_labels=relationship_labels,
+        existing_bio_selections=existing_bio_selections
     )
 
 @app.route("/suggest_labels", methods=["POST"])
