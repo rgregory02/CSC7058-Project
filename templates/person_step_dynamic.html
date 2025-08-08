@@ -470,24 +470,26 @@
     </div>
 
 <form method="POST">
-  {% set has_relationship_group = label_groups_list | selectattr("key", "equalto", "relationship") | list | length > 0 %}
-  {% for group in label_groups_list if group.key != "relationship" %}
-    {% set is_nested = '/' in group.key %}
-    {% set parent_key = '/'.join(group.key.split('/')[:-1]) if is_nested else None %}
-    {% set selected_id = existing_labels.get(group.key, {}).get('label') %}
-    {% set matched_conf = existing_labels.get(group.key, {}).get('confidence', 100) %}
-    {% set safe_key = group.key.replace('/', '__') %}
+{% set has_relationship_group = label_groups_list | selectattr("key", "equalto", "relationship") | list | length > 0 %}
+{% for group in label_groups_list if group.key != "relationship" %}
+  {% set is_nested = '/' in group.key %}
+  {% set parent_key = '/'.join(group.key.split('/')[:-1]) if is_nested else None %}
+  {% set label_data = existing_labels.get(group.key, {}) %}
+  {% set selected_id = label_data.get('label') or (label_data.get('id') if label_data.get('source') == 'gpt' else None) %}
+  {% set matched_conf = label_data.get('confidence', 100) %}
+  {% set safe_key = group.key.replace('/', '__') %}
 
-    <div class="label-group-box"
-         id="group_{{ safe_key }}"
-         {% if is_nested %}
-           {% set parent_path = group.key.rsplit('/', 1)[0] %}
-           {% set parent_selected_id = existing_labels.get(parent_path, {}).get('label') %}
-           {% set this_folder_name = group.key.split('/')[-1] %}
-           {% set show_nested = this_folder_name == parent_selected_id %}
-           data-parent="{{ parent_path.replace('/', '__') }}"
-           style="{% if not show_nested %}display: none;{% endif %}"
-         {% endif %}>
+  <div class="label-group-box"
+       id="group_{{ safe_key }}"
+       {% if is_nested %}
+         {% set parent_path = group.key.rsplit('/', 1)[0] %}
+         {% set this_folder_name = group.key.split('/')[-1] %}
+         {% set parent_data = existing_labels.get(parent_path, {}) %}
+         {% set parent_selected_id = parent_data.get('label') or (parent_data.get('id') if parent_data.get('source') == 'gpt' else None) %}
+         {% set show_nested = this_folder_name == parent_selected_id %}
+         data-parent="{{ parent_path.replace('/', '__') }}"
+         style="{% if not show_nested %}display: none;{% endif %}"
+       {% endif %}>
 
       <div class="label-title">{{ group.key.replace('_', ' ')|title }}</div>
 
@@ -503,29 +505,35 @@
              class="group-selection-tracker"
              value="{{ selected_id or '' }}">
 
-      <div class="label-options">
-        {% for item in group.options %}
-{% set is_selected = selected_id == item.id %}
-{% set source = existing_labels.get(group.key, {}).get('source', '') %}
-<div class="label-card {% if is_selected %}selected{% endif %}"
-     data-group="{{ group.key }}"
-     data-value="{{ item.id }}"
-     data-id="{{ item.id }}"
-     data-source="{{ source }}"
-     onclick="toggleLabelSelection(this)">
-  {% if item.image %}
-    <img src="{{ item.image }}" alt="{{ item.display }}">
-  {% endif %}
-  <div><strong>{{ item.display.replace('_', ' ')|title }}</strong></div>
-  {% if item.description %}
-    <div class="label-description">{{ item.description }}</div>
-  {% endif %}
-  {% if is_selected and source == "gpt" %}
-    <div class="gpt-badge">🤖 GPT</div>
-  {% endif %}
+<div class="label-options">
+  {% for item in group.options %}
+    {% set stored_entry = existing_labels.get(group.key, {}) %}
+    {% set selected_id = stored_entry.get('label') or stored_entry.get('id') %}
+    {% set is_selected = selected_id == item.id %}
+    {% set source = stored_entry.get('source', '') %}
+
+    <div class="label-card {% if is_selected %}selected{% endif %}"
+         data-group="{{ group.key }}"
+         data-value="{{ item.id }}"
+         data-id="{{ item.id }}"
+         data-source="{{ source }}"
+         onclick="toggleLabelSelection(this)">
+      {% if item.image %}
+        <img src="{{ item.image }}" alt="{{ item.display }}">
+      {% endif %}
+      <div><strong>{{ item.display.replace('_', ' ')|title }}</strong></div>
+
+      {% if item.description %}
+        <div class="label-description">{{ item.description }}</div>
+      {% endif %}
+
+      {% if is_selected and source == "gpt" %}
+        <div class="gpt-badge">🤖 GPT</div>
+      {% endif %}
+
+    </div>
+  {% endfor %}
 </div>
-        {% endfor %}
-      </div>
 
 {% set nested_key = group.key.replace('/', '__') %}
 {% set full_key = group.key + '_bio' %}

@@ -575,17 +575,27 @@ def person_step_dynamic(step):
     if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
         labels_list = person_data["entries"][entry_index].get(current_type, [])
         for label in labels_list:
+            print(f"[DEBUG] Checking label: {label}")
             if "label_type" not in label:
                 for group in label_groups_list:
                     if any(opt["id"] == label["id"] for opt in group["options"]):
                         label["label_type"] = group["key"]
                         break
-            label_type = label.get("label_type")
+            label_type = None
+
+            # Match against all group keys to get the full path (e.g. "car/ford/red_ford")
+            for group in label_groups_list:
+                if any(opt["id"] == label["id"] for opt in group["options"]):
+                    label_type = group["key"]
+                    break
             if label_type:
                 existing_labels[label_type] = {
                     "label": label.get("id"),
-                    "confidence": label.get("confidence", 100)
+                    "id": label.get("id"),
+                    "confidence": label.get("confidence", 100),
+                    "source": label.get("source", "")
                 }
+                print(f"[DEBUG] → Set existing_labels[{label_type}]: {existing_labels[label_type]}")
                 selected_label_ids.add(label_type)
                 selected_label_ids.add(label_type.split("/")[-1])
                 selected_label_ids.add(label.get("id"))
@@ -613,7 +623,9 @@ def person_step_dynamic(step):
             if child_selected_id:
                 existing_labels[key] = {
                     "label": child_selected_id,
+                    "id": child_selected_id,
                     "confidence": selected_conf_by_type.get(child_type, 100),
+                    "source": "gpt"  # or "", if you don't have a way to confirm source
                 }
                 selected_label_ids.add(key)
                 selected_label_ids.add(child_selected_id)

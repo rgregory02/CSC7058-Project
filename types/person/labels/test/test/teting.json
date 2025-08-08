@@ -1,0 +1,10 @@
+{
+  "id": "teting",
+  "display": "Teting",
+  "label_type": "test",
+  "confidence": 100,
+  "created": "2025-08-08T01:51:28.821289+00:00",
+  "properties": {
+    "suggests_biographies_from": "person/test/test/teting"
+  }
+}
