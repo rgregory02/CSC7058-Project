@@ -988,25 +988,30 @@ function updateBiographyVisibility() {
     updateSaveButtonState();
   }
 
-  // ✅ New: Relationship card selection handler
-  function selectRelationship(card) {
-    const value = card.getAttribute("data-value");
-    const input = document.getElementById("input_relationship");
 
-    // Deselect others
-    document.querySelectorAll('.label-card[data-group="relationship"]').forEach(c => {
-      c.classList.remove("selected");
-    });
+function selectRelationship(card) {
+  const value = card.getAttribute("data-value");
+  const input = document.getElementById("input_relationship");
 
+  const currentlySelected = card.classList.contains("selected");
+
+  // Deselect all first
+  document.querySelectorAll('.label-card[data-group="relationship"]').forEach(c => {
+    c.classList.remove("selected");
+  });
+
+  if (currentlySelected) {
+    // If already selected, deselect
+    input.value = "";
+  } else {
+    // Otherwise, select new one
     card.classList.add("selected");
-
-    if (input) {
-      input.value = value;
-    }
-
-    updateLinkedPersonBioVisibility();
-    updateSaveButtonState();
+    input.value = value;
   }
+
+  updateLinkedPersonBioVisibility();
+  updateSaveButtonState();
+}
 
 function getLabelSuggestions(event) {
   if (event) event.preventDefault();
