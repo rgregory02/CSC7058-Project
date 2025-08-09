@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Archived Types</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="box">
+    <h1>📦 Archived Types</h1>
+    {% if archived %}
+      <ul style="text-align:left;">
+        {% for a in archived %}
+          <li>
+            <code>{{ a }}</code>
+            <form method="post" action="{{ url_for('restore_archived_type', archived_folder=a) }}"
+                  style="display:inline;margin-left:10px;">
+              <button class="btn">Restore</button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>Nothing archived yet.</p>
+    {% endif %}
+    <div style="margin-top:10px;">
+      <a class="btn secondary" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+    </div>
+  </div>
+</body>
+</html>

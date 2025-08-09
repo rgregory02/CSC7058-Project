@@ -49,7 +49,12 @@ from utils import (
     map_existing_bio_selections,
     build_suggested_biographies,
     list_biographies,
-    expand_child_groups
+    expand_child_groups,
+    list_types_live,
+    scan_cross_references,
+    archive_type,
+    restore_type,
+    archive_root
 )
 
 app = Flask(__name__)
@@ -981,6 +986,43 @@ def general_step_review(type_name, bio_id):
     data = load_json_as_dict(bio_file)
     return render_template("general_step_review.html",
                            type_name=type_name, bio_id=bio_id, bio=data)
+
+
+@app.route("/type/<type_name>/archive", methods=["GET", "POST"])
+def archive_type_confirm(type_name):
+    if request.method == "POST":
+        force = request.form.get("force") == "on"
+        refs = scan_cross_references(type_name)
+        if refs and not force:
+            flash("This type is referenced by others. Tick 'Force archive' to proceed.", "error")
+            return render_template("archive_type_confirm.html", type_name=type_name, refs=refs)
+
+        try:
+            dst = archive_type(type_name)
+            flash(f"Archived '{type_name}' to {dst}.", "success")
+            return redirect(url_for("dashboard"))
+        except Exception as e:
+            flash(str(e), "error")
+            return render_template("archive_type_confirm.html", type_name=type_name, refs=refs)
+
+    # GET: show refs & confirm
+    refs = scan_cross_references(type_name)
+    return render_template("archive_type_confirm.html", type_name=type_name, refs=refs)
+
+@app.route("/type/archive")
+def archived_types_list():
+    root = archive_root()
+    items = sorted(os.listdir(root)) if os.path.isdir(root) else []
+    return render_template("archived_types.html", archived=items)
+
+@app.route("/type/archive/restore/<archived_folder>", methods=["POST"])
+def restore_archived_type(archived_folder):
+    try:
+        dst = restore_type(archived_folder)
+        flash(f"Restored to {dst}.", "success")
+    except Exception as e:
+        flash(str(e), "error")
+    return redirect(url_for("archived_types_list"))
 
 
 # @app.route("/person_step/time/<person_id>", methods=["GET", "POST"])

@@ -35,6 +35,8 @@
         <a class="btn ghost" href="{{ url_for('index_page') }}">👤 Browse Life Wizard</a>
         <!-- Optional: create a new Type right from here -->
         <a class="btn secondary" href="{{ url_for('add_type_prompt') }}">➕ Add New Type</a>
+        <!-- NEW: archived types hub -->
+        <a class="btn secondary" href="{{ url_for('archived_types_list') }}">📦 Archived Types</a>
       </div>
     </div>
 
@@ -59,18 +61,24 @@
             <a class="btn secondary" href="{{ url_for('create_subfolder', type_name=t) }}">
               🏷️ Add Label Group
             </a>
+
+            <!-- NEW: archive this type -->
+            <a class="btn ghost"
+               href="{{ url_for('archive_type_confirm', type_name=t) }}"
+               onclick="return confirm('Archive this entire type (labels & biographies) to /archive/types ? You can restore later.');">
+              🗃️ Archive Type
+            </a>
           </div>
 
           {% if preview[t] %}
             <div><small>Recent:</small></div>
             <ul class="slim">
-              {# preview[t] should yield objects/dicts with id & name; adjust if your helper returns tuples #}
+              {# preview[t] may be objects with .id/.name or tuples (id, name) #}
               {% for b in preview[t] %}
+                {% set bid = (b.id if b is mapping or (b is defined and b.id is defined) else (b[0] if b is sequence else b)) %}
+                {% set bname = (b.name if b is mapping or (b is defined and b.name is defined) else (b[1] if b is sequence and b|length>1 else bid)) %}
                 <li>
-                  <a href="{{ url_for('general_iframe_wizard', type=t, bio_id=(b.id if b is mapping or (b is defined and b.id is defined) else (b[0] if b is sequence else b)), step='labels') }}">
-  {{ b.name if b is mapping or (b is defined and b.name is defined) else (b[1] if b is sequence and b|length>1 else (b.id if b is mapping else b)) }}
-</a>
-
+                  <a href="{{ url_for('general_iframe_wizard', type=t, bio_id=bid, step='labels') }}">{{ bname }}</a>
                 </li>
               {% endfor %}
             </ul>
@@ -83,4 +91,5 @@
   </div>
 </body>
 </html>
+
 

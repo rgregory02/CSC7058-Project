@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Archive {{ type_name|replace('_',' ')|title }}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="box">
+    <h1>Archive “{{ type_name|replace('_',' ')|title }}”</h1>
+
+    {% if refs and refs|length %}
+      <div class="flash-error" style="margin:12px 0;">
+        <strong>Heads up:</strong> This type appears to be referenced:
+        <ul style="text-align:left;margin-top:8px;">
+          {% for r in refs[:20] %}
+            <li><code>{{ r }}</code></li>
+          {% endfor %}
+          {% if refs|length > 20 %}<li>…and {{ refs|length - 20 }} more</li>{% endif %}
+        </ul>
+        You can still force-archive, but other UIs may show broken links until you update them.
+      </div>
+    {% else %}
+      <p>No references found. Safe to archive.</p>
+    {% endif %}
+
+    <form method="post" style="margin-top:16px;">
+      {% if refs and refs|length %}
+        <label style="display:block;margin-bottom:10px;">
+          <input type="checkbox" name="force"> I understand and want to force-archive.
+        </label>
+      {% endif %}
+      <button class="btn" type="submit">Archive Type</button>
+      <a class="btn secondary" href="{{ url_for('dashboard') }}">Cancel</a>
+    </form>
+  </div>
+</body>
+</html>
