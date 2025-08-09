@@ -65,7 +65,8 @@
               {% if _updated %}Last updated: {{ _updated }}{% else %}No timestamp{% endif %}
             </div>
             <div class="quick" style="margin-top:10px">
-              <a class="btn" href="{{ url_for('label_step', type_name=type_name, bio_id=_id, step=0) }}">🧩 Open Label Wizard</a>
+              <a class="btn" href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='labels')
+ }}">🧩 Open Label Wizard</a>
               <a class="btn secondary"
                  href="{{ url_for('search_or_add_biography', type_name=type_name, return_url=request.url) }}?q={{ _name|urlencode }}">
                  🔎 Find / Edit
