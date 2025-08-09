@@ -1,90 +1,213 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>{{ 'New' if mode=='new' else 'Edit' }} Property – {{ type_name|title }}</title>
+  <title>{{ 'New' if mode=='new' else 'Edit' }} Property – {{ type_name|replace('_',' ')|title }}</title>
   <link rel="stylesheet" href="/static/styles.css">
   <style>
-    .field{margin:10px 0}
-    input[type=text], textarea, select{width:100%;padding:10px;border:1px solid #ddd;border-radius:8px}
-    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    .btn{padding:10px 16px;border-radius:8px;background:#6c63ff;color:#fff;text-decoration:none;border:none;cursor:pointer}
+    body{background:#f6f7fb;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    .wrap{max-width:1000px;margin:30px auto;background:#fff;border:1px solid #e7e9f2;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.05);padding:24px}
+    h1{margin:0 0 8px}
+    .muted{color:#657085}
+    form{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+    .full{grid-column:1/-1}
+    label{font-weight:600;display:block;margin-bottom:6px}
+    input[type=text], textarea, select{width:100%;padding:10px;border:1px solid #d9dbe7;border-radius:8px}
+    textarea{min-height:90px}
+    .row{display:flex;gap:12px;align-items:center}
+    .btn{display:inline-block;background:#6c63ff;color:#fff;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:600;border:none;cursor:pointer}
     .btn.secondary{background:#eef0f7;color:#333}
+    .actions{grid-column:1/-1;display:flex;gap:10px;justify-content:flex-end;margin-top:8px}
+    small.help{display:block;color:#8b90a0;margin-top:4px}
+    .pill{display:inline-block;background:#f2f4ff;border:1px solid #dfe3ff;padding:4px 8px;border-radius:999px;font-size:12px;color:#495}
   </style>
 </head>
 <body>
-  <div class="box">
-    <h1>{{ 'New' if mode=='new' else 'Edit' }} Property – {{ type_name|replace('_',' ')|title }}</h1>
-    <form method="POST">
-      <div class="field">
-        <label>Property Key (file name, no spaces)</label>
-        <input type="text" name="key" value="{{ prop_key or (prop and prop.key) or '' }}" placeholder="e.g. work_place" {{ 'required' if mode=='new' else '' }}>
+  <div class="wrap">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div>
+        <h1>{{ '➕ New' if mode=='new' else '✏️ Edit' }} Property</h1>
+        <div class="muted">{{ type_name|replace('_',' ')|title }}</div>
+      </div>
+      <div class="row">
+        <a class="btn secondary" href="{{ url_for('type_properties', type_name=type_name) }}">Back to Properties</a>
+        <a class="btn secondary" href="{{ url_for('dashboard') }}">Dashboard</a>
+      </div>
+    </div>
+
+    <form method="post" autocomplete="off">
+      <!-- Identity -->
+      <div class="full">
+        <label for="name">Property Name</label>
+        <input type="text" id="name" name="name"
+               placeholder="e.g. Work Place"
+               value="{{ (prop.name if prop else '') or '' }}" required>
+        <small class="help">Human‑readable display name.</small>
       </div>
 
-      <div class="field">
-        <label>Display Name</label>
-        <input type="text" name="name" value="{{ (prop.name if prop else '') or (prop and prop.get('name')) or '' }}" placeholder="Work place">
+      <div>
+        <label for="key">Property Key</label>
+        <input type="text" id="key" name="key"
+               placeholder="e.g. work_place"
+               value="{{ (prop_key if mode=='edit' else '') or '' }}"
+               pattern="[a-z0-9_]+"
+               required>
+        <small class="help">Autofills from name (lowercase, numbers & underscores only). You can override it.</small>
       </div>
 
-      <div class="field">
-        <label>Description</label>
-        <textarea name="description" rows="2">{{ (prop and prop.get('description')) or '' }}</textarea>
+      <div>
+        <label for="input">Input type (optional)</label>
+        <input type="text" id="input" name="input"
+               placeholder="e.g. select, multi, free_text"
+               value="{{ prop.input if prop and prop.input is defined else '' }}">
+        <small class="help">Purely informational for now; helpful for UI hints.</small>
       </div>
 
-      <hr>
+      <div class="full">
+        <label for="description">Description</label>
+        <textarea id="description" name="description"
+                  placeholder="Optional description for this property">{{ prop.description if prop else '' }}</textarea>
+      </div>
 
-      <div class="field">
-        <label>Source kind</label>
-        <select name="source_kind">
+      <!-- Source block -->
+      <div class="full"><span class="pill">Source</span></div>
+
+      <div>
+        <label for="source_kind">Source kind</label>
+        {% set src = (prop.source if prop and prop.source is defined else {}) %}
+        <select id="source_kind" name="source_kind">
+          {% set current_kind = src.kind if src and src.kind is defined else '' %}
           <option value="">— none —</option>
-          <option value="type_labels" {% if prop and prop.get('source',{}).get('kind')=='type_labels' %}selected{% endif %}>type_labels</option>
-          <option value="type_biographies" {% if prop and prop.get('source',{}).get('kind')=='type_biographies' %}selected{% endif %}>type_biographies</option>
+          <option value="type_labels" {{ 'selected' if current_kind=='type_labels' else '' }}>type_labels</option>
+          <option value="type_biographies" {{ 'selected' if current_kind=='type_biographies' else '' }}>type_biographies</option>
         </select>
       </div>
 
-      <div class="row">
-        <div class="field">
-          <label>Source type (if using source)</label>
-          <input type="text" name="source_type" value="{{ (prop and prop.get('source',{}).get('type','')) or '' }}" placeholder="buildings">
-        </div>
-        <div class="field">
-          <label>Source path (for type_labels)</label>
-          <input type="text" name="source_path" value="{{ (prop and prop.get('source',{}).get('path','')) or '' }}" placeholder="work_building">
-        </div>
+      <div>
+        <label for="source_type">Source type</label>
+        <select id="source_type" name="source_type">
+          <option value="">— pick a type —</option>
+          {% for t in available_types %}
+            <option value="{{ t }}" {{ 'selected' if src and src.get('type')==t else '' }}>{{ t }}</option>
+          {% endfor %}
+        </select>
+        <small class="help">If pulling from another type’s labels or biographies.</small>
       </div>
 
-      <div class="field">
-        <label><input type="checkbox" name="source_allow_children" {% if prop and prop.get('source',{}).get('allow_children') %}checked{% endif %}> Allow child folders (for type_labels)</label>
+      <div>
+        <label for="source_path">Source path (suggested)</label>
+        {% set src_path = src.get('path','') if src else '' %}
+        <input list="label_groups" type="text" id="source_path" name="source_path"
+               placeholder="e.g. work_building/hospital"
+               value="{{ src_path }}">
+        <datalist id="label_groups">
+          {% for g in available_label_groups %}
+            <option value="{{ g }}"></option>
+          {% endfor %}
+        </datalist>
+        <small class="help">For <code>type_labels</code>: the label group path inside that type.</small>
       </div>
 
-      <hr>
-
-      <div class="row">
-        <div class="field">
-          <label>Link biography type (optional)</label>
-          <input type="text" name="link_bio_type" value="{{ (prop and prop.get('link_biography',{}).get('type','')) or '' }}" placeholder="buildings">
-        </div>
-        <div class="field">
-          <label>Link biography path (optional)</label>
-          <input type="text" name="link_bio_path" value="{{ (prop and prop.get('link_biography',{}).get('path','')) or '' }}" placeholder="work_building/hospital">
-        </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        {% set allow_children = (src.get('allow_children') if src else False) %}
+        <input type="checkbox" id="source_allow_children" name="source_allow_children"
+               {{ 'checked' if allow_children else '' }}>
+        <label for="source_allow_children" style="margin:0">Allow child folders</label>
       </div>
 
-      <div class="field">
-        <label>Link biography mode</label>
-        <select name="link_bio_mode">
-          {% set lbm = (prop and prop.get('link_biography',{}).get('mode','child_or_parent')) or 'child_or_parent' %}
-          <option value="child_only" {% if lbm=='child_only' %}selected{% endif %}>child_only</option>
-          <option value="parent_only" {% if lbm=='parent_only' %}selected{% endif %}>parent_only</option>
-          <option value="child_or_parent" {% if lbm=='child_or_parent' %}selected{% endif %}>child_or_parent</option>
+      <!-- Link biography block -->
+      <div class="full"><span class="pill">Link Biography</span></div>
+
+      {% set lb = (prop.link_biography if prop and prop.link_biography is defined else {}) %}
+
+      <div>
+        <label for="link_bio_type">Link biography type</label>
+        <select id="link_bio_type" name="link_bio_type">
+          <option value="">— none —</option>
+          {% for t in available_types %}
+            <option value="{{ t }}" {{ 'selected' if lb and lb.get('type')==t else '' }}>{{ t }}</option>
+          {% endfor %}
         </select>
       </div>
 
-      <div style="margin-top:14px">
-        <button class="btn" type="submit">Save</button>
+      <div>
+        <label for="link_bio_path">Link biography path (optional)</label>
+        <input list="label_groups" type="text" id="link_bio_path" name="link_bio_path"
+               placeholder="e.g. work_building/hospital"
+               value="{{ lb.get('path','') if lb else '' }}">
+        <small class="help">If you keep biographies in subfolders (optional).</small>
+      </div>
+
+      <div>
+        <label for="link_bio_mode">Link biography mode</label>
+        {% set mode_val = lb.get('mode','child_or_parent') if lb else 'child_or_parent' %}
+        <select id="link_bio_mode" name="link_bio_mode">
+          <option value="child_only" {{ 'selected' if mode_val=='child_only' else '' }}>child_only</option>
+          <option value="parent_only" {{ 'selected' if mode_val=='parent_only' else '' }}>parent_only</option>
+          <option value="child_or_parent" {{ 'selected' if mode_val=='child_or_parent' else '' }}>child_or_parent</option>
+        </select>
+      </div>
+
+      <!-- quick helpers -->
+      <div class="row">
+        <a class="btn secondary" href="{{ url_for('add_type_prompt') }}" target="_top">➕ Add Type</a>
+        <a class="btn secondary" href="{{ url_for('create_subfolder', type_name=type_name) }}" target="_top">🏷️ Add Label Group</a>
+      </div>
+
+      <!-- Actions -->
+      <div class="actions">
         <a class="btn secondary" href="{{ url_for('type_properties', type_name=type_name) }}">Cancel</a>
+        <button type="submit" class="btn">Save Property</button>
       </div>
     </form>
   </div>
+
+  <script>
+    // --- Auto-generate key from name (while user hasn't edited key manually) ---
+    const nameEl = document.getElementById('name');
+    const keyEl  = document.getElementById('key');
+
+    // If editing, don't auto-change the key
+    let keyDirty = {{ 'true' if mode=='edit' else 'false' }};
+
+    // If user types in the key field, mark it as manually edited
+    keyEl.addEventListener('input', () => { keyDirty = true; });
+
+    function toSnakeCase(s) {
+      return (s || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+    }
+
+    nameEl.addEventListener('input', () => {
+      if (keyDirty) return;
+      keyEl.value = toSnakeCase(nameEl.value);
+    });
+
+    // On first load for "new", if there is a name, prefill key
+    document.addEventListener('DOMContentLoaded', () => {
+      if (!keyDirty && !keyEl.value && nameEl.value) {
+        keyEl.value = toSnakeCase(nameEl.value);
+      }
+    });
+
+    // Disable/enable path & allow_children depending on source_kind
+    const sourceKindEl = document.getElementById('source_kind');
+    const sourcePathEl = document.getElementById('source_path');
+    const allowChildrenEl = document.getElementById('source_allow_children');
+    function refreshSourceControls(){
+      const k = sourceKindEl.value;
+      const labelsMode = (k === 'type_labels');
+      const bioMode = (k === 'type_biographies');
+      sourcePathEl.disabled = !labelsMode;
+      allowChildrenEl.disabled = !labelsMode;
+      if (!labelsMode){ allowChildrenEl.checked = false; }
+    }
+    sourceKindEl.addEventListener('change', refreshSourceControls);
+    refreshSourceControls();
+  </script>
 </body>
 </html>
+

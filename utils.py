@@ -2,7 +2,7 @@ import os
 import json
 from datetime import datetime
 from openai import OpenAI
-import os
+import re
 import glob
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -210,6 +210,22 @@ LIFE_STAGE_ORDER = {
     "nineties": 95,
     "hundreds": 105
 }
+
+
+def _list_types():
+    root = "types"
+    if not os.path.isdir(root):
+        return []
+    return sorted([d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d))])
+
+def _sanitize_key(raw: str, fallback: str = "") -> str:
+    key = (raw or "").strip().lower()
+    key = re.sub(r"[^a-z0-9_]+", "_", key).strip("_")
+    return key or fallback
+
+def _checkbox_on(req, name: str) -> bool:
+    return (req.form.get(name) or "").lower() in ("on", "true", "1", "yes")
+
 
 def load_labels_from_folder(folder_path):
     """

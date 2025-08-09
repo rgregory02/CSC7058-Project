@@ -55,7 +55,10 @@ from utils import (
     archive_type,
     restore_type,
     archive_root,
-    resolve_property_options
+    resolve_property_options,
+    _list_types,
+    _sanitize_key,
+    _checkbox_on
 )
 
 app = Flask(__name__)
@@ -729,7 +732,35 @@ def type_labels(type_name):
 
     return render_template("type_labels.html", type_name=type_name, groups=groups)
 
+@app.route("/api/type/<type_name>/label_paths")
+def api_label_paths(type_name):
+    base = os.path.join("types", type_name, "labels")
+    paths = set()
+    if os.path.isdir(base):
+        for root, dirs, files in os.walk(base):
+            rel = os.path.relpath(root, base)
+            if rel == ".":
+                continue
+            # Only folders that contain .jsons (options/groups)
+            has_json = any(f.endswith(".json") for f in files)
+            if has_json:
+                # normalise slashes
+                paths.add(rel.replace("\\", "/"))
+    return jsonify(sorted(paths))
 
+@app.route("/api/type/<type_name>/bio_paths")
+def api_bio_paths(type_name):
+    base = os.path.join("types", type_name, "biographies")
+    paths = set()
+    if os.path.isdir(base):
+        for root, dirs, files in os.walk(base):
+            rel = os.path.relpath(root, base)
+            if rel == ".":
+                continue
+            has_json = any(f.endswith(".json") for f in files)
+            if has_json:
+                paths.add(rel.replace("\\", "/"))
+    return jsonify(sorted(paths))
 
 
 @app.route("/api/type/<type_name>/labels.json")
@@ -739,6 +770,8 @@ def type_labels_api(type_name):
         return jsonify({"error": "not_found"}), 404
     groups = collect_label_groups(base, type_name)
     return jsonify({"type": type_name, "groups": groups})
+
+
 
 
 # ---------- 1) Entry screen to pick a type & biography ----------
@@ -1236,48 +1269,51 @@ def new_property(type_name):
     os.makedirs(base, exist_ok=True)
 
     if request.method == "POST":
-        key = (request.form.get("key") or "").strip().lower()
-        key = re.sub(r"[^a-z0-9_]+", "_", key).strip("_")
+        key = _sanitize_key(request.form.get("key"))
         if not key:
             flash("Please provide a valid property key (letters, numbers, underscores).", "error")
             return redirect(request.url)
+
         path = os.path.join(base, f"{key}.json")
         if os.path.exists(path):
             flash("A property with that key already exists.", "error")
             return redirect(request.url)
 
         payload = {
-            "name": (request.form.get("name") or key.replace("_"," ").title()).strip(),
+            "name": (request.form.get("name") or key.replace("_", " ").title()).strip(),
             "description": (request.form.get("description") or "").strip()
         }
 
-        # Source block
-        source_kind = request.form.get("source_kind") or ""
-        if source_kind in ("type_labels", "type_biographies"):
-            src = {
-                "kind": source_kind,
-                "type": (request.form.get("source_type") or "").strip()
-            }
+        # ----- Source block (optional) -----
+        source_kind = (request.form.get("source_kind") or "").strip()
+        source_type = (request.form.get("source_type") or "").strip()
+        if source_kind in ("type_labels", "type_biographies") and source_type:
+            src = {"kind": source_kind, "type": source_type}
             if source_kind == "type_labels":
                 src["path"] = (request.form.get("source_path") or "").strip()
-                src["allow_children"] = bool(request.form.get("source_allow_children"))
+                src["allow_children"] = _checkbox_on(request, "source_allow_children")
             payload["source"] = src
 
-        # Link biography block
+        # ----- Link biography block (optional) -----
         link_bio_type = (request.form.get("link_bio_type") or "").strip()
         if link_bio_type:
-            lb = {
+            payload["link_biography"] = {
                 "type": link_bio_type,
                 "path": (request.form.get("link_bio_path") or "").strip(),
                 "mode": (request.form.get("link_bio_mode") or "child_or_parent").strip()
             }
-            payload["link_biography"] = lb
 
         save_dict_as_json(path, payload)
         flash("Property created.", "success")
         return redirect(url_for("type_properties", type_name=type_name))
 
-    return render_template("property_edit.html", type_name=type_name, mode="new", prop=None)
+    return render_template(
+        "property_edit.html",
+        type_name=type_name,
+        mode="new",
+        prop=None,
+        all_types=_list_types()
+    )
 
 # ---------- Properties: edit ----------
 @app.route("/type/<type_name>/properties/<prop_key>", methods=["GET", "POST"])
@@ -1290,26 +1326,30 @@ def edit_property(type_name, prop_key):
     prop = load_json_as_dict(path) if os.path.exists(path) else {}
 
     if request.method == "POST":
-        # allow rename of key?
-        new_key = (request.form.get("key") or prop_key).strip().lower()
-        new_key = re.sub(r"[^a-z0-9_]+", "_", new_key).strip("_") or prop_key
+        # Allow renaming the key
+        new_key = _sanitize_key(request.form.get("key"), fallback=prop_key)
 
-        payload = {
-            "name": (request.form.get("name") or "").strip() or prop.get("name") or new_key.replace("_"," ").title(),
-            "description": (request.form.get("description") or "").strip()
-        }
+        # Start from existing so we don’t accidentally drop unknown fields
+        payload = dict(prop)
+        payload["name"] = (request.form.get("name") or "").strip() or prop.get("name") or new_key.replace("_", " ").title()
+        payload["description"] = (request.form.get("description") or "").strip()
 
-        source_kind = request.form.get("source_kind") or ""
-        if source_kind in ("type_labels", "type_biographies"):
-            src = {
-                "kind": source_kind,
-                "type": (request.form.get("source_type") or "").strip()
-            }
+        # ----- Source block -----
+        source_kind = (request.form.get("source_kind") or "").strip()
+        source_type = (request.form.get("source_type") or "").strip()
+
+        if source_kind in ("type_labels", "type_biographies") and source_type:
+            src = {"kind": source_kind, "type": source_type}
             if source_kind == "type_labels":
                 src["path"] = (request.form.get("source_path") or "").strip()
-                src["allow_children"] = bool(request.form.get("source_allow_children"))
+                src["allow_children"] = _checkbox_on(request, "source_allow_children")
             payload["source"] = src
+        else:
+            # If user cleared the source settings, remove it
+            if "source" in payload:
+                payload.pop("source", None)
 
+        # ----- Link biography block -----
         link_bio_type = (request.form.get("link_bio_type") or "").strip()
         if link_bio_type:
             payload["link_biography"] = {
@@ -1317,18 +1357,29 @@ def edit_property(type_name, prop_key):
                 "path": (request.form.get("link_bio_path") or "").strip(),
                 "mode": (request.form.get("link_bio_mode") or "child_or_parent").strip()
             }
+        else:
+            payload.pop("link_biography", None)
 
-        # handle rename of the file if key changed
+        # Save (handle rename)
         new_path = os.path.join(base, f"{new_key}.json")
         save_dict_as_json(new_path, payload)
         if new_path != path and os.path.exists(path):
-            try: os.remove(path)
-            except: pass
+            try:
+                os.remove(path)
+            except Exception as e:
+                print(f"[WARN] Failed to remove old property file {path}: {e}")
 
         flash("Property saved.", "success")
         return redirect(url_for("type_properties", type_name=type_name))
 
-    return render_template("property_edit.html", type_name=type_name, mode="edit", prop_key=prop_key, prop=prop)
+    return render_template(
+        "property_edit.html",
+        type_name=type_name,
+        mode="edit",
+        prop_key=prop_key,
+        prop=prop,
+        all_types=_list_types()
+    )
 
 # ---------- Properties: delete ----------
 @app.route("/type/<type_name>/properties/<prop_key>/delete", methods=["POST"])
