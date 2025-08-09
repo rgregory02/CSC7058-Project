@@ -563,6 +563,78 @@ def time_step(type_name, bio_id):
         edit_entry_index=session.get("edit_entry_index")
     )
 
+@app.route("/type/<type_name>/labels")
+def type_labels(type_name):
+    base = os.path.join("types", type_name, "labels")
+    if not os.path.isdir(base):
+        return f"No labels folder for type '{type_name}'.", 404
+
+    # grouped view (property-first) using your existing helper
+    groups = collect_label_groups(base, type_name)
+
+    # optional flat list (useful for search & auditing)
+    q = (request.args.get("q") or "").strip().lower()
+    flat = []
+    for root, _, files in os.walk(base):
+        for f in files:
+            if not f.endswith(".json"):
+                continue
+            if f == "_group.json":
+                continue
+            json_path = os.path.join(root, f)
+            try:
+                data = load_json_as_dict(json_path)
+            except Exception:
+                data = {}
+            label_id = os.path.splitext(f)[0]
+            rel_dir = os.path.relpath(root, base).replace("\\", "/")
+            prop_key = rel_dir if rel_dir != "." else ""     # e.g. "work_place/hospital"
+            display = (
+                data.get("properties", {}).get("name") or
+                data.get("name") or
+                label_id
+            )
+            desc = data.get("description", data.get("properties", {}).get("description", ""))
+            item = {
+                "id": label_id,
+                "display": display,
+                "description": desc,
+                "prop_key": prop_key,
+                "path": f"{prop_key}/{label_id}" if prop_key else label_id,
+            }
+            flat.append(item)
+
+    # search filter (applies to flat view)
+    if q:
+        flat = [
+            i for i in flat
+            if q in i["display"].lower() or q in i["id"].lower() or q in i["prop_key"].lower()
+        ]
+
+    # quick stats
+    total_files = len(flat)
+    total_groups = len(groups)
+
+    return render_template(
+        "type_labels.html",
+        type_name=type_name,
+        groups=groups,
+        flat=flat,
+        total_files=total_files,
+        total_groups=total_groups,
+        q=q
+    )
+
+
+@app.route("/api/type/<type_name>/labels.json")
+def type_labels_api(type_name):
+    base = os.path.join("types", type_name, "labels")
+    if not os.path.isdir(base):
+        return jsonify({"error": "not_found"}), 404
+    groups = collect_label_groups(base, type_name)
+    return jsonify({"type": type_name, "groups": groups})
+
+
 # ---------- 1) Entry screen to pick a type & biography ----------
 @app.route("/wizard_start", methods=["GET", "POST"])
 def wizard_start():
