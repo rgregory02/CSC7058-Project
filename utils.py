@@ -385,6 +385,171 @@ def build_suggested_biographies(*args, **kwargs):
 
     return out
 
+import os, re, shutil, json
+from datetime import datetime
+
+SAFE_TYPE = re.compile(r"^[a-z0-9_]+$")
+
+def list_types_live():
+    root = "types"
+    return sorted([
+        d for d in os.listdir(root)
+        if os.path.isdir(os.path.join(root, d)) and not d.startswith("_")
+    ]) if os.path.isdir(root) else []
+
+def archive_root():
+    return os.path.join("archive", "types")
+
+def archive_type_folder_name(type_name):
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    return f"{type_name}_{ts}"
+
+def type_exists(type_name):
+    return os.path.isdir(os.path.join("types", type_name))
+
+def archive_type(type_name):
+    assert SAFE_TYPE.match(type_name), "Invalid type name."
+    src = os.path.join("types", type_name)
+    if not os.path.isdir(src):
+        raise FileNotFoundError(f"Type '{type_name}' not found.")
+    dst_root = archive_root()
+    os.makedirs(dst_root, exist_ok=True)
+    dst = os.path.join(dst_root, archive_type_folder_name(type_name))
+    shutil.move(src, dst)
+    return dst
+
+def restore_type(archived_folder):
+    # archived_folder is the full name under archive/types, e.g. person_20250809-224200
+    src = os.path.join(archive_root(), archived_folder)
+    if not os.path.isdir(src):
+        raise FileNotFoundError("Archived folder not found.")
+    # Derive type name from prefix before last underscore timestamp
+    # safer: split last '_' occurrence that is followed by digits
+    parts = archived_folder.rsplit("_", 1)
+    type_name = parts[0] if len(parts) == 2 else archived_folder
+    dst = os.path.join("types", type_name)
+    if os.path.exists(dst):
+        raise FileExistsError(f"Type '{type_name}' already exists live.")
+    os.makedirs("types", exist_ok=True)
+    shutil.move(src, dst)
+    return dst
+
+def scan_cross_references(target_type: str):
+    """
+    Find references to `target_type` from other types' label configurations.
+
+    We flag three patterns:
+      1) Property JSON (top-level) with  source.kind in {"type_labels","type_biographies"} and source.type == target_type
+      2) Property JSON (top-level) with  link_biography.type == target_type
+      3) Any label JSON under a group where properties.suggests_biographies_from == target_type
+
+    Returns a list of dicts:
+      {
+        "from_type": "<type that holds the ref>",
+        "kind": "source_labels" | "source_biographies" | "link_biography" | "suggests_from_label",
+        "group_key": "<group or subpath if we can infer it>",
+        "file": "<relative path to the json that declared it>",
+        "details": {... raw bits we saw ...}
+      }
+    """
+    refs = []
+    base_types_dir = os.path.join("types")
+    if not os.path.isdir(base_types_dir):
+        return refs
+
+    def load_json_safely(p):
+        try:
+            return load_json_as_dict(p)
+        except Exception as e:
+            print(f"[scan_xref] WARN could not parse {p}: {e}")
+            return None
+
+    for from_type in os.listdir(base_types_dir):
+        if from_type == target_type:
+            continue
+        t_path = os.path.join(base_types_dir, from_type)
+        if not os.path.isdir(t_path):
+            continue
+
+        labels_root = os.path.join(t_path, "labels")
+        if not os.path.isdir(labels_root):
+            continue
+
+        # ----- (A) Top-level property JSONs (property-first design) -----
+        for name in os.listdir(labels_root):
+            if not name.endswith(".json"):
+                continue
+            prop_key = name[:-5]
+            prop_path = os.path.join(labels_root, name)
+            meta = load_json_safely(prop_path)
+            if not isinstance(meta, dict):
+                # tolerate arrays/strings/etc; just skip
+                continue
+
+            # read source + link_biography from either top-level or properties
+            src = (
+                meta.get("source")
+                or meta.get("properties", {}).get("source")
+                or {}
+            )
+            lb = (
+                meta.get("link_biography")
+                or meta.get("properties", {}).get("link_biography")
+                or {}
+            )
+
+            # 1) source.kind points to target_type
+            if isinstance(src, dict):
+                kind = src.get("kind")
+                s_type = src.get("type")
+                if s_type == target_type and kind in ("type_labels", "type_biographies"):
+                    refs.append({
+                        "from_type": from_type,
+                        "kind": "source_labels" if kind == "type_labels" else "source_biographies",
+                        "group_key": prop_key,
+                        "file": os.path.relpath(prop_path, "."),
+                        "details": {"source": src}
+                    })
+
+            # 2) link_biography points to target_type
+            if isinstance(lb, dict):
+                lb_type = lb.get("type")
+                if lb_type == target_type:
+                    refs.append({
+                        "from_type": from_type,
+                        "kind": "link_biography",
+                        "group_key": prop_key,
+                        "file": os.path.relpath(prop_path, "."),
+                        "details": {"link_biography": lb}
+                    })
+
+        # ----- (B) Legacy subfolders: look for label JSONs that suggest target_type -----
+        # Any *.json within any subfolder (except _group.json) that contains
+        # properties.suggests_biographies_from == target_type
+        for root, _, files in os.walk(labels_root):
+            rel_root = os.path.relpath(root, labels_root).replace("\\", "/")
+            for f in files:
+                if not f.endswith(".json"):
+                    continue
+                if f == "_group.json":
+                    continue
+                jpath = os.path.join(root, f)
+                data = load_json_safely(jpath)
+                if not isinstance(data, dict):
+                    continue
+                props = data.get("properties", {})
+                sugg = props.get("suggests_biographies_from") or data.get("suggests_biographies_from")
+                if sugg == target_type:
+                    group_key = rel_root if rel_root != "." else ""
+                    refs.append({
+                        "from_type": from_type,
+                        "kind": "suggests_from_label",
+                        "group_key": group_key,
+                        "file": os.path.relpath(jpath, "."),
+                        "details": {"suggests_biographies_from": sugg}
+                    })
+
+    return refs
 
 
 
