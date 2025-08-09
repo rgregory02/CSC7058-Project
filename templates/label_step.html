@@ -70,7 +70,8 @@
         <!-- Hidden selected ID + confidence for this group (server fills from existing_labels/preview) -->
         <input type="hidden" name="selected_id_{{ group.key }}" id="input_{{ safe_key }}" class="group-selection-tracker" value="{{ selected_id or '' }}">
 
-        {% if group.options and not group.refer_to %}
+        {% set is_cross_bio = group.refer_to and group.refer_to.source == 'biographies' %}
+{% if group.options and not is_cross_bio %}
           <div class="label-options">
             {% for item in group.options %}
               {% set is_selected = (selected_id == item.id) %}
@@ -99,7 +100,11 @@
 
         <!-- Biography suggestions / picker (for refer_to or computed suggestions) -->
         {% set sugg_key = group.key.replace('/', '__') %}
-        {% if group.refer_to or suggested_biographies.get(sugg_key) %}
+        {% set show_bio_picker =
+     (group.link_biography)
+  or (group.refer_to and group.refer_to.source == 'biographies')
+  or suggested_biographies.get(sugg_key)%}
+{% if show_bio_picker %}
           {% set bio_input_name = 'selected_id_' ~ group.key ~ '_bio' %}
           {% set bio_hidden_id = 'input_' ~ sugg_key ~ '_bio' %}
           <div class="bio-suggestions" id="bio_suggestions_{{ sugg_key }}">

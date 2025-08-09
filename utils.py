@@ -256,46 +256,40 @@ def build_suggested_biographies(*args, **kwargs):
     """
     Suggest biography options per group that links to another type.
 
-    New signature (preferred):
+    Preferred signature:
         build_suggested_biographies(current_type, label_groups_list, label_base_path, existing_labels=None)
 
-    Back-compat accepted:
+    Back-compat:
         build_suggested_biographies(current_type, label_groups_list, label_base_path)
-        build_suggested_biographies(label_groups_list, label_base_path)  # (legacy) current_type unused
+        build_suggested_biographies(label_groups_list, label_base_path)
 
-    Returns: dict keyed by group.key with a list of {id, display, description?}
+    Returns: { safe_group_key: [ {id, display, description?}, ... ] }
     """
-    # -------- argument normalization --------
+    # ---- arg normalisation ----
     current_type = None
     label_groups_list = None
     label_base_path = None
     existing_labels = None
 
-    # Prefer kwargs if present
     if "current_type" in kwargs:
-        current_type = kwargs.get("current_type")
-        label_groups_list = kwargs.get("label_groups_list")
-        label_base_path = kwargs.get("label_base_path")
-        existing_labels = kwargs.get("existing_labels")
+        current_type       = kwargs.get("current_type")
+        label_groups_list  = kwargs.get("label_groups_list")
+        label_base_path    = kwargs.get("label_base_path")
+        existing_labels    = kwargs.get("existing_labels")
     else:
-        # Positional handling
         if len(args) == 4:
             current_type, label_groups_list, label_base_path, existing_labels = args
         elif len(args) == 3:
             current_type, label_groups_list, label_base_path = args
         elif len(args) == 2:
-            # Very old call: (label_groups_list, label_base_path)
             label_groups_list, label_base_path = args
         else:
             raise TypeError("build_suggested_biographies: unexpected arguments")
 
     if not isinstance(label_groups_list, (list, tuple)):
         raise TypeError("build_suggested_biographies: label_groups_list must be a list")
-
     if not isinstance(existing_labels, dict):
         existing_labels = {}
-
-    suggestions = {}
 
     def load_json_safely(p):
         try:
@@ -303,55 +297,94 @@ def build_suggested_biographies(*args, **kwargs):
         except Exception:
             return {}
 
-    # Walk groups and emit options only for groups that indicate cross-type linking
+    out = {}
+
     for g in label_groups_list:
         key = g.get("key")
-        refer_to = g.get("refer_to") or g.get("link_biography")
-        if not key or not isinstance(refer_to, dict):
+        if not key:
             continue
+        safe = key.replace("/", "__")
 
-        src_type = refer_to.get("type")
-        src_kind = refer_to.get("source", "biographies")  # "biographies" | "labels"
-        src_path = refer_to.get("path", "")
-        allow_children = bool(refer_to.get("allow_children"))
+        bios = []
 
-        # Where to look
-        base = os.path.join("types", src_type or "", "biographies" if src_kind == "biographies" else "labels")
-        if not os.path.isdir(base):
-            continue
+        # ---- Case A: property JSON provides link_biography (the “parent-label → child-bios” pattern) ----
+        lb = g.get("link_biography")
+        if isinstance(lb, dict) and lb.get("type"):
+            lb_type  = lb["type"]
+            lb_path  = (lb.get("path") or "").strip("/")        # e.g. "work_building"
+            lb_mode  = (lb.get("mode") or "child_or_parent")    # "child_only" | "parent_only" | "child_or_parent"
 
-        # If linking to biographies
-        opts = []
-        if src_kind == "biographies":
-            root = base if not src_path else os.path.join(base, src_path)
-            if os.path.isdir(root):
-                for f in os.listdir(root):
-                    if not f.endswith(".json"):
-                        continue
-                    json_path = os.path.join(root, f)
-                    data = load_json_safely(json_path)
-                    bid = os.path.splitext(f)[0]
-                    disp = data.get("name", bid.replace("_", " ").title())
-                    desc = data.get("description", "")
-                    opts.append({"id": bid, "display": disp, "description": desc})
-        else:
-            # Linking to labels (another type's labels subtree)
-            # If a parent option was chosen, you might further scope into a child subfolder later.
-            root = base if not src_path else os.path.join(base, src_path)
-            if os.path.isdir(root):
-                for f in os.listdir(root):
-                    if not f.endswith(".json") or f == "_group.json":
-                        continue
-                    data = load_json_safely(os.path.join(root, f))
-                    lid = os.path.splitext(f)[0]
-                    disp = data.get("properties", {}).get("name") or data.get("name") or lid
-                    desc = data.get("description", data.get("properties", {}).get("description", ""))
-                    opts.append({"id": lid, "display": disp, "description": desc})
+            # Which parent option is currently selected for this group?
+            sel = existing_labels.get(key) or {}
+            # tolerate either {"label": "hospital"} or bare string "hospital" (older callers)
+            if isinstance(sel, str):
+                selected_label_id = sel
+            else:
+                selected_label_id = sel.get("label") or sel.get("id")
 
-        if opts:
-            suggestions[key.replace("/", "__")] = opts
+            base_bios_dir = os.path.join("types", lb_type, "biographies")
+            if not os.path.isdir(base_bios_dir):
+                out[safe] = []
+                continue
 
-    return suggestions
+            # Prefer child folder when a parent label is selected
+            if selected_label_id and lb_mode in ("child_only", "child_or_parent"):
+                child_dir = os.path.join(base_bios_dir, lb_path, selected_label_id) if lb_path else os.path.join(base_bios_dir, selected_label_id)
+                if os.path.isdir(child_dir):
+                    for f in os.listdir(child_dir):
+                        if f.endswith(".json"):
+                            data = load_json_safely(os.path.join(child_dir, f))
+                            bid  = os.path.splitext(f)[0]
+                            bios.append({
+                                "id": bid,
+                                "display": data.get("name", bid.replace("_"," ").title()),
+                                "description": data.get("description", "")
+                            })
+
+            # If nothing found (or mode allows), show parent-level matches as a fallback
+            if (not bios) and lb_mode in ("parent_only", "child_or_parent"):
+                parent_dir = os.path.join(base_bios_dir, lb_path) if lb_path else base_bios_dir
+                if os.path.isdir(parent_dir):
+                    for root, _, files in os.walk(parent_dir):
+                        for f in files:
+                            if not f.endswith(".json"):
+                                continue
+                            # Heuristic: only include files/folders that hint the selected label
+                            if selected_label_id and (selected_label_id not in root) and (os.path.splitext(f)[0] != selected_label_id):
+                                continue
+                            data = load_json_safely(os.path.join(root, f))
+                            bid  = os.path.splitext(f)[0]
+                            bios.append({
+                                "id": bid,
+                                "display": data.get("name", bid.replace("_"," ").title()),
+                                "description": data.get("description", "")
+                            })
+
+        # ---- Case B: refer_to points straight to another type's biographies (list them) ----
+        elif g.get("refer_to", {}).get("source") == "biographies":
+            r = g["refer_to"]
+            r_type = r.get("type")
+            r_path = (r.get("path") or "").strip("/")
+            base = os.path.join("types", r_type, "biographies")
+            scan = os.path.join(base, r_path) if r_path else base
+            if os.path.isdir(scan):
+                for root, _, files in os.walk(scan):
+                    for f in files:
+                        if not f.endswith(".json"):
+                            continue
+                        data = load_json_safely(os.path.join(root, f))
+                        bid  = os.path.splitext(f)[0]
+                        bios.append({
+                            "id": bid,
+                            "display": data.get("name", bid.replace("_"," ").title()),
+                            "description": data.get("description", "")
+                        })
+
+        if bios:
+            out[safe] = bios
+
+    return out
+
 
 
 

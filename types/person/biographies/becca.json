@@ -1,0 +1,29 @@
+{
+    "name": "Becca",
+    "type": "person",
+    "created": "2025-08-09T22:47:39.495369",
+    "entries": [
+        {
+            "time": {
+                "label": "seventies",
+                "confidence": 67,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "seventies"
+            },
+            "created": "2025-08-09T23:11:28.578443",
+            "person": [
+                {
+                    "label_type": "hair_colour",
+                    "confidence": 100,
+                    "id": "brown_hair"
+                },
+                {
+                    "label_type": "work_place",
+                    "confidence": 100,
+                    "id": "hospital"
+                }
+            ]
+        }
+    ]
+}
