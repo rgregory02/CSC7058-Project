@@ -1,0 +1,17 @@
+{
+    "name": "Teddy",
+    "type": "pet",
+    "created": "2025-08-09T14:37:24.001238",
+    "entries": [
+        {
+            "time": {
+                "label": "2025-08-06",
+                "confidence": 100,
+                "label_type": "date",
+                "date_value": "2025-08-06",
+                "subvalue": ""
+            },
+            "created": "2025-08-09T14:37:39.357519"
+        }
+    ]
+}

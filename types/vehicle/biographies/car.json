@@ -1,0 +1,17 @@
+{
+    "name": "Car",
+    "type": "vehicle",
+    "created": "2025-08-09T14:48:44.695070",
+    "entries": [
+        {
+            "time": {
+                "label": "2025-08-12",
+                "confidence": 100,
+                "label_type": "date",
+                "date_value": "2025-08-12",
+                "subvalue": ""
+            },
+            "created": "2025-08-09T14:49:00.055452"
+        }
+    ]
+}

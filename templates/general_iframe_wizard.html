@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>General Wizard — {{ type_name|title }}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    iframe {
+      width: 100%;
+      height: 78vh;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      background: #fff;
+    }
+    .btn.active {
+      background-color: #2e7d32;
+      color: white;
+    }
+    .nav-bar {
+      margin-bottom: 10px;
+    }
+    .nav-bar .btn {
+      margin-right: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>🧩 General Wizard — {{ type_name|title }}</h1>
+    
+    <div class="nav-bar">
+      <a class="btn {% if step == 'start' %}active{% endif %}" 
+         href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='start') }}">Start</a>
+      <a class="btn {% if step == 'time' %}active{% endif %}" 
+         href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='time') }}">Time</a>
+      <a class="btn {% if step == 'labels' %}active{% endif %}" 
+         href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='labels') }}">Labels</a>
+      <a class="btn {% if step == 'review' %}active{% endif %}" 
+         href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='review') }}">Review</a>
+      <a class="btn secondary" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+    </div>
+
+    {% if step == 'start' %}
+      <iframe src="{{ url_for('general_step_start', type_name=type_name, bio_id=bio_id) }}"></iframe>
+    {% elif step == 'time' %}
+      <iframe src="{{ url_for('general_step_time', type_name=type_name, bio_id=bio_id) }}"></iframe>
+    {% elif step == 'labels' %}
+      <iframe src="{{ url_for('general_step_labels_redirect', type_name=type_name, bio_id=bio_id) }}"></iframe>
+    {% elif step == 'review' %}
+      <iframe src="{{ url_for('general_step_review', type_name=type_name, bio_id=bio_id) }}"></iframe>
+    {% else %}
+      <div class="flash-error">Unknown step.</div>
+    {% endif %}
+  </div>
+</body>
+</html>
+

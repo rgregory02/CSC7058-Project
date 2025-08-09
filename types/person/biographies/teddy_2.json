@@ -1,0 +1,25 @@
+{
+    "name": "Teddy",
+    "type": "person",
+    "created": "2025-08-09T22:39:07.325194",
+    "entries": [
+        {
+            "time": {
+                "label": "toddler",
+                "confidence": 100,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "toddler"
+            },
+            "created": "2025-08-09T22:39:14.536651",
+            "person": [
+                {
+                    "label_type": "work_place",
+                    "confidence": 100,
+                    "biography": "hospital",
+                    "biography_confidence": 100
+                }
+            ]
+        }
+    ]
+}

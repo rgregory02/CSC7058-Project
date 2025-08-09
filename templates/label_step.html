@@ -27,9 +27,6 @@
     .bottom-card { margin-top:30px; padding:22px; border:1px solid #ddd; border-radius:12px; background:#f9f9f9; text-align:center; }
     .back-link { margin:0 10px; text-decoration:none; border:1px solid #007bff; padding:6px 12px; border-radius:6px; color:#007bff; background:#fff; }
     .bio-suggestions { margin-top:14px; background:#f9f9ff; border:1px dashed #ccd; border-radius:10px; padding:14px; }
-    .gpt-confidence-wrapper { background:#f0f8ff; border:1px solid #a0cbe8; border-radius:10px; padding:10px 12px; margin:10px 0; }
-    .suggested-label-card { display:inline-block; width:220px; padding:14px; margin:8px; border-radius:10px; border:2px solid #ccc; background:#fff; cursor:pointer; transition:.2s; text-align:center; }
-    .suggested-label-card.selected { background:#e8fce8; border-color:#4CAF50; }
     .muted { color:#666; font-size:.9em; }
   </style>
 </head>
@@ -70,7 +67,7 @@
           <input type="text" class="label-search" placeholder="Search {{ group.label or group.key }}…" oninput="filterLabels(this, '{{ group.key }}')" data-group="{{ group.key }}">
         {% endif %}
 
-        <!-- Hidden selected ID + confidence for this group -->
+        <!-- Hidden selected ID + confidence for this group (server fills from existing_labels/preview) -->
         <input type="hidden" name="selected_id_{{ group.key }}" id="input_{{ safe_key }}" class="group-selection-tracker" value="{{ selected_id or '' }}">
 
         {% if group.options and not group.refer_to %}
@@ -80,7 +77,7 @@
               <div class="label-card {% if is_selected %}selected{% endif %}"
                    data-group="{{ group.key }}"
                    data-value="{{ item.id }}"
-                   onclick="toggleLabelSelection(this)">
+                   onclick="previewChild('{{ group.key }}','{{ item.id }}')">
                 {% if item.image %}
                   <img src="{{ item.image }}" alt="{{ item.display }}">
                 {% endif %}
@@ -100,7 +97,7 @@
           </div>
         {% endif %}
 
-        <!-- Biography suggestions / picker (shown if group.refer_to or backend suggested_biographies present) -->
+        <!-- Biography suggestions / picker (for refer_to or computed suggestions) -->
         {% set sugg_key = group.key.replace('/', '__') %}
         {% if group.refer_to or suggested_biographies.get(sugg_key) %}
           {% set bio_input_name = 'selected_id_' ~ group.key ~ '_bio' %}
@@ -109,14 +106,12 @@
             <div class="label-title">📖 {{ (group.label or group.key)|replace('_',' ')|title }} — Linked Biographies</div>
 
             <!-- hidden selection + confidence -->
-            <input type="hidden" name="{{ bio_input_name }}" id="{{ bio_hidden_id }}" class="group-selection-tracker" value="{{ existing_bio_selections.get(group.key ~ '_bio','') if existing_bio_selections else '' }}">
-
+            <input type="hidden" name="{{ bio_input_name }}" id="{{ bio_hidden_id }}" class="group-selection-tracker" value="">
             <input type="text" class="label-search" placeholder="Search biographies…" oninput="filterLabels(this, '{{ sugg_key }}_bio')" data-group="{{ sugg_key }}_bio">
 
             <div class="label-options">
               {% for option in (suggested_biographies.get(sugg_key) or []) %}
-                {% set bio_selected = (existing_bio_selections and existing_bio_selections.get(group.key ~ '_bio','') == option.id) %}
-                <div class="label-card{% if bio_selected %} selected{% endif %}"
+                <div class="label-card"
                      data-group="{{ sugg_key }}_bio"
                      data-value="{{ option.id }}"
                      onclick="toggleBioSelection(this, '{{ bio_hidden_id }}')">
@@ -128,9 +123,9 @@
 
             <div class="confidence-slider" style="margin-top:10px;">
               <label for="confidence_{{ safe_key }}_bio">🎯 Biography Match Confidence:</label><br>
-              <input type="range" name="confidence_{{ group.key }}_bio" id="confidence_{{ safe_key }}_bio" min="0" max="100" value="{{ existing_bio_selections.get(group.key ~ '_bio_conf', 100) if existing_bio_selections else 100 }}" oninput="updateConfidence('{{ group.key }}_bio')">
+              <input type="range" name="confidence_{{ group.key }}_bio" id="confidence_{{ safe_key }}_bio" min="0" max="100" value="100" oninput="updateConfidence('{{ group.key }}_bio')">
               <div class="confidence-display">
-                <span id="confidence_display_{{ safe_key }}_bio">{{ existing_bio_selections.get(group.key ~ '_bio_conf', 100) if existing_bio_selections else 100 }}%</span>
+                <span id="confidence_display_{{ safe_key }}_bio">100%</span>
                 <span id="confidence_level_{{ safe_key }}_bio"></span>
               </div>
             </div>
@@ -149,29 +144,23 @@
       </div>
     {% endfor %}
 
-    <!-- GPT assist -->
+    <!-- GPT assist (UI stub; wire to your backend if you want) -->
     <div class="label-group-box">
       <h3>🤖 Need help choosing labels?</h3>
       <p class="muted">Describe this {{ current_type.replace('_',' ') }} and we’ll suggest labels. You can adjust confidence before saving.</p>
       <textarea id="labelPromptInput" rows="3" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:8px;" placeholder="e.g. Works in a large city hospital, pediatric focus, senior role"></textarea>
       <div style="margin-top:10px;">
-        <button type="button" class="primary-button" onclick="getLabelSuggestions()">🔍 Suggest Labels</button>
+        <button type="button" class="primary-button" onclick="alert('Hook this up to your suggestion endpoint');">🔍 Suggest Labels</button>
       </div>
-      <div id="labelSuggestionsOutput" style="margin-top:12px;"></div>
-      <div id="gpt-selected-labels-with-confidence" style="margin-top:10px;"></div>
       <input type="hidden" name="gpt_selected_labels_json" id="gpt_selected_labels_json" value="[]">
     </div>
 
     <div class="bottom-card">
       <div style="margin-bottom:12px;">
         <button type="submit" id="saveButton" class="primary-button">➡️ Move to next page with no labels selected</button>
-        <a class="primary-button" href="{{ url_for('label_step', type_name=current_type, bio_id=bio_id, step=next_step) }}">⏭️ Skip to Next Step</a>
       </div>
       <div>
         <a href="/" class="back-link">🏠 Home</a>
-        {% if prev_step is not none %}
-          <a href="{{ url_for('label_step', type_name=current_type, bio_id=bio_id, step=prev_step) }}" class="back-link">🔙 Back</a>
-        {% endif %}
       </div>
     </div>
   </form>
@@ -179,6 +168,14 @@
 
 <script>
   function makeSafeKey(key){ return key.replaceAll('/','__'); }
+
+  // Preview child options by reloading with query params (server will expand children)
+  function previewChild(groupKey, optionId){
+    const url = new URL(window.location.href);
+    url.searchParams.set('preview_key', groupKey);
+    url.searchParams.set('preview_val', optionId);
+    window.location.href = url.toString();
+  }
 
   function updateConfidence(rawKey){
     const safe = makeSafeKey(rawKey);
@@ -194,27 +191,7 @@
     else { level.textContent='(Low)'; level.style.color='red'; }
   }
 
-  function toggleLabelSelection(card){
-    const groupKey = card.getAttribute('data-group');
-    const safe = makeSafeKey(groupKey);
-    const hidden = document.getElementById('input_'+safe);
-    if(!hidden) return;
-
-    const current = hidden.value;
-    const val = card.getAttribute('data-value');
-    const cards = document.querySelectorAll(`.label-card[data-group="${groupKey}"]`);
-
-    if(current === val){
-      hidden.value = '';
-      card.classList.remove('selected');
-    } else {
-      cards.forEach(c=>c.classList.remove('selected'));
-      card.classList.add('selected');
-      hidden.value = val;
-    }
-    updateSaveButtonState();
-  }
-
+  // Biography tiles (no preview; just set hidden value)
   function toggleBioSelection(card, hiddenId){
     const hidden = document.getElementById(hiddenId);
     if(!hidden) return;
@@ -264,5 +241,15 @@
     }else{
       btn.textContent = '➡️ Move to next page with no labels selected';
       btn.style.backgroundColor = '#6c63ff';
-   
+    }
+  }
 
+  // Initialize confidence displays and save button state
+  document.querySelectorAll("[id^='confidence_']").forEach(el=>{
+    const id = el.id.replace('confidence_','');
+    updateConfidence(id.replace('__','/'));
+  });
+  updateSaveButtonState();
+</script>
+</body>
+</html>
