@@ -1,0 +1,33 @@
+{
+    "person_id": "Person_1754744029",
+    "name": "Hercule Poirot",
+    "dob": "2025-08-13",
+    "created": "2025-08-09T13:53:49.925129+01:00",
+    "entries": [
+        {
+            "time": {
+                "label": "preteen",
+                "confidence": 35,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "preteen"
+            },
+            "created": "2025-08-09T13:53:56.559711",
+            "buildings": [
+                {
+                    "label_type": "work_building",
+                    "confidence": 100,
+                    "id": "hospital"
+                },
+                {
+                    "label_type": "hospital",
+                    "confidence": 57,
+                    "id": "royal_victoria_hospital",
+                    "biography": "royal_victoria_hospital",
+                    "biography_confidence": 100
+                }
+            ]
+        }
+    ],
+    "finalised": true
+}

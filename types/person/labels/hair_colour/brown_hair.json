@@ -1,0 +1,10 @@
+{
+  "id": "brown_hair",
+  "display": "Brown Hair",
+  "label_type": "hair_colour",
+  "confidence": 100,
+  "created": "2025-08-08T13:30:11.601010+00:00",
+  "properties": {
+    "suggests_biographies_from": "person/hair_colour/brown_hair"
+  }
+}

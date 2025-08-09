@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Select Time – {{ name }}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="box">
+    <h1>⏳ Select Time Period</h1>
+    <div class="subheading">
+      <strong>Name:</strong> {{ name }}<br>
+      <strong>Type:</strong> {{ type_name|replace('_', ' ')|title }}
+    </div>
+
+    <form method="POST" action="{{ url_for('time_step', type_name=type_name, bio_id=bio_id) }}">
+      <label for="label_type">Time Type:</label>
+      <select name="label_type" id="label_type" onchange="this.form.submit()">
+        <option value="">-- Choose --</option>
+        {% for label, desc in label_files %}
+          <option value="{{ label }}" {% if label == selected_label_type %}selected{% endif %}>
+            {{ label.replace('_', ' ')|title }} – {{ desc }}
+          </option>
+        {% endfor %}
+      </select>
+      <br><br>
+
+      {% if selected_label_type == "date" %}
+        <label for="date_value">📅 Select Date:</label>
+        <input type="date" name="date_value" id="date_value" value="{{ selected_date }}"><br><br>
+      {% elif selected_label_type %}
+        <label for="subvalue">🏷️ Choose {{ selected_label_type.replace('_', ' ')|title }}:</label>
+        <select name="subvalue" id="subvalue">
+          <option value="">-- Choose --</option>
+          {% for sub in subfolder_labels %}
+            <option value="{{ sub.name }}" {% if sub.name == selected_subvalue %}selected{% endif %}>
+              {{ sub.name.replace('_', ' ')|title }} – {{ sub.description }}
+            </option>
+          {% endfor %}
+        </select><br><br>
+      {% endif %}
+
+      {% if selected_label_type %}
+        <label for="confidence">🔍 Confidence:</label><br>
+        <input type="range" id="confidence" name="confidence" min="0" max="100"
+               value="{{ selected_confidence or 100 }}" oninput="updateConfidenceDisplay(this.value)">
+        <span id="confidence_display">{{ selected_confidence or 100 }}%</span>
+        <br><br>
+      {% endif %}
+
+      <div style="margin-top: 20px;">
+        {% if edit_entry_index is not none %}
+          <button type="submit">💾 Save Edits</button>
+          <button type="submit" name="cancel_edit" value="true">❌ Cancel</button>
+        {% else %}
+          <button type="submit">➡️ Continue</button>
+        {% endif %}
+      </div>
+    </form>
+
+    {% if existing_entries %}
+      <hr>
+      <h3>🗂️ Existing Entries</h3>
+      <ul>
+        {% for label, confidence in existing_entries %}
+          <li>{{ label }} ({{ confidence }}%)</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </div>
+
+  <script>
+    function updateConfidenceDisplay(value) {
+      document.getElementById("confidence_display").textContent = value + "%";
+    }
+  </script>
+</body>
+</html>

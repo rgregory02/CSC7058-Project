@@ -1,0 +1,32 @@
+<!-- templates/wizard_start.html -->
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Start General Wizard</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="box">
+    <h1>🧩 Start General Wizard</h1>
+    <form method="POST" action="{{ url_for('wizard_begin') }}">
+      <label>Type</label>
+      <select name="type_name" required>
+        <option value="">-- choose --</option>
+        {% for t in types %}
+          <option value="{{ t }}">{{ t|replace('_',' ')|title }}</option>
+        {% endfor %}
+      </select>
+      <br><br>
+      <label>Biography ID (optional)</label>
+      <input type="text" name="bio_id" placeholder="e.g. royal_victoria_hospital">
+      <div style="margin-top:10px">
+        <button class="btn" type="submit">Continue</button>
+      </div>
+      <p style="margin-top:10px">
+        Or search/create after choosing a type via the type cards on the Dashboard.
+      </p>
+    </form>
+  </div>
+</body>
+</html>

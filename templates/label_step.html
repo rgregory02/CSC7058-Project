@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Select Labels – {{ current_type|replace('_',' ')|title }}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    body { background:#f2f2f2; padding:40px; font-family:sans-serif; }
+    .box { background:#fff; max-width:980px; margin:auto; padding:28px; border-radius:12px; box-shadow:0 2px 12px rgba(0,0,0,.08); }
+    h1 { margin: 0 0 6px; }
+    .subheading { color:#555; margin-bottom:18px; }
+    .label-group-box { border:1px solid #ddd; border-radius:10px; padding:18px; margin-bottom:28px; background:#fff; }
+    .label-title { font-weight:700; font-size:1.15em; color:#6f42c1; margin-bottom:10px; display:flex; align-items:center; gap:10px; }
+    .group-note { font-size:.9em; color:#666; }
+    .label-options { display:flex; flex-wrap:wrap; gap:14px; }
+    .label-card { border:2px solid #ccc; border-radius:10px; padding:12px; cursor:pointer; min-width:160px; max-width:200px; min-height:150px; display:flex; align-items:center; justify-content:center; flex-direction:column; background:#fafafa; transition:.2s; position:relative; text-align:center; }
+    .label-card:hover { transform: translateY(-2px); box-shadow:0 2px 8px rgba(0,0,0,.06); }
+    .label-card.selected { border-color:#4CAF50; background:#eaffea; }
+    .label-card.selected::after { content:"✓"; position:absolute; top:8px; right:10px; color:#4CAF50; font-weight:700; }
+    .label-card img { max-width:100%; max-height:80px; object-fit:contain; border-radius:6px; }
+    .label-description { font-size:.85em; color:#666; margin-top:6px; }
+    .label-search { width:100%; padding:10px; border:1px solid #ccc; border-radius:8px; margin-bottom:12px; }
+    .confidence-slider { margin-top:12px; text-align:center; }
+    .confidence-display { font-size:.9em; margin-top:4px; }
+    .primary-button { display:inline-block; background:#6c63ff; color:#fff; font-weight:700; padding:10px 20px; border-radius:8px; text-decoration:none; border:none; cursor:pointer; }
+    .primary-button:hover { background:#5a54d6; }
+    .bottom-card { margin-top:30px; padding:22px; border:1px solid #ddd; border-radius:12px; background:#f9f9f9; text-align:center; }
+    .back-link { margin:0 10px; text-decoration:none; border:1px solid #007bff; padding:6px 12px; border-radius:6px; color:#007bff; background:#fff; }
+    .bio-suggestions { margin-top:14px; background:#f9f9ff; border:1px dashed #ccd; border-radius:10px; padding:14px; }
+    .gpt-confidence-wrapper { background:#f0f8ff; border:1px solid #a0cbe8; border-radius:10px; padding:10px 12px; margin:10px 0; }
+    .suggested-label-card { display:inline-block; width:220px; padding:14px; margin:8px; border-radius:10px; border:2px solid #ccc; background:#fff; cursor:pointer; transition:.2s; text-align:center; }
+    .suggested-label-card.selected { background:#e8fce8; border-color:#4CAF50; }
+    .muted { color:#666; font-size:.9em; }
+  </style>
+</head>
+<body>
+<div class="box">
+  <h1>🧩 Select {{ current_type|replace('_',' ')|title }}</h1>
+  <div class="subheading">
+    {% if bio_name %}<div><strong>Biography:</strong> {{ bio_name }}</div>{% endif %}
+    {% if time_selection and (time_selection.label or time_selection.date_value) %}
+      <div><strong>Time:</strong>
+        {% if time_selection.label %}{{ time_selection.label.replace('_',' ')|title }}
+        {% else %}{{ time_selection.date_value }}{% endif %}
+      </div>
+    {% endif %}
+  </div>
+
+  <form method="POST">
+    {% for group in label_groups_list %}
+      {% set safe_key = group.key.replace('/', '__') %}
+      {% set existing = existing_labels.get(group.key, {}) %}
+      {% set selected_id = existing.get('label') or existing.get('id') %}
+      {% set matched_conf = existing.get('confidence', 100) %}
+
+      <div class="label-group-box" id="group_{{ safe_key }}">
+        <div class="label-title">
+          {{ group.label or group.key.split('/')[-1]|replace('_',' ')|title }}
+          {% if group.description %}<span class="muted">— {{ group.description }}</span>{% endif %}
+        </div>
+
+        {% if group.refer_to %}
+          <div class="group-note">
+            This field links to <strong>{{ group.refer_to.type|replace('_',' ')|title }}</strong> biographies.
+            Choose an existing biography or create a new one below.
+          </div>
+        {% endif %}
+
+        {% if group.options and not group.refer_to %}
+          <input type="text" class="label-search" placeholder="Search {{ group.label or group.key }}…" oninput="filterLabels(this, '{{ group.key }}')" data-group="{{ group.key }}">
+        {% endif %}
+
+        <!-- Hidden selected ID + confidence for this group -->
+        <input type="hidden" name="selected_id_{{ group.key }}" id="input_{{ safe_key }}" class="group-selection-tracker" value="{{ selected_id or '' }}">
+
+        {% if group.options and not group.refer_to %}
+          <div class="label-options">
+            {% for item in group.options %}
+              {% set is_selected = (selected_id == item.id) %}
+              <div class="label-card {% if is_selected %}selected{% endif %}"
+                   data-group="{{ group.key }}"
+                   data-value="{{ item.id }}"
+                   onclick="toggleLabelSelection(this)">
+                {% if item.image %}
+                  <img src="{{ item.image }}" alt="{{ item.display }}">
+                {% endif %}
+                <div><strong>{{ item.display or item.id }}</strong></div>
+                {% if item.description %}<div class="label-description">{{ item.description }}</div>{% endif %}
+              </div>
+            {% endfor %}
+          </div>
+
+          <div class="confidence-slider">
+            <label for="confidence_{{ safe_key }}">🎯 Confidence:</label><br>
+            <input type="range" name="confidence_{{ group.key }}" id="confidence_{{ safe_key }}" min="0" max="100" value="{{ matched_conf }}" oninput="updateConfidence('{{ group.key }}')">
+            <div class="confidence-display">
+              <span id="confidence_display_{{ safe_key }}">{{ matched_conf }}%</span>
+              <span id="confidence_level_{{ safe_key }}"></span>
+            </div>
+          </div>
+        {% endif %}
+
+        <!-- Biography suggestions / picker (shown if group.refer_to or backend suggested_biographies present) -->
+        {% set sugg_key = group.key.replace('/', '__') %}
+        {% if group.refer_to or suggested_biographies.get(sugg_key) %}
+          {% set bio_input_name = 'selected_id_' ~ group.key ~ '_bio' %}
+          {% set bio_hidden_id = 'input_' ~ sugg_key ~ '_bio' %}
+          <div class="bio-suggestions" id="bio_suggestions_{{ sugg_key }}">
+            <div class="label-title">📖 {{ (group.label or group.key)|replace('_',' ')|title }} — Linked Biographies</div>
+
+            <!-- hidden selection + confidence -->
+            <input type="hidden" name="{{ bio_input_name }}" id="{{ bio_hidden_id }}" class="group-selection-tracker" value="{{ existing_bio_selections.get(group.key ~ '_bio','') if existing_bio_selections else '' }}">
+
+            <input type="text" class="label-search" placeholder="Search biographies…" oninput="filterLabels(this, '{{ sugg_key }}_bio')" data-group="{{ sugg_key }}_bio">
+
+            <div class="label-options">
+              {% for option in (suggested_biographies.get(sugg_key) or []) %}
+                {% set bio_selected = (existing_bio_selections and existing_bio_selections.get(group.key ~ '_bio','') == option.id) %}
+                <div class="label-card{% if bio_selected %} selected{% endif %}"
+                     data-group="{{ sugg_key }}_bio"
+                     data-value="{{ option.id }}"
+                     onclick="toggleBioSelection(this, '{{ bio_hidden_id }}')">
+                  <div><strong>{{ option.display or option.id }}</strong></div>
+                  {% if option.description %}<div class="label-description">{{ option.description }}</div>{% endif %}
+                </div>
+              {% endfor %}
+            </div>
+
+            <div class="confidence-slider" style="margin-top:10px;">
+              <label for="confidence_{{ safe_key }}_bio">🎯 Biography Match Confidence:</label><br>
+              <input type="range" name="confidence_{{ group.key }}_bio" id="confidence_{{ safe_key }}_bio" min="0" max="100" value="{{ existing_bio_selections.get(group.key ~ '_bio_conf', 100) if existing_bio_selections else 100 }}" oninput="updateConfidence('{{ group.key }}_bio')">
+              <div class="confidence-display">
+                <span id="confidence_display_{{ safe_key }}_bio">{{ existing_bio_selections.get(group.key ~ '_bio_conf', 100) if existing_bio_selections else 100 }}%</span>
+                <span id="confidence_level_{{ safe_key }}_bio"></span>
+              </div>
+            </div>
+
+            <div style="text-align:center; margin-top:12px;">
+              <a class="primary-button" href="{% if group.refer_to %}{{ url_for('search_or_add_biography', type_name=group.refer_to.type, return_url=request.url) }}{% else %}{{ url_for('search_or_add_biography', type_name=current_type, return_url=request.url) }}{% endif %}">
+                ➕ Search or Create {{ (group.refer_to.type if group.refer_to else current_type)|replace('_',' ')|title }} Biography
+              </a>
+            </div>
+          </div>
+        {% endif %}
+
+        {% if not group.options and not (group.refer_to or suggested_biographies.get(sugg_key)) %}
+          <div class="muted">No labels available yet for this group.</div>
+        {% endif %}
+      </div>
+    {% endfor %}
+
+    <!-- GPT assist -->
+    <div class="label-group-box">
+      <h3>🤖 Need help choosing labels?</h3>
+      <p class="muted">Describe this {{ current_type.replace('_',' ') }} and we’ll suggest labels. You can adjust confidence before saving.</p>
+      <textarea id="labelPromptInput" rows="3" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:8px;" placeholder="e.g. Works in a large city hospital, pediatric focus, senior role"></textarea>
+      <div style="margin-top:10px;">
+        <button type="button" class="primary-button" onclick="getLabelSuggestions()">🔍 Suggest Labels</button>
+      </div>
+      <div id="labelSuggestionsOutput" style="margin-top:12px;"></div>
+      <div id="gpt-selected-labels-with-confidence" style="margin-top:10px;"></div>
+      <input type="hidden" name="gpt_selected_labels_json" id="gpt_selected_labels_json" value="[]">
+    </div>
+
+    <div class="bottom-card">
+      <div style="margin-bottom:12px;">
+        <button type="submit" id="saveButton" class="primary-button">➡️ Move to next page with no labels selected</button>
+        <a class="primary-button" href="{{ url_for('label_step', type_name=current_type, bio_id=bio_id, step=next_step) }}">⏭️ Skip to Next Step</a>
+      </div>
+      <div>
+        <a href="/" class="back-link">🏠 Home</a>
+        {% if prev_step is not none %}
+          <a href="{{ url_for('label_step', type_name=current_type, bio_id=bio_id, step=prev_step) }}" class="back-link">🔙 Back</a>
+        {% endif %}
+      </div>
+    </div>
+  </form>
+</div>
+
+<script>
+  function makeSafeKey(key){ return key.replaceAll('/','__'); }
+
+  function updateConfidence(rawKey){
+    const safe = makeSafeKey(rawKey);
+    const slider = document.getElementById('confidence_'+safe);
+    const display = document.getElementById('confidence_display_'+safe);
+    const level = document.getElementById('confidence_level_'+safe);
+    if(!slider||!display||!level) return;
+    const v = parseInt(slider.value||0,10);
+    display.textContent = v+'%';
+    if(v===100){ level.textContent='(Exact)'; level.style.color='green'; }
+    else if(v>=67){ level.textContent='(High)'; level.style.color='green'; }
+    else if(v>=34){ level.textContent='(Medium)'; level.style.color='orange'; }
+    else { level.textContent='(Low)'; level.style.color='red'; }
+  }
+
+  function toggleLabelSelection(card){
+    const groupKey = card.getAttribute('data-group');
+    const safe = makeSafeKey(groupKey);
+    const hidden = document.getElementById('input_'+safe);
+    if(!hidden) return;
+
+    const current = hidden.value;
+    const val = card.getAttribute('data-value');
+    const cards = document.querySelectorAll(`.label-card[data-group="${groupKey}"]`);
+
+    if(current === val){
+      hidden.value = '';
+      card.classList.remove('selected');
+    } else {
+      cards.forEach(c=>c.classList.remove('selected'));
+      card.classList.add('selected');
+      hidden.value = val;
+    }
+    updateSaveButtonState();
+  }
+
+  function toggleBioSelection(card, hiddenId){
+    const hidden = document.getElementById(hiddenId);
+    if(!hidden) return;
+
+    const val = card.getAttribute('data-value');
+    const group = card.getAttribute('data-group');
+    const cards = document.querySelectorAll(`.label-card[data-group="${group}"]`);
+
+    if(hidden.value === val){
+      hidden.value = '';
+      card.classList.remove('selected');
+    } else {
+      cards.forEach(c=>c.classList.remove('selected'));
+      hidden.value = val;
+      card.classList.add('selected');
+    }
+    updateSaveButtonState();
+  }
+
+  function filterLabels(input, groupKey){
+    const q = (input.value||'').toLowerCase();
+    const cards = document.querySelectorAll(`.label-card[data-group="${groupKey}"]`);
+    let shown = 0;
+    cards.forEach(card=>{
+      const t = card.innerText.toLowerCase();
+      const match = t.includes(q);
+      if(match && shown < 12){ card.style.display='flex'; shown++; } else { card.style.display='none'; }
+    });
+  }
+
+  function updateSaveButtonState(){
+    const trackers = document.querySelectorAll('.group-selection-tracker');
+    const gpt = document.getElementById('gpt_selected_labels_json');
+    const btn = document.getElementById('saveButton');
+
+    const hasManual = Array.from(trackers).some(i => (i.value||'').trim() !== '');
+    let hasGPT = false;
+    try {
+      const arr = JSON.parse(gpt?.value || '[]');
+      hasGPT = Array.isArray(arr) && arr.length > 0;
+    } catch(_) { hasGPT = false; }
+
+    if(!btn) return;
+    if(hasManual || hasGPT){
+      btn.textContent = '✅ Save All Selections';
+      btn.style.backgroundColor = '#4CAF50';
+    }else{
+      btn.textContent = '➡️ Move to next page with no labels selected';
+      btn.style.backgroundColor = '#6c63ff';
+   
+

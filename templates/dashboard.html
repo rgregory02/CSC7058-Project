@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Biography Studio – Dashboard</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    body { background:#f6f7fb; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
+    .box { max-width: 1100px; margin: 40px auto; background:#fff; padding:28px; border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,.06); }
+    .toolbar { display:flex; flex-wrap:wrap; gap:10px; margin:16px 0 22px; }
+    .btn{display:inline-block;padding:10px 16px;border-radius:10px;background:#6c63ff;color:#fff;text-decoration:none;font-weight:600}
+    .btn.secondary{background:#eef0f7;color:#333}
+    .btn.ghost{background:transparent;color:#6c63ff;border:1px solid #6c63ff}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+    .card{background:#fff;border:1px solid #e7e9f2;border-radius:12px;padding:16px}
+    .card h3{margin:0 0 6px}
+    .card .muted{color:#657085;font-size:12px}
+    .quick{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 6px}
+    ul.slim{margin:6px 0 0 18px;text-align:left}
+    small{color:#657085}
+    .header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .header h1 { margin:0 }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="header">
+      <h1>📚 Biography Studio</h1>
+      <div class="toolbar">
+        <!-- Person-focused flow remains easy to reach -->
+        <a class="btn" href="{{ url_for('start_person_naming') }}">🧑‍🧭 Start Life Wizard</a>
+        <!-- General, type-agnostic creation flow -->
+        <a class="btn" href="{{ url_for('wizard_start') }}">🧩 Start General Wizard</a>
+        <!-- Optional: quick link to people browse page (your old index view) -->
+        <a class="btn ghost" href="{{ url_for('index_page') }}">👤 Browse Life Wizard</a>
+        <!-- Optional: create a new Type right from here -->
+        <a class="btn secondary" href="{{ url_for('add_type_prompt') }}">➕ Add New Type</a>
+      </div>
+    </div>
+
+    <h2 style="margin:10px 0 14px">Types</h2>
+
+    <div class="grid">
+      {% for t in types %}
+        <div class="card">
+          <h3>{{ t|replace('_',' ')|title }}</h3>
+          <div class="muted">Manage {{ t|replace('_',' ') }} biographies & labels</div>
+
+          <div class="quick">
+            <!-- Browse all bios for this type -->
+            <a class="btn secondary" href="{{ url_for('type_browse', type_name=t) }}">📂 Browse</a>
+
+            <!-- Create a new biography for this type -->
+            <a class="btn" href="{{ url_for('search_or_add_biography', type_name=t, return_url=url_for('type_browse', type_name=t)) }}">
+              ➕ New {{ t|replace('_',' ')|title }} Biography
+            </a>
+
+            <!-- Create a new label group (subfolder) for this type -->
+            <a class="btn secondary" href="{{ url_for('create_subfolder', type_name=t) }}">
+              🏷️ Add Label Group
+            </a>
+          </div>
+
+          {% if preview[t] %}
+            <div><small>Recent:</small></div>
+            <ul class="slim">
+              {# preview[t] should yield objects/dicts with id & name; adjust if your helper returns tuples #}
+              {% for b in preview[t] %}
+                <li>
+                  <a href="{{ url_for('label_step', type_name=t, bio_id=b.id if b.id is defined else b[0], step=0) }}">
+                    {{ b.name if b.name is defined else b[1] }}
+                  </a>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <small>No biographies yet.</small>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</body>
+</html>
+

@@ -1,0 +1,10 @@
+{
+  "id": "labrador",
+  "display": "Labrador",
+  "label_type": "dog",
+  "confidence": 100,
+  "created": "2025-08-08T13:32:35.617396+00:00",
+  "properties": {
+    "suggests_biographies_from": "pet/dog/labrador"
+  }
+}
