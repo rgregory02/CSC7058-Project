@@ -5,87 +5,81 @@
   <title>{{ type_name|replace('_',' ')|title }} — Labels</title>
   <link rel="stylesheet" href="/static/styles.css">
   <style>
-    .box{max-width:1100px;margin:30px auto;background:#fff;padding:24px;border-radius:12px}
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
-    .card{border:1px solid #e7e9f2;border-radius:10px;padding:12px;background:#fff}
-    .pill{display:inline-block; padding:2px 8px; border-radius:999px; background:#f2f3f8; font-size:12px; color:#555}
-    .muted{color:#666;font-size:.9em}
-    .search{width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin:8px 0 16px}
-    .option{border:1px solid #eee;border-radius:8px;padding:8px}
-    .row{display:flex;gap:10px;align-items:center;justify-content:space-between}
-    .small{font-size:12px;color:#777}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+    .card{border:1px solid #e3e5ee;border-radius:10px;padding:14px;background:#fff}
+    .muted{color:#666}
+    .tag{font-size:12px;background:#eef0f7;border-radius:999px;padding:2px 8px;margin-left:8px}
+    .search{width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin:12px 0}
+    details{border:1px dashed #e4e6f1;border-radius:8px;padding:10px;margin-top:8px;background:#fafbff}
+    summary{cursor:pointer;font-weight:600}
+    .option{border:1px solid #e7e9f2;border-radius:8px;padding:10px;margin:8px 0;background:#fff}
+    .children{margin:8px 0 0 14px;border-left:3px solid #e7e9f2;padding-left:10px}
+    .thumb{max-height:40px;max-width:80px;vertical-align:middle;margin-left:8px;border-radius:6px}
+    .header-row{display:flex;align-items:center;gap:8px}
   </style>
 </head>
 <body>
   <div class="box">
-    <h1>🏷️ {{ type_name|replace('_',' ')|title }} — Labels</h1>
-    <div class="row">
-      <div>
-        <span class="pill">{{ total_groups }} groups</span>
-        <span class="pill">{{ total_files }} label files</span>
-      </div>
-      <div>
-        <a class="btn secondary" href="{{ url_for('type_browse', type_name=type_name) }}">← Back to {{ type_name|title }}</a>
-      </div>
-    </div>
-
-    <h3 style="margin-top:16px;">Search (flat list)</h3>
-    <form method="get" action="{{ url_for('type_labels', type_name=type_name) }}">
-      <input class="search" type="text" name="q" value="{{ q or '' }}" placeholder="Search by name, id, or path…">
-    </form>
-
-    {% if q %}
-      <div class="muted" style="margin-bottom:12px">Filtered results for “{{ q }}”</div>
-    {% endif %}
-
-    {% if flat %}
-      <div class="grid" style="margin-bottom:24px">
-        {% for i in flat %}
-          <div class="card">
-            <div class="small muted">{{ i.prop_key or 'top-level' }}</div>
-            <div><strong>{{ i.display }}</strong></div>
-            <div class="small">id: {{ i.id }}</div>
-            {% if i.description %}<div class="muted" style="margin-top:6px">{{ i.description }}</div>{% endif %}
-            <div class="small" style="margin-top:8px">path: {{ i.path }}</div>
-          </div>
-        {% endfor %}
-      </div>
-    {% else %}
-      <div class="muted">No labels found.</div>
-    {% endif %}
-
-    <h3>Grouped by property</h3>
-    {% if groups %}
+    <h1>🏷️ Labels — {{ type_name|replace('_',' ')|title }}</h1>
+    <input class="search" placeholder="Filter label groups…" oninput="filterGroups(this.value)">
+    <div class="grid" id="groups">
       {% for g in groups %}
-        <div class="card" style="margin-bottom:12px">
-          <div class="row">
-            <div><strong>{{ g.label or g.key|replace('_',' ')|title }}</strong></div>
-            <div class="small">
-              key: <code>{{ g.key }}</code>
-              {% if g.refer_to %}
-                &nbsp;•&nbsp;<span class="pill">links to {{ g.refer_to.type }} {{ g.refer_to.source }}</span>
-              {% endif %}
-            </div>
-          </div>
-          {% if g.description %}<div class="muted" style="margin:6px 0 10px">{{ g.description }}</div>{% endif %}
-          {% if g.options %}
-            <div class="grid">
+      <div class="card group" data-key="{{ (g.key ~ ' ' ~ g.label)|lower }}">
+        <div class="header-row">
+          <h3 style="margin:0">{{ g.label }}</h3>
+          <span class="tag">{{ g.count }} options</span>
+        </div>
+        {% if g.description %}<div class="muted">{{ g.description }}</div>{% endif %}
+        <div class="muted" style="margin-top:6px">{{ g.kind.replace('_',' ')|title }}</div>
+
+        {% if g.options %}
+          <details>
+            <summary>Show options</summary>
+            <div>
               {% for o in g.options %}
                 <div class="option">
-                  <div><strong>{{ o.display or o.id }}</strong></div>
-                  <div class="small">id: {{ o.id }}</div>
-                  {% if o.description %}<div class="muted" style="margin-top:4px">{{ o.description }}</div>{% endif %}
+                  <div class="header-row">
+                    <div><strong>{{ o.display or o.id }}</strong></div>
+                    {% if o.image_url %}<img class="thumb" src="{{ o.image_url }}" alt="">{% endif %}
+                  </div>
+                  {% if o.description %}<div class="muted">{{ o.description }}</div>{% endif %}
+
+                  {% if o.children %}
+                    <details class="children">
+                      <summary>{{ o.child_count }} child option{{ 's' if o.child_count != 1 else '' }}</summary>
+                      <div>
+                        {% for c in o.children %}
+                          <div class="option">
+                            <div class="header-row">
+                              <div>{{ c.display or c.id }}</div>
+                              {% if c.image_url %}<img class="thumb" src="{{ c.image_url }}" alt="">{% endif %}
+                            </div>
+                            {% if c.description %}<div class="muted">{{ c.description }}</div>{% endif %}
+                          </div>
+                        {% endfor %}
+                      </div>
+                    </details>
+                  {% endif %}
                 </div>
               {% endfor %}
             </div>
-          {% else %}
-            <div class="muted">No options yet.</div>
-          {% endif %}
-        </div>
+          </details>
+        {% endif %}
+      </div>
       {% endfor %}
-    {% else %}
-      <div class="muted">No groups found.</div>
-    {% endif %}
+    </div>
+    <div style="margin-top:16px">
+      <a class="btn secondary" href="{{ url_for('dashboard') }}">⬅ Back</a>
+    </div>
   </div>
+  <script>
+    function filterGroups(q){
+      q = (q||"").toLowerCase();
+      document.querySelectorAll("#groups .group").forEach(card=>{
+        const key = card.getAttribute("data-key");
+        card.style.display = key.includes(q) ? "block" : "none";
+      });
+    }
+  </script>
 </body>
 </html>
