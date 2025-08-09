@@ -1203,6 +1203,145 @@ def restore_archived_type(archived_folder):
     return redirect(url_for("archived_types_list"))
 
 
+# ---------- Properties: list ----------
+@app.route("/type/<type_name>/properties")
+def type_properties(type_name):
+    base = os.path.join("types", type_name, "labels")
+    props = []
+    if os.path.isdir(base):
+        for f in sorted(os.listdir(base)):
+            p = os.path.join(base, f)
+            if f.endswith(".json") and os.path.isfile(p):
+                key = os.path.splitext(f)[0]
+                try:
+                    data = load_json_as_dict(p)
+                except Exception:
+                    data = {}
+                # tolerant read
+                name = (isinstance(data, dict) and (
+                    data.get("name") or data.get("properties", {}).get("name")
+                )) or key.replace("_"," ").title()
+                desc = (isinstance(data, dict) and (
+                    data.get("description") or data.get("properties", {}).get("description", "")
+                )) or ""
+                props.append({"key": key, "name": name, "description": desc})
+    # Show subfolders too, for context (not editable here)
+    subfolders = [d for d in sorted(os.listdir(base)) if os.path.isdir(os.path.join(base, d))] if os.path.isdir(base) else []
+    return render_template("type_properties.html", type_name=type_name, properties=props, subfolders=subfolders)
+
+# ---------- Properties: add ----------
+@app.route("/type/<type_name>/properties/new", methods=["GET", "POST"])
+def new_property(type_name):
+    base = os.path.join("types", type_name, "labels")
+    os.makedirs(base, exist_ok=True)
+
+    if request.method == "POST":
+        key = (request.form.get("key") or "").strip().lower()
+        key = re.sub(r"[^a-z0-9_]+", "_", key).strip("_")
+        if not key:
+            flash("Please provide a valid property key (letters, numbers, underscores).", "error")
+            return redirect(request.url)
+        path = os.path.join(base, f"{key}.json")
+        if os.path.exists(path):
+            flash("A property with that key already exists.", "error")
+            return redirect(request.url)
+
+        payload = {
+            "name": (request.form.get("name") or key.replace("_"," ").title()).strip(),
+            "description": (request.form.get("description") or "").strip()
+        }
+
+        # Source block
+        source_kind = request.form.get("source_kind") or ""
+        if source_kind in ("type_labels", "type_biographies"):
+            src = {
+                "kind": source_kind,
+                "type": (request.form.get("source_type") or "").strip()
+            }
+            if source_kind == "type_labels":
+                src["path"] = (request.form.get("source_path") or "").strip()
+                src["allow_children"] = bool(request.form.get("source_allow_children"))
+            payload["source"] = src
+
+        # Link biography block
+        link_bio_type = (request.form.get("link_bio_type") or "").strip()
+        if link_bio_type:
+            lb = {
+                "type": link_bio_type,
+                "path": (request.form.get("link_bio_path") or "").strip(),
+                "mode": (request.form.get("link_bio_mode") or "child_or_parent").strip()
+            }
+            payload["link_biography"] = lb
+
+        save_dict_as_json(path, payload)
+        flash("Property created.", "success")
+        return redirect(url_for("type_properties", type_name=type_name))
+
+    return render_template("property_edit.html", type_name=type_name, mode="new", prop=None)
+
+# ---------- Properties: edit ----------
+@app.route("/type/<type_name>/properties/<prop_key>", methods=["GET", "POST"])
+def edit_property(type_name, prop_key):
+    base = os.path.join("types", type_name, "labels")
+    path = os.path.join(base, f"{prop_key}.json")
+    if not os.path.exists(path):
+        return f"Property {prop_key} not found for {type_name}.", 404
+
+    prop = load_json_as_dict(path) if os.path.exists(path) else {}
+
+    if request.method == "POST":
+        # allow rename of key?
+        new_key = (request.form.get("key") or prop_key).strip().lower()
+        new_key = re.sub(r"[^a-z0-9_]+", "_", new_key).strip("_") or prop_key
+
+        payload = {
+            "name": (request.form.get("name") or "").strip() or prop.get("name") or new_key.replace("_"," ").title(),
+            "description": (request.form.get("description") or "").strip()
+        }
+
+        source_kind = request.form.get("source_kind") or ""
+        if source_kind in ("type_labels", "type_biographies"):
+            src = {
+                "kind": source_kind,
+                "type": (request.form.get("source_type") or "").strip()
+            }
+            if source_kind == "type_labels":
+                src["path"] = (request.form.get("source_path") or "").strip()
+                src["allow_children"] = bool(request.form.get("source_allow_children"))
+            payload["source"] = src
+
+        link_bio_type = (request.form.get("link_bio_type") or "").strip()
+        if link_bio_type:
+            payload["link_biography"] = {
+                "type": link_bio_type,
+                "path": (request.form.get("link_bio_path") or "").strip(),
+                "mode": (request.form.get("link_bio_mode") or "child_or_parent").strip()
+            }
+
+        # handle rename of the file if key changed
+        new_path = os.path.join(base, f"{new_key}.json")
+        save_dict_as_json(new_path, payload)
+        if new_path != path and os.path.exists(path):
+            try: os.remove(path)
+            except: pass
+
+        flash("Property saved.", "success")
+        return redirect(url_for("type_properties", type_name=type_name))
+
+    return render_template("property_edit.html", type_name=type_name, mode="edit", prop_key=prop_key, prop=prop)
+
+# ---------- Properties: delete ----------
+@app.route("/type/<type_name>/properties/<prop_key>/delete", methods=["POST"])
+def delete_property(type_name, prop_key):
+    path = os.path.join("types", type_name, "labels", f"{prop_key}.json")
+    if os.path.exists(path):
+        os.remove(path)
+        flash("Property deleted.", "success")
+    else:
+        flash("Nothing to delete.", "info")
+    return redirect(url_for("type_properties", type_name=type_name))
+
+
 # @app.route("/person_step/time/<person_id>", methods=["GET", "POST"])
 # def person_step_time(person_id):
 #     labels_folder = "./types/time/labels"

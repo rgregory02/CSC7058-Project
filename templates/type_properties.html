@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{{ type_name|replace('_',' ')|title }} – Properties</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+    .card{border:1px solid #e5e7eb;border-radius:12px;padding:14px;background:#fff}
+    .muted{color:#6b7280;font-size:.9em}
+    .btn{display:inline-block;padding:8px 12px;border-radius:8px;background:#6c63ff;color:#fff;text-decoration:none}
+    .btn.secondary{background:#eef0f7;color:#333}
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>{{ type_name|replace('_',' ')|title }} — Properties</h1>
+    <div style="margin:10px 0 16px">
+      <a class="btn" href="{{ url_for('new_property', type_name=type_name) }}">➕ New Property</a>
+      <a class="btn secondary" href="{{ url_for('type_browse', type_name=type_name) }}">📂 Back to {{ type_name|title }}</a>
+    </div>
+
+    {% if subfolders %}
+      <p class="muted">Label subfolders detected: {{ subfolders|join(', ') }}</p>
+    {% endif %}
+
+    {% if properties %}
+      <div class="grid">
+        {% for p in properties %}
+          <div class="card">
+            <strong>{{ p.name }}</strong>
+            <div class="muted">key: {{ p.key }}</div>
+            {% if p.description %}<div style="margin:6px 0">{{ p.description }}</div>{% endif %}
+            <div style="margin-top:8px">
+              <a class="btn" href="{{ url_for('edit_property', type_name=type_name, prop_key=p.key) }}">Edit</a>
+              <form method="POST" action="{{ url_for('delete_property', type_name=type_name, prop_key=p.key) }}" style="display:inline" onsubmit="return confirm('Delete property {{ p.key }}? This only removes the property JSON.')">
+                <button class="btn secondary" type="submit">Delete</button>
+              </form>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p>No properties yet. Create your first one.</p>
+    {% endif %}
+  </div>
+</body>
+</html>

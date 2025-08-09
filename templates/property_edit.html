@@ -1,0 +1,90 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{{ 'New' if mode=='new' else 'Edit' }} Property – {{ type_name|title }}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    .field{margin:10px 0}
+    input[type=text], textarea, select{width:100%;padding:10px;border:1px solid #ddd;border-radius:8px}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .btn{padding:10px 16px;border-radius:8px;background:#6c63ff;color:#fff;text-decoration:none;border:none;cursor:pointer}
+    .btn.secondary{background:#eef0f7;color:#333}
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>{{ 'New' if mode=='new' else 'Edit' }} Property – {{ type_name|replace('_',' ')|title }}</h1>
+    <form method="POST">
+      <div class="field">
+        <label>Property Key (file name, no spaces)</label>
+        <input type="text" name="key" value="{{ prop_key or (prop and prop.key) or '' }}" placeholder="e.g. work_place" {{ 'required' if mode=='new' else '' }}>
+      </div>
+
+      <div class="field">
+        <label>Display Name</label>
+        <input type="text" name="name" value="{{ (prop.name if prop else '') or (prop and prop.get('name')) or '' }}" placeholder="Work place">
+      </div>
+
+      <div class="field">
+        <label>Description</label>
+        <textarea name="description" rows="2">{{ (prop and prop.get('description')) or '' }}</textarea>
+      </div>
+
+      <hr>
+
+      <div class="field">
+        <label>Source kind</label>
+        <select name="source_kind">
+          <option value="">— none —</option>
+          <option value="type_labels" {% if prop and prop.get('source',{}).get('kind')=='type_labels' %}selected{% endif %}>type_labels</option>
+          <option value="type_biographies" {% if prop and prop.get('source',{}).get('kind')=='type_biographies' %}selected{% endif %}>type_biographies</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Source type (if using source)</label>
+          <input type="text" name="source_type" value="{{ (prop and prop.get('source',{}).get('type','')) or '' }}" placeholder="buildings">
+        </div>
+        <div class="field">
+          <label>Source path (for type_labels)</label>
+          <input type="text" name="source_path" value="{{ (prop and prop.get('source',{}).get('path','')) or '' }}" placeholder="work_building">
+        </div>
+      </div>
+
+      <div class="field">
+        <label><input type="checkbox" name="source_allow_children" {% if prop and prop.get('source',{}).get('allow_children') %}checked{% endif %}> Allow child folders (for type_labels)</label>
+      </div>
+
+      <hr>
+
+      <div class="row">
+        <div class="field">
+          <label>Link biography type (optional)</label>
+          <input type="text" name="link_bio_type" value="{{ (prop and prop.get('link_biography',{}).get('type','')) or '' }}" placeholder="buildings">
+        </div>
+        <div class="field">
+          <label>Link biography path (optional)</label>
+          <input type="text" name="link_bio_path" value="{{ (prop and prop.get('link_biography',{}).get('path','')) or '' }}" placeholder="work_building/hospital">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Link biography mode</label>
+        <select name="link_bio_mode">
+          {% set lbm = (prop and prop.get('link_biography',{}).get('mode','child_or_parent')) or 'child_or_parent' %}
+          <option value="child_only" {% if lbm=='child_only' %}selected{% endif %}>child_only</option>
+          <option value="parent_only" {% if lbm=='parent_only' %}selected{% endif %}>parent_only</option>
+          <option value="child_or_parent" {% if lbm=='child_or_parent' %}selected{% endif %}>child_or_parent</option>
+        </select>
+      </div>
+
+      <div style="margin-top:14px">
+        <button class="btn" type="submit">Save</button>
+        <a class="btn secondary" href="{{ url_for('type_properties', type_name=type_name) }}">Cancel</a>
+      </div>
+    </form>
+  </div>
+</body>
+</html>

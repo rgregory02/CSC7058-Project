@@ -1,0 +1,15 @@
+{
+    "name": "Educational Place",
+    "description": "",
+    "source": {
+        "kind": "type_labels",
+        "type": "buildings",
+        "path": "educational_buildings",
+        "allow_children": true
+    },
+    "link_biography": {
+        "type": "buildings",
+        "path": "educational_buildings",
+        "mode": "child_or_parent"
+    }
+}
