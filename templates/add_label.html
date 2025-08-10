@@ -1,147 +1,125 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Add New Label</title>
-    <link rel="stylesheet" href="/static/styles.css">
-    <style>
-        body {
-            font-family: sans-serif;
-            background: #f2f2f2;
-            padding: 40px;
-        }
-        .form-box {
-            max-width: 600px;
-            margin: auto;
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        label {
-            display: block;
-            margin-top: 15px;
-            font-weight: bold;
-        }
-        input[type="text"], textarea, input[type="number"] {
-            width: 100%;
-            padding: 10px;
-            margin-top: 5px;
-            margin-bottom: 20px;
-        }
-        button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 1em;
-        }
-        .breadcrumb {
-            margin-bottom: 20px;
-        }
-        .flash {
-            padding: 10px;
-            margin-bottom: 20px;
-            border-radius: 5px;
-        }
-        .flash.error {
-            background-color: #ffdddd;
-            border: 1px solid #cc0000;
-        }
-        .flash.success {
-            background-color: #ddffdd;
-            border: 1px solid #00cc00;
-        }
-        small {
-            display: block;
-            color: #666;
-            margin-top: -15px;
-            margin-bottom: 10px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Add New Label</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    body {font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:#f2f2f2;padding:40px;}
+    .form-box {max-width: 680px; margin:auto; background:#fff; padding:28px; border-radius:12px; box-shadow:0 2px 12px rgba(0,0,0,.08);}
+    .row {display:flex; gap:12px; align-items:center; flex-wrap:wrap;}
+    label {display:block; margin-top:14px; font-weight:700;}
+    input[type="text"], input[type="number"], textarea {width:100%; padding:10px; margin-top:6px; border:1px solid #d9dbe7; border-radius:8px;}
+    .muted {color:#666; font-size:.9em; margin-top:6px;}
+    .path-pill {display:inline-block; padding:6px 10px; border-radius:999px; background:#f5f7ff; border:1px solid #e1e6ff; font-size:12px; color:#3a3f4c;}
+    .actions {display:flex; gap:10px; margin-top:18px;}
+    button {background:#4CAF50; color:#fff; padding:10px 16px; border:none; border-radius:8px; font-weight:700; cursor:pointer;}
+    .btn-secondary {background:#eef0f7; color:#333;}
+    .flash {padding:10px; border-radius:8px; margin:10px 0;}
+    .flash.error{background:#ffefef;border:1px solid #ffb3b3}
+    .flash.success{background:#effbea;border:1px solid #bfe6a8}
+    .breadcrumb-buttons{display:flex; gap:8px; margin-bottom:12px}
+    .breadcrumb-button{display:inline-block; padding:8px 12px; border-radius:8px; background:#eef0f7; color:#333; text-decoration:none; font-weight:600}
+    small.block{display:block;color:#666;margin-top:-10px;margin-bottom:10px}
+  </style>
 </head>
 <body>
 <div class="form-box">
-    <h1>Add New Label</h1>
+  <h1>➕ Add New Label</h1>
 
-    <div class="breadcrumb-buttons">
-        <a href="/" class="breadcrumb-button">🏠 Home</a>
-        <a href="{{ return_url }}" class="breadcrumb-button">↩️ Return to Wizard</a>
+  <div class="breadcrumb-buttons">
+    <a href="/" class="breadcrumb-button">🏠 Home</a>
+    <a href="{{ return_url }}" class="breadcrumb-button">↩️ Return</a>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message|safe }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="muted">
+    <strong>Type:</strong> {{ type_name }} &nbsp;•&nbsp;
+    <strong>Folder:</strong> <span class="path-pill">types/{{ type_name }}/labels/{{ subfolder_name }}</span>
+  </div>
+
+  <form method="POST" autocomplete="off">
+    <input type="hidden" name="return_url" value="{{ return_url }}">
+
+    <label for="label_name">Label Name</label>
+    <input type="text" id="label_name" name="label_name" required placeholder="e.g. Army Nurse">
+
+    <div class="row">
+      <div style="flex:1 1 240px">
+        <label for="label_id">Label Key (auto)</label>
+        <input type="text" id="label_id" name="label_id" placeholder="auto from name" pattern="[a-z0-9_]+" >
+        <small class="block">Lowercase & underscores only; you can override.</small>
+      </div>
+      <div style="flex:1 1 240px">
+        <label for="confidence">🎯 Default Confidence</label>
+        <input type="range" id="confidence" name="confidence" min="0" max="100" value="100" oninput="updateConfidence()">
+        <div class="muted" id="conf_readout">100% (Exact)</div>
+      </div>
     </div>
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="flash {{ category }}">{{ message|safe }}</div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
+    <label for="description">Description (optional)</label>
+    <textarea id="description" name="description" rows="3" placeholder="What does this label represent?"></textarea>
 
-    <form method="POST">
-        <input type="hidden" name="return_url" value="{{ return_url }}">
+    <label for="image">Image filename or URL (optional)</label>
+    <input type="text" id="image" name="image" placeholder="e.g. nurse.jpg or https://...">
+    <small class="block">If a filename, place the image next to the JSON file to be auto‑picked by the browser UI.</small>
 
-        <label for="label_name">Label Name:</label>
-        <input type="text" id="label_name" name="label_name" required placeholder="e.g. Army Nurse">
-        <small>
-            This label will also create a subfolder for nested labels and matching biographies.
-        </small>
+    <label for="source">Source (optional)</label>
+    <input type="text" id="source" name="source" placeholder="e.g. Wikidata ID, personal record">
 
-        <label for="description">Description (optional):</label>
-        <textarea id="description" name="description" rows="3" placeholder="What does this label represent?"></textarea>
+    <label for="extra_properties">Extra Properties (optional, JSON)</label>
+    <textarea id="extra_properties" name="extra_properties" rows="4" placeholder='e.g. {"importance":"high"}'></textarea>
 
-        <label for="image">Image filename or URL (optional):</label>
-        <input type="text" id="image" name="image" placeholder="e.g. nurse.jpg or https://...">
+    <div class="row" style="margin-top:6px">
+      <label style="display:flex; align-items:center; gap:8px; font-weight:600; margin-top:0">
+        <input type="checkbox" id="make_children" name="make_children" checked>
+        Create child folders (labels & biographies)
+      </label>
+      <label style="display:flex; align-items:center; gap:8px; font-weight:600; margin-top:0">
+        <input type="checkbox" id="make_stub_bio" name="make_stub_bio" checked>
+        Create stub biography
+      </label>
+    </div>
 
-        <label for="confidence">🎯 Default Confidence:</label>
-        <input type="range" id="confidence" name="confidence" min="0" max="100" value="100"
-               oninput="updateConfidence()">
-        <div class="confidence-display" style="margin-top: 8px; margin-bottom: 15px;">
-            <span id="confidence_value">100%</span>
-            <span id="confidence_level" style="margin-left: 10px; color: green;">(Exact)</span>
-        </div>
-
-        <label for="source">Source (optional):</label>
-        <input type="text" id="source" name="source" placeholder="e.g. WikiData ID, personal record">
-
-        <label for="suggests_biographies_from">Suggests Biographies From (optional):</label>
-        <input type="text" id="suggests_biographies_from" name="suggests_biographies_from"
-               placeholder="e.g. educational_building">
-        <small>
-            Optional. Used to suggest related biographies (e.g. ‘university’ → educational_building).
-            If left blank, it will be auto-filled from the parent folder.
-        </small>
-
-        <label for="extra_properties">Extra Properties (optional, JSON format):</label>
-        <textarea id="extra_properties" name="extra_properties" rows="4" placeholder='e.g. {"eye_colour": "green", "importance": "high"}'></textarea>
-        <small>Optional structured metadata to store inside the label’s <code>properties</code>.</small>
-
-        <button type="submit">✅ Save Label</button>
-    </form>
+    <div class="actions">
+      <a class="btn-secondary" href="{{ return_url }}">Cancel</a>
+      <button type="submit">✅ Save Label</button>
+    </div>
+  </form>
 </div>
 
 <script>
-  function updateConfidence() {
-    const slider = document.getElementById("confidence");
-    const val = parseInt(slider.value || 0);
-    document.getElementById("confidence_value").textContent = val + "%";
-    const level = document.getElementById("confidence_level");
-    if (val === 100) {
-      level.textContent = "(Exact)";
-      level.style.color = "green";
-    } else if (val >= 67) {
-      level.textContent = "(High)";
-      level.style.color = "green";
-    } else if (val >= 34) {
-      level.textContent = "(Medium)";
-      level.style.color = "orange";
-    } else {
-      level.textContent = "(Low)";
-      level.style.color = "red";
-    }
+  const nameEl = document.getElementById('label_name');
+  const keyEl  = document.getElementById('label_id');
+
+  let keyDirty = false;
+  keyEl.addEventListener('input', () => keyDirty = (keyEl.value || '').length > 0);
+
+  function toSlug(s){
+    return (s||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
   }
-  document.addEventListener("DOMContentLoaded", updateConfidence);
+  nameEl.addEventListener('input', () => {
+    if(!keyDirty){ keyEl.value = toSlug(nameEl.value); }
+  });
+
+  function updateConfidence(){
+    const v = parseInt(document.getElementById('confidence').value || 0, 10);
+    const txt = document.getElementById('conf_readout');
+    let lvl = '(Low)', col = 'red';
+    if(v===100){ lvl='(Exact)'; col='green'; }
+    else if(v>=67){ lvl='(High)'; col='green'; }
+    else if(v>=34){ lvl='(Medium)'; col='orange'; }
+    txt.textContent = `${v}% ${lvl}`;
+    txt.style.color = col;
+  }
+  document.addEventListener('DOMContentLoaded', updateConfidence);
 </script>
 </body>
 </html>

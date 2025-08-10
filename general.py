@@ -60,7 +60,11 @@ from utils import (
     sanitise_key,
     checkbox_on,
     list_label_groups_for_type,
-    build_label_groups_by_type
+    build_label_groups_by_type,
+    _ensure_property_self_labels,
+    _import_labels_from_api,
+    _import_labels_from_sqlite,
+    _write_label_json
 )
 
 app = Flask(__name__)
@@ -2662,87 +2666,112 @@ def add_label(type_name, subfolder_name):
     labels_dir = os.path.join('types', type_name, 'labels', subfolder_name)
     os.makedirs(labels_dir, exist_ok=True)
 
-    if request.method == 'POST':
-        # Extract and process core values
-        raw_label_name = request.form['label_name'].strip()
-        label_id = raw_label_name.replace(' ', '_').lower()
-        display_name = raw_label_name.strip().title()
-        label_type = subfolder_name.split('/')[-1] if '/' in subfolder_name else subfolder_name
-        description = request.form.get('description', '').strip()
-        image_url = request.form.get('image', '').strip()
-        confidence = int(request.form.get('confidence', '100').strip())
-        source = request.form.get('source', 'user').strip()
-        timestamp = datetime.now(timezone.utc).isoformat()
-        return_url = request.form.get("return_url", "")
-
-        # Load and validate optional extra properties
-        extra_properties_raw = request.form.get('extra_properties', '').strip()
+    def _slug(s: str) -> str:
         try:
-            extra_properties = json.loads(extra_properties_raw) if extra_properties_raw else {}
-        except json.JSONDecodeError:
-            flash("❌ Invalid JSON in extra properties. Please check your format.", "error")
+            from utils import slugify_key  # if you already have it
+            return slugify_key(s)
+        except Exception:
+            import re
+            return re.sub(r'[^a-z0-9_]+', '_', (s or '').lower()).strip('_')
+
+    if request.method == 'POST':
+        # round-trip target
+        return_url = request.form.get("return_url") or request.referrer or url_for('type_browse', type_name=type_name)
+
+        # required
+        raw_label_name = (request.form.get('label_name') or '').strip()
+        if not raw_label_name:
+            flash("❌ Please provide a label name.", "error")
             return redirect(request.url)
 
-        # Auto-fill suggests_biographies_from into properties if not present
-        if "suggests_biographies_from" not in extra_properties:
-            bio_path = f"{type_name}/{subfolder_name}/{label_id}".replace('//', '/')
-            extra_properties["suggests_biographies_from"] = bio_path
+        # key can be overridden, else slug from name
+        submitted_key = (request.form.get('label_id') or '').strip()
+        label_id = _slug(submitted_key or raw_label_name)
+        if not label_id:
+            flash("❌ Could not derive a valid key from the name.", "error")
+            return redirect(request.url)
 
-        # Check for duplicate
+        display_name = raw_label_name.strip()
+        label_type = subfolder_name.split('/')[-1] if '/' in subfolder_name else subfolder_name
+
+        description = (request.form.get('description') or '').strip()
+        image_val   = (request.form.get('image') or '').strip()
+        confidence  = int((request.form.get('confidence') or '100').strip() or 100)
+        source      = (request.form.get('source') or '').strip() or 'user'
+        make_children = bool(request.form.get('make_children'))
+        make_stub_bio = bool(request.form.get('make_stub_bio'))
+        timestamp   = datetime.now(timezone.utc).isoformat()
+
+        # extra properties JSON
+        extra_raw = (request.form.get('extra_properties') or '').strip()
+        try:
+            extra_properties = json.loads(extra_raw) if extra_raw else {}
+            if not isinstance(extra_properties, dict):
+                raise ValueError("Extra properties must be a JSON object.")
+        except Exception as e:
+            flash(f"❌ Invalid JSON in extra properties: {e}", "error")
+            return redirect(request.url)
+
+        # guard duplicate (case-insensitive)
         label_filename = f"{label_id}.json"
-        label_path = os.path.join(labels_dir, label_filename)
-        existing_labels = [f.lower() for f in os.listdir(labels_dir) if f.endswith('.json')]
-        if label_filename.lower() in existing_labels:
-            flash("❌ A label with this name already exists in this subfolder.", "error")
+        existing = {f.lower() for f in os.listdir(labels_dir) if f.endswith('.json')}
+        if label_filename.lower() in existing:
+            flash("❌ A label with this key already exists in this folder.", "error")
             return redirect(request.url)
 
-        # Construct label object with standardised fields
+        # construct canonical label JSON
+        label_path = os.path.join(labels_dir, label_filename)
         label_data = {
             "id": label_id,
-            "display": display_name,
+            "name": display_name,           # <- for loaders that read 'name'
+            "display": display_name,        # <- for UIs that read 'display'
             "label_type": label_type,
             "description": description,
             "confidence": confidence,
-            "image_url": image_url,
+            "image": image_val or None,     # both keys for compatibility
+            "image_url": image_val or None,
             "source": source,
             "created": timestamp,
-            "properties": extra_properties
+            "properties": extra_properties or {}
         }
+        # strip Nones/empties
+        label_data = {k: v for k, v in label_data.items() if v not in (None, "", {}) or k == "properties"}
 
-        # Remove null-like keys
-        label_data = {k: v for k, v in label_data.items() if v not in [None, ""]}
-
-        # Save label file
+        # save label
         with open(label_path, 'w') as f:
             json.dump(label_data, f, indent=2)
 
-        # Automatically create nested label and biography subfolders
-        child_label_subfolder = os.path.join('types', type_name, 'labels', subfolder_name, label_id)
-        child_bio_subfolder = os.path.join('types', type_name, 'biographies', subfolder_name, label_id)
-        os.makedirs(child_label_subfolder, exist_ok=True)
-        os.makedirs(child_bio_subfolder, exist_ok=True)
+        # optionally create nested folders
+        if make_children:
+            child_label_dir = os.path.join('types', type_name, 'labels', subfolder_name, label_id)
+            child_bio_dir   = os.path.join('types', type_name, 'biographies', subfolder_name, label_id)
+            os.makedirs(child_label_dir, exist_ok=True)
+            os.makedirs(child_bio_dir, exist_ok=True)
 
-        # Create stub biography matching the label_id
-        stub_filename = f"{label_id}.json"
-        stub_path = os.path.join(child_bio_subfolder, stub_filename)
-        if not os.path.exists(stub_path):
-            stub_data = {
-                "id": label_id,
-                "name": display_name,
-                "description": f"Auto-generated biography stub for label: {display_name}",
-                "source": "auto-generated from label",
-                "entries": []
-            }
-            with open(stub_path, 'w') as f:
-                json.dump(stub_data, f, indent=2)
+            # optional stub biography
+            if make_stub_bio:
+                stub_path = os.path.join(child_bio_dir, f"{label_id}.json")
+                if not os.path.exists(stub_path):
+                    stub_data = {
+                        "id": label_id,
+                        "name": display_name,
+                        "description": f"Auto-generated biography stub for label: {display_name}",
+                        "source": "auto-generated from label",
+                        "entries": []
+                    }
+                    with open(stub_path, 'w') as f:
+                        json.dump(stub_data, f, indent=2)
 
-        flash(f"✅ Label \"{display_name}\" added successfully!", "success")
-        flash(f"📂 Subfolders created under labels and biographies for '{label_id}'.", "success")
+        flash(f"✅ Label “{display_name}” added.", "success")
+        if make_children:
+            flash("📂 Child folders created (labels & biographies).", "success")
+            if make_stub_bio:
+                flash("📄 Stub biography created.", "success")
 
-        return redirect(return_url or url_for('add_label', type_name=type_name, subfolder_name=subfolder_name))
+        return redirect(return_url)
 
-    # Return URL fallback
-    return_url = request.args.get("return_url") or request.referrer or ''
+    # GET
+    return_url = request.args.get("return_url") or request.referrer or url_for('type_browse', type_name=type_name)
     return render_template(
         'add_label.html',
         type_name=type_name,
@@ -2750,53 +2779,134 @@ def add_label(type_name, subfolder_name):
         return_url=return_url
     )
 
+
 @app.route("/create_subfolder/<type_name>", methods=["GET", "POST"])
 def create_subfolder(type_name):
-    labels_dir = f"./types/{type_name}/labels"
-    return_url = request.args.get("return_url", "/")
+    labels_root = os.path.join("types", type_name, "labels")
+    bios_root   = os.path.join("types", type_name, "biographies")
+    os.makedirs(labels_root, exist_ok=True)
+    os.makedirs(bios_root, exist_ok=True)
+
+    return_url = request.values.get("return_url") or request.referrer or url_for("dashboard")
 
     if request.method == "POST":
-        display_label = request.form.get("subfolder_label", "").strip()
-
-        # Auto-generate internal_name (slugified)
-        internal_name = re.sub(r'\W+', '_', display_label.lower()).strip('_') if display_label else ""
+        display_label = (request.form.get("subfolder_label") or "").strip()
+        group_desc    = (request.form.get("subfolder_desc") or "").strip()
+        internal_name = (request.form.get("subfolder_name") or "").strip()
+        if not internal_name and display_label:
+            internal_name = slugify_key(display_label)
 
         if not display_label:
             flash("Display label is required.", "error")
             return redirect(request.url)
-
         if not internal_name:
             flash("Could not generate a valid internal name from display label.", "error")
             return redirect(request.url)
 
-        subfolder_path = os.path.join(labels_dir, internal_name)
-        subfolder_json_path = os.path.join(labels_dir, f"{internal_name}.json")
+        subfolder_path       = os.path.join(labels_root, internal_name)
+        subfolder_group_meta = os.path.join(subfolder_path, "_group.json")
+        bios_base_path       = os.path.join(bios_root, internal_name)
 
-        try:
-            # ✅ Create subfolder if it doesn't exist
-            os.makedirs(subfolder_path, exist_ok=True)
+        # Make group folders & meta
+        os.makedirs(subfolder_path, exist_ok=True)
+        if not os.path.exists(subfolder_group_meta):
+            with open(subfolder_group_meta, "w") as f:
+                json.dump({"name": display_label, "description": group_desc}, f, indent=2)
 
-            # ✅ Create empty subfolder JSON if it doesn't exist
-            if not os.path.exists(subfolder_json_path):
-                with open(subfolder_json_path, "w") as f:
-                    json.dump([], f, indent=2)
+        # Ensure the property JSON exists and points to this folder
+        _ensure_property_self_labels(type_name, internal_name, display_label, group_desc)
 
-            # ✅ Create subfolder index (if not already) — this is the "big_events.json"
-            if os.path.exists(subfolder_json_path):
-                with open(subfolder_json_path, "r") as f:
-                    data = json.load(f)
-            else:
-                data = []
+        # Optionally make biographies root
+        if request.form.get("also_make_bio_root") == "on":
+            os.makedirs(bios_base_path, exist_ok=True)
 
-            # ✅ If needed, you can skip writing anything else here — metadata is stored by the folder name
-            flash(f"Subfolder '{display_label}' created successfully.", "success")
-            return redirect(return_url)
+        # --- Population mode ---
+        populate_mode = request.form.get("populate_mode") or "manual"
 
-        except Exception as e:
-            flash(f"Error creating subfolder: {e}", "error")
-            return redirect(request.url)
+        if populate_mode == "api":
+            api_url     = (request.form.get("api_url") or "").strip()
+            array_path  = (request.form.get("api_array_path") or "").strip()
+            field_id    = (request.form.get("api_field_id") or "id").strip()
+            field_name  = (request.form.get("api_field_display") or "name").strip()
+            field_desc  = (request.form.get("api_field_desc") or "description").strip()
+            field_img   = (request.form.get("api_field_image") or "image_url").strip()
+            max_items   = int(request.form.get("api_max_items") or "200")
 
+            if not api_url:
+                flash("API URL is required for API population.", "error")
+                return redirect(request.url)
+
+            created = _import_labels_from_api(
+                type_name, internal_name, display_label, group_desc,
+                api_url=api_url,
+                array_path=array_path,
+                field_map={
+                    "id": field_id, "display": field_name,
+                    "description": field_desc, "image_url": field_img
+                },
+                headers=None, query=None, max_items=max_items
+            )
+            flash(f"✅ Imported {len(created)} labels from API.", "success")
+
+        elif populate_mode == "db_sqlite":
+            sqlite_path = (request.form.get("db_sqlite_path") or "").strip()
+            sql         = (request.form.get("db_sql") or "").strip()
+            col_id      = (request.form.get("db_col_id") or "id").strip()
+            col_name    = (request.form.get("db_col_display") or "name").strip()
+            col_desc    = (request.form.get("db_col_desc") or "description").strip()
+            col_img     = (request.form.get("db_col_image") or "image_url").strip()
+            max_items   = int(request.form.get("db_max_items") or "500")
+
+            if not sqlite_path or not sql:
+                flash("SQLite path and SQL are required for DB population.", "error")
+                return redirect(request.url)
+
+            created = _import_labels_from_sqlite(
+                type_name, internal_name, display_label, group_desc,
+                sqlite_path=sqlite_path, sql=sql,
+                col_id=col_id, col_display=col_name, col_desc=col_desc, col_img=col_img,
+                max_items=max_items
+            )
+            flash(f"✅ Imported {len(created)} labels from database.", "success")
+
+        else:
+            # manual path: optionally create first label as before
+            if request.form.get("create_first_label") == "on":
+                raw_label_name = (request.form.get("first_label_name") or "").strip()
+                if raw_label_name:
+                    item = {
+                        "id": raw_label_name,
+                        "display": raw_label_name.strip().title(),
+                        "description": (request.form.get("first_label_desc") or "").strip(),
+                        "image_url": (request.form.get("first_label_image") or "").strip(),
+                        "confidence": int(request.form.get("first_label_conf") or "100"),
+                        "source": "user"
+                    }
+                    # write main label (and child folders)
+                    _write_label_json(subfolder_path, internal_name, item)
+
+                    # optional stub bio
+                    if request.form.get("make_stub_bio") == "on":
+                        child_bio_dir = os.path.join(bios_base_path, slugify_key(raw_label_name))
+                        os.makedirs(child_bio_dir, exist_ok=True)
+                        stub = os.path.join(child_bio_dir, f"{slugify_key(raw_label_name)}.json")
+                        if not os.path.exists(stub):
+                            with open(stub, "w") as f:
+                                json.dump({
+                                    "id": slugify_key(raw_label_name),
+                                    "name": item["display"],
+                                    "description": f"Auto-generated biography stub for label: {item['display']}",
+                                    "source": "auto",
+                                    "entries": []
+                                }, f, indent=2)
+                    flash(f"✅ Created first label “{item['display']}”.", "success")
+
+        flash(f"📂 Subfolder “{display_label}” created.", "success")
+        return redirect(return_url)
+
+    # GET
     return render_template("create_subfolder.html", type_name=type_name, return_url=return_url)
+
 
 @app.route('/iframe_select/<string:type_name>')
 def iframe_select_type(type_name):

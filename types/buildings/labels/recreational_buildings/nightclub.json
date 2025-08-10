@@ -1,0 +1,13 @@
+{
+  "id": "nightclub",
+  "display": "Nightclub",
+  "label_type": "recreational_buildings",
+  "description": "",
+  "confidence": 100,
+  "image_url": "",
+  "source": "user",
+  "created": "2025-08-10T20:23:00.997831+00:00",
+  "properties": {
+    "suggests_biographies_from": "buildings/recreational_buildings/nightclub"
+  }
+}

@@ -1023,6 +1023,184 @@ def expand_child_groups(*, base_groups, current_type, label_base_path, existing_
     expanded.sort(key=lambda g: (len(g["key"].split("/")), g["key"]))
     return expanded
 
+# utils.py
+import os, json, re, sqlite3, urllib.request, urllib.error, urllib.parse
+from datetime import datetime, timezone
+
+def slugify_key(s: str) -> str:
+    return re.sub(r"[^a-z0-9_]+", "_", (s or "").lower()).strip("_")
+
+def _write_label_json(base_dir: str, label_type: str, item: dict):
+    """
+    item expects: {id, display, description?, image_url?, confidence?}
+    Creates label json and child label/bio folders under base_dir/<id> and sibling bios dir.
+    """
+    label_id     = slugify_key(item["id"])
+    display_name = item.get("display") or label_id.replace("_", " ").title()
+    path_json    = os.path.join(base_dir, f"{label_id}.json")
+    os.makedirs(base_dir, exist_ok=True)
+
+    payload = {
+        "id": label_id,
+        "display": display_name,
+        "label_type": label_type,
+        "description": item.get("description", ""),
+        "confidence": int(item.get("confidence", 100)),
+        "image_url": item.get("image_url", ""),
+        "source": item.get("source", "import"),
+        "created": datetime.now(timezone.utc).isoformat(),
+        "properties": item.get("properties", {})
+    }
+    # prune blanks
+    payload = {k: v for k, v in payload.items() if v not in ("", None, [])}
+
+    with open(path_json, "w") as f:
+        json.dump(payload, f, indent=2)
+
+    # child folders
+    label_id = payload["id"]
+    child_label_dir = os.path.join(base_dir, label_id)
+    os.makedirs(child_label_dir, exist_ok=True)
+    return payload["id"]  # return canonical id (slug)
+
+def _ensure_property_self_labels(type_name: str, group_key: str, display_label: str, description: str = ""):
+    """
+    Ensure top-level property JSON exists mapping this group to self_labels w/ allow_children.
+    """
+    labels_root  = os.path.join("types", type_name, "labels")
+    prop_json    = os.path.join(labels_root, f"{group_key}.json")
+    if not os.path.exists(prop_json):
+        with open(prop_json, "w") as f:
+            json.dump({
+                "name": display_label,
+                "description": description or "",
+                "source": {
+                    "kind": "self_labels",
+                    "path": group_key,
+                    "allow_children": True
+                }
+            }, f, indent=2)
+
+def _fetch_api_json(url: str, headers: dict = None, query: dict = None, timeout: int = 15):
+    """
+    Lightweight HTTP GET (no external deps). Returns parsed JSON or []/{}.
+    """
+    try:
+        if query:
+            url = f"{url}?{urllib.parse.urlencode(query, doseq=True)}"
+        req = urllib.request.Request(url, headers=headers or {})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            content = resp.read()
+            try:
+                return json.loads(content.decode("utf-8", errors="ignore"))
+            except Exception:
+                return []
+    except urllib.error.URLError as e:
+        print("[API ERROR]", e)
+        return []
+
+def _extract_items_from_json(data, array_path: str, field_map: dict):
+    """
+    array_path: e.g. "data.items"  -> we walk nested dicts/lists
+    field_map:  {"id": "code", "display": "name", "description": "summary", "image_url": "image"}
+    Returns list of {id, display, ...}
+    """
+    def walk_path(obj, path):
+        parts = [p for p in (path or "").split(".") if p]
+        cur = obj
+        for p in parts:
+            if isinstance(cur, dict):
+                cur = cur.get(p, [])
+            elif isinstance(cur, list):
+                # allow numeric index
+                try:
+                    idx = int(p)
+                    cur = cur[idx] if 0 <= idx < len(cur) else []
+                except ValueError:
+                    # apply to each and flatten
+                    acc = []
+                    for it in cur:
+                        if isinstance(it, dict) and p in it:
+                            acc.append(it[p])
+                    cur = acc
+            else:
+                return []
+        return cur
+
+    raw = walk_path(data, array_path) if array_path else data
+    if not isinstance(raw, list):
+        raw = [raw] if raw else []
+
+    out = []
+    for row in raw:
+        if not isinstance(row, dict): 
+            continue
+        iid = row.get(field_map.get("id", "id"))
+        disp = row.get(field_map.get("display", "display")) or iid
+        if not iid or not disp:
+            continue
+        item = {
+            "id": str(iid),
+            "display": str(disp),
+            "description": row.get(field_map.get("description", "description"), ""),
+            "image_url": row.get(field_map.get("image_url", "image_url"), ""),
+        }
+        out.append(item)
+    return out
+
+def _import_labels_from_api(type_name: str, group_key: str, display_label: str, description: str,
+                            api_url: str, array_path: str, field_map: dict, headers: dict = None, query: dict = None,
+                            max_items: int = 200):
+    labels_dir = os.path.join("types", type_name, "labels", group_key)
+    os.makedirs(labels_dir, exist_ok=True)
+
+    _ensure_property_self_labels(type_name, group_key, display_label, description)
+
+    data = _fetch_api_json(api_url, headers=headers, query=query)
+    items = _extract_items_from_json(data, array_path=array_path, field_map=field_map)
+    created = []
+    for item in items[:max_items]:
+        slug = _write_label_json(labels_dir, group_key, item)
+        created.append(slug)
+    return created
+
+def _import_labels_from_sqlite(type_name: str, group_key: str, display_label: str, description: str,
+                               sqlite_path: str, sql: str,
+                               col_id: str = "id", col_display: str = "name",
+                               col_desc: str = "description", col_img: str = "image_url",
+                               max_items: int = 500):
+    labels_dir = os.path.join("types", type_name, "labels", group_key)
+    os.makedirs(labels_dir, exist_ok=True)
+
+    _ensure_property_self_labels(type_name, group_key, display_label, description)
+
+    created = []
+    try:
+        con = sqlite3.connect(sqlite_path)
+        cur = con.cursor()
+        cur.execute(sql)
+        cols = [d[0] for d in cur.description]
+        idx = {c: i for i, c in enumerate(cols)}
+        for i, row in enumerate(cur.fetchall()):
+            if i >= max_items: break
+            def col(name): 
+                j = idx.get(name)
+                return row[j] if j is not None else None
+
+            item = {
+                "id": col(col_id),
+                "display": col(col_display),
+                "description": col(col_desc) or "",
+                "image_url": col(col_img) or ""
+            }
+            if not item["id"] or not item["display"]:
+                continue
+            slug = _write_label_json(labels_dir, group_key, item)
+            created.append(slug)
+        con.close()
+    except Exception as e:
+        print("[SQLITE IMPORT ERROR]", e)
+    return created
 
 
 

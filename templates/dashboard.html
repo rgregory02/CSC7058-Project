@@ -27,12 +27,12 @@
     <div class="header">
       <h1>📚 Biography Studio</h1>
       <div class="toolbar">
-        <!-- Person-focused flow remains easy to reach -->
-        <a class="btn" href="{{ url_for('start_person_naming') }}">🧑‍🧭 Start Life Wizard</a>
         <!-- General, type-agnostic creation flow -->
-        <a class="btn" href="{{ url_for('wizard_start') }}">🧩 Start General Wizard</a>
+        <a class="btn" href="{{ url_for('wizard_start') }}">🧩 Start Biography Wizard</a>
         <!-- Optional: quick link to people browse page (your old index view) -->
         <a class="btn ghost" href="{{ url_for('index_page') }}">👤 Browse Life Wizard</a>
+      </div>
+      <div class="toolbar">
         <!-- Optional: create a new Type right from here -->
         <a class="btn secondary" href="{{ url_for('add_type_prompt') }}">➕ Add New Type</a>
         <!-- NEW: archived types hub -->

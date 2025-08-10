@@ -1,0 +1,9 @@
+{
+  "name": "Recreational buildings",
+  "description": "",
+  "source": {
+    "kind": "self_labels",
+    "path": "recreational_buildings",
+    "allow_children": true
+  }
+}
