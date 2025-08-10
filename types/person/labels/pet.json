@@ -1,15 +1,25 @@
 {
-    "name": "Pet",
-    "description": "Pet that the person owns",
-    "source": {
-        "kind": "type_labels",
-        "type": "pet",
-        "path": "species",
-        "allow_children": true
-    },
-    "link_biography": {
-        "type": "pet",
-        "path": "",
-        "mode": "child_or_parent"
-    }
+  "name": "Pet",
+  "description": "A person's pet",
+  "input": "select",
+  "source": {
+    "kind": "type_labels",
+    "type": "pet",
+    "path": "pet",
+
+    "allow_children": true
+  },
+
+  
+  "link_biography": {
+    "type": "pet",
+    "mode": "child_or_parent",
+    "lookup": "id",
+    "path": "pet"
+  },
+  "ui": {
+    "allow_confidence": true,
+    "default_confidence": 100,
+    "display_template": "Has pet: {{option}}"
+  }
 }

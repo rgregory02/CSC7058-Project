@@ -1,3 +1,25 @@
 {
-    "description":"An occupation from the O*net dataset"
+  "name": "Relationship",
+  "description": "A person's relationship",
+  "input": "select",
+  "source": {
+    "kind": "self_labels",
+    "type": "person",
+    "path": "relationship",
+
+    "allow_children": true
+  },
+
+  
+  "link_biography": {
+    "type": "person",
+    "mode": "child_or_parent",
+    "lookup": "id",
+    "path": "relationship"
+  },
+  "ui": {
+    "allow_confidence": true,
+    "default_confidence": 100,
+    "display_template": "Has relationship: {{option}}"
+  }
 }
