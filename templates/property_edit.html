@@ -20,6 +20,7 @@
     .actions{grid-column:1/-1;display:flex;gap:10px;justify-content:flex-end;margin-top:8px}
     small.help{display:block;color:#8b90a0;margin-top:4px}
     .pill{display:inline-block;background:#f2f4ff;border:1px solid #dfe3ff;padding:4px 8px;border-radius:999px;font-size:12px;color:#495}
+    .twoCols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   </style>
 </head>
 <body>
@@ -34,6 +35,11 @@
         <a class="btn secondary" href="{{ url_for('dashboard') }}">Dashboard</a>
       </div>
     </div>
+
+    {% set src = (prop.source if prop and prop.source is defined else {}) %}
+    {# UI normalization: show 'self_labels' if saved as type_labels but points to current type #}
+    {% set raw_kind = src.kind if src and src.kind is defined else '' %}
+    {% set ui_kind = ( 'self_labels' if (raw_kind=='type_labels' and (src.get('type')==type_name)) else raw_kind ) %}
 
     <form method="post" autocomplete="off">
       <!-- Identity -->
@@ -52,7 +58,7 @@
                value="{{ (prop_key if mode=='edit' else '') or '' }}"
                pattern="[a-z0-9_]+"
                required>
-        <small class="help">Autofills from name (lowercase, numbers & underscores only). You can override it.</small>
+        <small class="help">Auto‑generates from the name (lowercase, numbers & underscores). You can override it.</small>
       </div>
 
       <div>
@@ -74,13 +80,13 @@
 
       <div>
         <label for="source_kind">Source kind</label>
-        {% set src = (prop.source if prop and prop.source is defined else {}) %}
         <select id="source_kind" name="source_kind">
-          {% set current_kind = src.kind if src and src.kind is defined else '' %}
-          <option value="">— none —</option>
-          <option value="type_labels" {{ 'selected' if current_kind=='type_labels' else '' }}>type_labels</option>
-          <option value="type_biographies" {{ 'selected' if current_kind=='type_biographies' else '' }}>type_biographies</option>
+          <option value="none" {{ 'selected' if ui_kind in ('', None) else '' }}>— none —</option>
+          <option value="self_labels" {{ 'selected' if ui_kind=='self_labels' else '' }}>self_labels (this type)</option>
+          <option value="type_labels" {{ 'selected' if ui_kind=='type_labels' else '' }}>type_labels (another type)</option>
+          <option value="type_biographies" {{ 'selected' if ui_kind=='type_biographies' else '' }}>type_biographies (another type)</option>
         </select>
+        <small class="help">Choose where this property’s options come from.</small>
       </div>
 
       <div>
@@ -91,28 +97,37 @@
             <option value="{{ t }}" {{ 'selected' if src and src.get('type')==t else '' }}>{{ t }}</option>
           {% endfor %}
         </select>
-        <small class="help">If pulling from another type’s labels or biographies.</small>
+        <small class="help">Used for <code>type_labels</code> / <code>type_biographies</code>. Hidden for <code>self_labels</code>.</small>
       </div>
 
-      <div>
-        <label for="source_path">Source path (suggested)</label>
-        {% set src_path = src.get('path','') if src else '' %}
-        <input list="label_groups" type="text" id="source_path" name="source_path"
-               placeholder="e.g. work_building/hospital"
-               value="{{ src_path }}">
-        <datalist id="label_groups">
-          {% for g in available_label_groups %}
-            <option value="{{ g }}"></option>
-          {% endfor %}
-        </datalist>
-        <small class="help">For <code>type_labels</code>: the label group path inside that type.</small>
-      </div>
+      <div class="full twoCols">
+        <div>
+          <label for="source_path">Source path</label>
+          {% set src_path = src.get('path','') if src else '' %}
+          <input list="label_groups" type="text" id="source_path" name="source_path"
+                 placeholder="e.g. work_building/hospital"
+                 value="{{ src_path }}">
+          <datalist id="label_groups"></datalist>
+          <small class="help">
+            For <code>self_labels</code>/<code>type_labels</code>: label group path.  
+            If <code>self_labels</code> and left blank, it will default to the property key.
+          </small>
+        </div>
 
-      <div style="display:flex;align-items:center;gap:8px">
-        {% set allow_children = (src.get('allow_children') if src else False) %}
-        <input type="checkbox" id="source_allow_children" name="source_allow_children"
-               {{ 'checked' if allow_children else '' }}>
-        <label for="source_allow_children" style="margin:0">Allow child folders</label>
+        <!-- NEW: visual picker mirroring the datalist -->
+        <div>
+          <label for="source_path_select">Pick from groups</label>
+          <select id="source_path_select">
+            <option value="">— choose a group —</option>
+          </select>
+          <small class="help">Choose an existing group; or type your own on the left.</small>
+          <div style="margin-top:10px;display:flex;align-items:center;gap:8px">
+            {% set allow_children = (src.get('allow_children') if src else False) %}
+            <input type="checkbox" id="source_allow_children" name="source_allow_children"
+                   {{ 'checked' if allow_children else '' }}>
+            <label for="source_allow_children" style="margin:0">Allow child folders</label>
+          </div>
+        </div>
       </div>
 
       <!-- Link biography block -->
@@ -132,8 +147,8 @@
 
       <div>
         <label for="link_bio_path">Link biography path (optional)</label>
-        <input list="label_groups" type="text" id="link_bio_path" name="link_bio_path"
-               placeholder="e.g. work_building/hospital"
+        <input type="text" id="link_bio_path" name="link_bio_path"
+               placeholder="e.g. hospitals"
                value="{{ lb.get('path','') if lb else '' }}">
         <small class="help">If you keep biographies in subfolders (optional).</small>
       </div>
@@ -163,14 +178,16 @@
   </div>
 
   <script>
+    // ---- Data from server for dynamic suggestions ----
+    const CURRENT_TYPE = {{ type_name|tojson }};
+    const LABEL_GROUPS_BY_TYPE = {{ (label_groups_by_type or {})|tojson }};
+    const AVAILABLE_TYPES = {{ (available_types or [])|tojson }};
+
     // --- Auto-generate key from name (while user hasn't edited key manually) ---
     const nameEl = document.getElementById('name');
     const keyEl  = document.getElementById('key');
-
-    // If editing, don't auto-change the key
     let keyDirty = {{ 'true' if mode=='edit' else 'false' }};
 
-    // If user types in the key field, mark it as manually edited
     keyEl.addEventListener('input', () => { keyDirty = true; });
 
     function toSnakeCase(s) {
@@ -184,30 +201,91 @@
     nameEl.addEventListener('input', () => {
       if (keyDirty) return;
       keyEl.value = toSnakeCase(nameEl.value);
-    });
-
-    // On first load for "new", if there is a name, prefill key
-    document.addEventListener('DOMContentLoaded', () => {
-      if (!keyDirty && !keyEl.value && nameEl.value) {
-        keyEl.value = toSnakeCase(nameEl.value);
+      // If self_labels & empty path, keep path in sync with key
+      if (document.getElementById('source_kind').value === 'self_labels') {
+        const sp = document.getElementById('source_path');
+        if (!sp.value) sp.value = keyEl.value;
       }
     });
 
-    // Disable/enable path & allow_children depending on source_kind
+    // ---- Source UI logic ----
     const sourceKindEl = document.getElementById('source_kind');
+    const sourceTypeEl = document.getElementById('source_type');
     const sourcePathEl = document.getElementById('source_path');
     const allowChildrenEl = document.getElementById('source_allow_children');
-    function refreshSourceControls(){
-      const k = sourceKindEl.value;
-      const labelsMode = (k === 'type_labels');
-      const bioMode = (k === 'type_biographies');
-      sourcePathEl.disabled = !labelsMode;
-      allowChildrenEl.disabled = !labelsMode;
-      if (!labelsMode){ allowChildrenEl.checked = false; }
+    const datalist = document.getElementById('label_groups');
+    const pathSelect = document.getElementById('source_path_select');
+
+    function fillGroupsUI(groups){
+      // datalist
+      datalist.innerHTML = '';
+      groups.forEach(g => {
+        const opt = document.createElement('option');
+        opt.value = g;
+        datalist.appendChild(opt);
+      });
+      // select
+      pathSelect.innerHTML = '<option value="">— choose a group —</option>';
+      groups.forEach(g => {
+        const o = document.createElement('option');
+        o.value = g;
+        o.textContent = g;
+        pathSelect.appendChild(o);
+      });
     }
-    sourceKindEl.addEventListener('change', refreshSourceControls);
-    refreshSourceControls();
+
+    function refreshSourceControls(firstLoad=false){
+      const kind = sourceKindEl.value;
+
+      const isSelf = (kind === 'self_labels');
+      const isLbls = (kind === 'type_labels');
+      const isBios = (kind === 'type_biographies');
+
+      sourceTypeEl.disabled = !(isLbls || isBios);
+      sourcePathEl.disabled = !(isSelf || isLbls);
+      pathSelect.disabled   = !(isSelf || isLbls);
+      allowChildrenEl.disabled = !(isSelf || isLbls);
+
+      if (isSelf){
+        fillGroupsUI(LABEL_GROUPS_BY_TYPE[CURRENT_TYPE] || []);
+        if (!firstLoad && !sourcePathEl.value) {
+          sourcePathEl.value = keyEl.value || toSnakeCase(nameEl.value);
+        }
+      } else if (isLbls){
+        const t = sourceTypeEl.value || '';
+        fillGroupsUI(t ? (LABEL_GROUPS_BY_TYPE[t] || []) : []);
+      } else {
+        fillGroupsUI([]);
+        allowChildrenEl.checked = false;
+      }
+    }
+
+    sourceKindEl.addEventListener('change', () => refreshSourceControls(false));
+    sourceTypeEl.addEventListener('change', () => {
+      if (sourceKindEl.value === 'type_labels'){
+        const t = sourceTypeEl.value || '';
+        fillGroupsUI(t ? (LABEL_GROUPS_BY_TYPE[t] || []) : []);
+      }
+    });
+
+    // when user picks from the dropdown, mirror into text input
+    pathSelect.addEventListener('change', () => {
+      if (pathSelect.value) sourcePathEl.value = pathSelect.value;
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      // If editing and UI showed self_labels (normalized) adjust dropdown
+      const initialKind = '{{ ui_kind }}';
+      if (initialKind === 'self_labels') {
+        sourceKindEl.value = 'self_labels';
+      }
+      refreshSourceControls(true);
+      // Preselect dropdown if the text value matches one of the options
+      const match = Array.from(pathSelect.options).find(o => o.value === sourcePathEl.value);
+      if (match) pathSelect.value = match.value;
+    });
   </script>
 </body>
 </html>
+
 

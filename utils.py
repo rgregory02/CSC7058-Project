@@ -7,6 +7,14 @@ import glob
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp"]
+
+def load_json_safe(path):
+    try:
+        return load_json_as_dict(path)
+    except Exception:
+        return {}
+
 def load_json_as_dict(file_path):
     """
     Load the JSON file at file_path into a dictionary.
@@ -211,20 +219,69 @@ LIFE_STAGE_ORDER = {
     "hundreds": 105
 }
 
-
-def _list_types():
+def list_types():
     root = "types"
     if not os.path.isdir(root):
         return []
     return sorted([d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d))])
 
-def _sanitize_key(raw: str, fallback: str = "") -> str:
+def sanitise_key(raw: str, fallback: str = "") -> str:
     key = (raw or "").strip().lower()
     key = re.sub(r"[^a-z0-9_]+", "_", key).strip("_")
     return key or fallback
 
-def _checkbox_on(req, name: str) -> bool:
+def checkbox_on(req, name: str) -> bool:
     return (req.form.get(name) or "").lower() in ("on", "true", "1", "yes")
+
+def collect_label_options_from_folder(folder_abs):
+    """Return [{id, display, description?, image?}] for *.json files in a folder."""
+    out = []
+    if not os.path.isdir(folder_abs):
+        return out
+    for f in sorted(os.listdir(folder_abs)):
+        if not f.endswith(".json") or f == "_group.json":
+            continue
+        lid = os.path.splitext(f)[0]
+        data = load_json_safe(os.path.join(folder_abs, f))
+        display = (data.get("properties", {}) or {}).get("name") or data.get("name") or lid
+        desc = data.get("description", (data.get("properties", {}) or {}).get("description", ""))
+
+        # sibling image if present
+        img = None
+        for ext in IMAGE_EXTS:
+            cand = os.path.join(folder_abs, lid + ext)
+            if os.path.exists(cand):
+                rel = os.path.relpath(cand, ".").replace("\\", "/")
+                img = f"/{rel}"
+                break
+
+        item = {"id": lid, "display": display}
+        if desc: item["description"] = desc
+        if img:  item["image"] = img
+        out.append(item)
+    return out
+
+def normalise_source_meta(meta: dict, prop_key: str, current_type: str):
+    """
+    Map self_labels -> type_labels(current_type), defaulting path to prop_key.
+    This keeps the rest of the code path simple (only type_labels/type_biographies).
+    """
+    if not isinstance(meta, dict):
+        return meta
+    src = (meta.get("source") or meta.get("properties", {}).get("source") or {})
+    if isinstance(src, dict) and src.get("kind") == "self_labels":
+        meta = dict(meta)  # shallow copy
+        new_src = dict(src)
+        new_src["kind"] = "type_labels"
+        new_src["type"] = current_type
+        if not new_src.get("path"):
+            new_src["path"] = prop_key
+        # keep allow_children if present
+        if "allow_children" not in new_src:
+            new_src["allow_children"] = bool(src.get("allow_children"))
+        # write back in top-level "source"
+        meta["source"] = new_src
+    return meta
 
 
 def load_labels_from_folder(folder_path):
@@ -270,7 +327,7 @@ def list_biographies(type_name):
 
 def build_suggested_biographies(*args, **kwargs):
     """
-    Suggest biography options per group that links to another type.
+    Suggest biography options per group.
 
     Preferred signature:
         build_suggested_biographies(current_type, label_groups_list, label_base_path, existing_labels=None)
@@ -281,17 +338,17 @@ def build_suggested_biographies(*args, **kwargs):
 
     Returns: { safe_group_key: [ {id, display, description?}, ... ] }
     """
-    # ---- arg normalisation ----
+    # -------- arg normalization --------
     current_type = None
     label_groups_list = None
     label_base_path = None
     existing_labels = None
 
     if "current_type" in kwargs:
-        current_type       = kwargs.get("current_type")
-        label_groups_list  = kwargs.get("label_groups_list")
-        label_base_path    = kwargs.get("label_base_path")
-        existing_labels    = kwargs.get("existing_labels")
+        current_type      = kwargs.get("current_type")
+        label_groups_list = kwargs.get("label_groups_list")
+        label_base_path   = kwargs.get("label_base_path")
+        existing_labels   = kwargs.get("existing_labels")
     else:
         if len(args) == 4:
             current_type, label_groups_list, label_base_path, existing_labels = args
@@ -304,6 +361,7 @@ def build_suggested_biographies(*args, **kwargs):
 
     if not isinstance(label_groups_list, (list, tuple)):
         raise TypeError("build_suggested_biographies: label_groups_list must be a list")
+
     if not isinstance(existing_labels, dict):
         existing_labels = {}
 
@@ -313,6 +371,51 @@ def build_suggested_biographies(*args, **kwargs):
         except Exception:
             return {}
 
+    # ---- helpers ----
+    def _norm_selected_map(d):
+        """Make values simple strings (selected ids)."""
+        out = {}
+        for k, v in (d or {}).items():
+            if isinstance(v, str):
+                out[k] = v
+            elif isinstance(v, dict):
+                out[k] = v.get("label") or v.get("id") or v.get("value") or ""
+        return out
+
+    norm_selected = _norm_selected_map(existing_labels)
+
+    def _selected_chain_for_key(base_key: str) -> str:
+        """
+        Traverse selections downward:
+          base -> sel1; base/sel1 -> sel2 => "sel1/sel2"
+        """
+        bits = []
+        cur = base_key
+        while True:
+            sel = norm_selected.get(cur)
+            if not sel:
+                break
+            bits.append(sel)
+            cur = f"{cur}/{sel}"
+        return "/".join(bits)
+
+    def _append_bios_from_folder(folder, bios, seen):
+        if not os.path.isdir(folder):
+            return
+        for f in sorted(os.listdir(folder)):
+            if not f.endswith(".json"):
+                continue
+            bid = os.path.splitext(f)[0]
+            if bid in seen:
+                continue
+            data = load_json_safely(os.path.join(folder, f))
+            bios.append({
+                "id": bid,
+                "display": data.get("name", bid.replace("_", " ").title()),
+                "description": data.get("description", "")
+            })
+            seen.add(bid)
+
     out = {}
 
     for g in label_groups_list:
@@ -320,86 +423,108 @@ def build_suggested_biographies(*args, **kwargs):
         if not key:
             continue
         safe = key.replace("/", "__")
-
         bios = []
+        seen = set()
 
-        # ---- Case A: property JSON provides link_biography (the “parent-label → child-bios” pattern) ----
+        # ---------- A) link_biography (scoped by the selected label chain) ----------
         lb = g.get("link_biography")
         if isinstance(lb, dict) and lb.get("type"):
-            lb_type  = lb["type"]
-            lb_path  = (lb.get("path") or "").strip("/")        # e.g. "work_building"
-            lb_mode  = (lb.get("mode") or "child_or_parent")    # "child_only" | "parent_only" | "child_or_parent"
-
-            # Which parent option is currently selected for this group?
-            sel = existing_labels.get(key) or {}
-            # tolerate either {"label": "hospital"} or bare string "hospital" (older callers)
-            if isinstance(sel, str):
-                selected_label_id = sel
-            else:
-                selected_label_id = sel.get("label") or sel.get("id")
-
+            lb_type = lb["type"]
             base_bios_dir = os.path.join("types", lb_type, "biographies")
-            if not os.path.isdir(base_bios_dir):
-                out[safe] = []
-                continue
+            if os.path.isdir(base_bios_dir):
+                conf_path = (lb.get("path") or "").strip("/")
+                mode = (lb.get("mode") or "child_or_parent")
 
-            # Prefer child folder when a parent label is selected
-            if selected_label_id and lb_mode in ("child_only", "child_or_parent"):
-                child_dir = os.path.join(base_bios_dir, lb_path, selected_label_id) if lb_path else os.path.join(base_bios_dir, selected_label_id)
-                if os.path.isdir(child_dir):
-                    for f in os.listdir(child_dir):
-                        if f.endswith(".json"):
-                            data = load_json_safely(os.path.join(child_dir, f))
-                            bid  = os.path.splitext(f)[0]
-                            bios.append({
-                                "id": bid,
-                                "display": data.get("name", bid.replace("_"," ").title()),
-                                "description": data.get("description", "")
-                            })
+                chain = _selected_chain_for_key(key)  # "" or "sel1" or "sel1/sel2/..."
+                if chain:
+                    # Deepest child and first parent folder derived from the chain
+                    root = os.path.join(base_bios_dir, conf_path) if conf_path else base_bios_dir
+                    parts = chain.split("/")
+                    child_dir = os.path.join(root, *parts)               # deepest child
+                    parent_dir = os.path.join(root, parts[0])            # first-level parent
 
-            # If nothing found (or mode allows), show parent-level matches as a fallback
-            if (not bios) and lb_mode in ("parent_only", "child_or_parent"):
-                parent_dir = os.path.join(base_bios_dir, lb_path) if lb_path else base_bios_dir
-                if os.path.isdir(parent_dir):
-                    for root, _, files in os.walk(parent_dir):
-                        for f in files:
-                            if not f.endswith(".json"):
-                                continue
-                            # Heuristic: only include files/folders that hint the selected label
-                            if selected_label_id and (selected_label_id not in root) and (os.path.splitext(f)[0] != selected_label_id):
-                                continue
-                            data = load_json_safely(os.path.join(root, f))
-                            bid  = os.path.splitext(f)[0]
-                            bios.append({
-                                "id": bid,
-                                "display": data.get("name", bid.replace("_"," ").title()),
-                                "description": data.get("description", "")
-                            })
+                    if mode == "child_only":
+                        _append_bios_from_folder(child_dir, bios, seen)
+                    elif mode == "parent_only":
+                        _append_bios_from_folder(parent_dir, bios, seen)
+                    else:  # child_or_parent
+                        _append_bios_from_folder(child_dir, bios, seen)
+                        if not bios:
+                            _append_bios_from_folder(parent_dir, bios, seen)
+                else:
+                    # No selection yet → do NOT suggest anything (keeps UX clean)
+                    pass
 
-        # ---- Case B: refer_to points straight to another type's biographies (list them) ----
+        # ---------- B) refer_to = biographies (unscoped list) ----------
         elif g.get("refer_to", {}).get("source") == "biographies":
             r = g["refer_to"]
             r_type = r.get("type")
             r_path = (r.get("path") or "").strip("/")
-            base = os.path.join("types", r_type, "biographies")
-            scan = os.path.join(base, r_path) if r_path else base
-            if os.path.isdir(scan):
+            base = os.path.join("types", r_type, "biographies") if r_type else None
+            if base and os.path.isdir(base):
+                scan = os.path.join(base, r_path) if r_path else base
                 for root, _, files in os.walk(scan):
                     for f in files:
                         if not f.endswith(".json"):
                             continue
+                        bid = os.path.splitext(f)[0]
+                        if bid in seen:
+                            continue
                         data = load_json_safely(os.path.join(root, f))
-                        bid  = os.path.splitext(f)[0]
                         bios.append({
                             "id": bid,
-                            "display": data.get("name", bid.replace("_"," ").title()),
+                            "display": data.get("name", bid.replace("_", " ").title()),
                             "description": data.get("description", "")
                         })
+                        seen.add(bid)
 
         if bios:
+            # Sort for stable UX
+            bios.sort(key=lambda x: (x.get("display") or x.get("id") or "").lower())
             out[safe] = bios
 
     return out
+
+
+
+
+def list_label_groups_for_type(type_name: str):
+    """
+    Return a sorted list of label group paths under types/<type>/labels.
+    Includes nested groups, e.g. "work_building", "work_building/hospital".
+    """
+    base = os.path.join("types", type_name, "labels")
+    groups = set()
+    if not os.path.isdir(base):
+        return []
+
+    for root, dirs, files in os.walk(base):
+        rel = os.path.relpath(root, base)
+        if rel == ".":
+            # top-level property JSONs also create a group of same key
+            for f in files:
+                if f.endswith(".json") and f not in ("_group.json",):
+                    groups.add(os.path.splitext(f)[0])
+            continue
+
+        # this is a subfolder; use folder path as a group key
+        rel_key = rel.replace("\\", "/")
+        groups.add(rel_key)
+
+        # property JSONs inside this folder also count as direct groups/options
+        for f in files:
+            if f.endswith(".json") and f not in ("_group.json",):
+                key = f[:-5]  # filename without .json
+                groups.add(f"{rel_key}/{key}")
+
+    return sorted(groups, key=lambda s: (s.count("/"), s))
+
+def build_label_groups_by_type():
+    out = {}
+    for t in list_types():
+        out[t] = list_label_groups_for_type(t)
+    return out
+
 
 import os, re, shutil, json
 from datetime import datetime
@@ -609,67 +734,51 @@ def scan_cross_references(target_type: str):
 
 #     return label_groups_list
 
-
 def collect_label_groups(label_base_path: str, current_type: str):
     """
-    Build UI groups *from property JSON files* in types/<type>/labels,
-    and fall back to legacy "subfolder = group, files = options" if no property JSON exists.
+    Build groups from property JSONs (property-first), with legacy subfolder fallback.
 
     Group shape:
-    {
-      "key": "work_place",
-      "label": "Work place",
-      "description": "...",
-      "options": [ { id, display, description, image? } ... ],
-      # Hints for cross‑type pulls:
-      "refer_to": { "type": "...", "source": "labels"|"biographies", "path": "...", "allow_children": true },
-      "link_biography": { "type": "...", "path": "...", "mode": "child_or_parent" }
-    }
+      {
+        "key": "work_place",
+        "label": "Work place",
+        "description": "...",
+        "options": [ { id, display, description?, image? } ... ],
+        "refer_to": { "type": "...", "source": "labels"|"biographies", "path": "...", "allow_children": true }?,  # hint
+        "link_biography": { "type": "...", "path": "...", "mode": "child_or_parent" }?
+      }
     """
     groups = []
     if not os.path.isdir(label_base_path):
         return groups
 
-    # -------- helpers --------
-    IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp"]
-
-    def load_json_safely(p):
-        try:
-            return load_json_as_dict(p)
-        except Exception as e:
-            print(f"[WARN] Could not parse JSON: {p} -> {e}")
-            return {}
-
-    def build_option_from_file(json_path: str, url_base_prefix: str = "/types"):
-        """Legacy subfolder option loader (kept for backward-compat)."""
-        data = load_json_safely(json_path)
+    def build_option_from_file(json_path: str):
+        data = load_json_safe(json_path)
         base = os.path.splitext(os.path.basename(json_path))[0]
-        name = data.get("properties", {}).get("name") or data.get("name") or base
-        desc = data.get("description", data.get("properties", {}).get("description", ""))
+        name = (data.get("properties", {}) or {}).get("name") or data.get("name") or base
+        desc = data.get("description", (data.get("properties", {}) or {}).get("description", ""))
 
-        # best‑effort sibling image
-        image_url = None
+        # sibling image
+        img = None
         folder = os.path.dirname(json_path)
         for ext in IMAGE_EXTS:
-            candidate = os.path.join(folder, base + ext)
-            if os.path.exists(candidate):
-                rel = os.path.relpath(candidate, ".").replace("\\", "/")
-                image_url = f"{url_base_prefix}/{rel.split('/', 1)[1]}" if rel.startswith("types/") else f"/{rel}"
+            cand = os.path.join(folder, base + ext)
+            if os.path.exists(cand):
+                rel = os.path.relpath(cand, ".").replace("\\", "/")
+                img = f"/{rel}"
                 break
 
-        opt = {"id": base, "display": name, "description": desc}
-        if image_url:
-            # support both keys (templates sometimes use item.image)
-            opt["image"] = image_url
-            opt["image_url"] = image_url
+        opt = {"id": base, "display": name}
+        if desc: opt["description"] = desc
+        if img:
+            opt["image"] = img
+            opt["image_url"] = img
         return opt
 
     def extract_source(meta: dict):
-        """Read `source` from top-level or properties.* and normalise."""
         src = (meta or {}).get("source") or (meta or {}).get("properties", {}).get("source") or {}
         if not isinstance(src, dict):
             return None
-
         kind = src.get("kind")
         if kind == "type_labels":
             return {
@@ -679,35 +788,28 @@ def collect_label_groups(label_base_path: str, current_type: str):
                 "allow_children": bool(src.get("allow_children"))
             }
         if kind == "type_biographies":
-            return { "type": src.get("type"), "source": "biographies" }
+            return {"type": src.get("type"), "source": "biographies", "path": src.get("path", "")}
         return None
 
     def extract_link_bio(meta: dict):
-        """Read link_biography from top-level or properties.* and normalise."""
         lb = (meta or {}).get("link_biography") or (meta or {}).get("properties", {}).get("link_biography") or {}
         if not isinstance(lb, dict) or not lb.get("type"):
             return None
-        return {
-            "type": lb.get("type"),
-            "path": lb.get("path", ""),
-            "mode": (lb.get("mode") or "child_or_parent")
-        }
+        return {"type": lb.get("type"), "path": lb.get("path", ""), "mode": (lb.get("mode") or "child_or_parent")}
 
-    # -------- 1) Property JSONs at the TOP LEVEL (property‑first) --------
+    # 1) Property JSONs at top-level of labels/
     top_level_jsons = [
         f for f in os.listdir(label_base_path)
         if f.endswith(".json") and os.path.isfile(os.path.join(label_base_path, f))
     ]
 
     for jf in sorted(top_level_jsons):
-        prop_key  = os.path.splitext(jf)[0]                       # e.g. "work_place"
+        prop_key  = os.path.splitext(jf)[0]
         prop_path = os.path.join(label_base_path, jf)
-        meta = load_json_safely(prop_path)
+        meta = load_json_safe(prop_path)
 
-        # If the file is not an object, handle gracefully
+        # handle non-dict defensively
         if not isinstance(meta, dict):
-            print(f"[WARN] Property JSON is not an object (converting if list): {prop_path} -> {type(meta).__name__}")
-            # If it's a simple list, expose it as a basic group of options
             if isinstance(meta, list):
                 opts = []
                 for item in meta:
@@ -717,30 +819,27 @@ def collect_label_groups(label_base_path: str, current_type: str):
                         iid  = item.get("id") or item.get("key") or item.get("value")
                         name = item.get("display") or item.get("name") or iid
                         if iid:
-                            opt = {"id": iid, "display": name or iid}
-                            if "description" in item:
-                                opt["description"] = item["description"]
-                            # optional image fields users might include
+                            o = {"id": iid, "display": name or iid}
+                            if item.get("description"): o["description"] = item["description"]
                             img = item.get("image") or item.get("image_url")
-                            if img:
-                                opt["image"] = img
-                                opt["image_url"] = img
-                            opts.append(opt)
+                            if img: o["image"] = o["image_url"] = img
+                            opts.append(o)
                 if opts:
                     groups.append({
                         "key": prop_key,
-                        "label": prop_key.replace("_", " ").title(),
+                        "label": prop_key.replace("_"," ").title(),
                         "description": "",
                         "options": opts
                     })
-            # skip to next file
             continue
 
-        # derive presentation
+        # normalise self_labels to type_labels(current_type)
+        meta = normalise_source_meta(meta, prop_key, current_type)
+
         prop_name = meta.get("name") or meta.get("properties", {}).get("name") or prop_key.replace("_", " ").title()
         prop_desc = meta.get("description") or meta.get("properties", {}).get("description", "")
 
-        # discover options via your resolver (folder | type_labels | type_biographies | none)
+        # Let your existing resolver populate options when appropriate
         try:
             options = resolve_property_options(
                 current_type=current_type,
@@ -755,192 +854,299 @@ def collect_label_groups(label_base_path: str, current_type: str):
         refer_to = extract_source(meta)
         link_bio = extract_link_bio(meta)
 
-        group_obj = {
-            "key": prop_key,
-            "label": prop_name,
-            "description": prop_desc,
-            "options": options
-        }
-        if refer_to:
-            group_obj["refer_to"] = refer_to
-        if link_bio:
-            group_obj["link_biography"] = link_bio
+        g = {"key": prop_key, "label": prop_name, "description": prop_desc, "options": options}
+        if refer_to: g["refer_to"] = refer_to
+        if link_bio: g["link_biography"] = link_bio
+        groups.append(g)
 
-        groups.append(group_obj)
-
-    # -------- 2) Legacy fallback: subfolders that do NOT have a matching top‑level property JSON --------
+    # 2) Legacy: subfolders without a property JSON
     for entry in sorted(os.listdir(label_base_path)):
         full = os.path.join(label_base_path, entry)
         if not os.path.isdir(full):
             continue
+        if f"{entry}.json" in top_level_jsons:
+            continue
 
-        subkey = entry  # e.g. "hair_color"
-        if f"{subkey}.json" in top_level_jsons:
-            continue  # already covered by property JSON
-
-        group_label = subkey.replace("_", " ").title()
+        group_label = entry.replace("_"," ").title()
         group_desc = ""
         refer_to = None
         link_bio = None
 
-        # Optional _group.json inside the folder for meta
         meta_path = os.path.join(full, "_group.json")
         if os.path.exists(meta_path):
-            meta = load_json_safely(meta_path)
-            if isinstance(meta, dict):
-                group_label = meta.get("name") or meta.get("properties", {}).get("name") or group_label
-                group_desc  = meta.get("description") or meta.get("properties", {}).get("description", "") or ""
-                refer_to    = extract_source(meta)
-                link_bio    = extract_link_bio(meta)
-            else:
-                print(f"[WARN] _group.json is not an object: {meta_path}")
+            m = load_json_safe(meta_path)
+            if isinstance(m, dict):
+                # also normalise self_labels in group meta
+                m = normalise_source_meta(m, entry, current_type)
+                group_label = m.get("name") or m.get("properties", {}).get("name") or group_label
+                group_desc  = m.get("description") or m.get("properties", {}).get("description", "") or ""
+                refer_to    = (
+                    {"type": current_type, "source":"labels", "path": entry, "allow_children": True}
+                    if (m.get("source", {}) or {}).get("kind") == "self_labels"
+                    else extract_source(m)
+                )
+                link_bio    = extract_link_bio(m)
 
-        # Collect options from *.json files in the subfolder
         opts = []
         for f in sorted(os.listdir(full)):
             if not f.endswith(".json") or f == "_group.json":
                 continue
             opts.append(build_option_from_file(os.path.join(full, f)))
 
-        group_obj = {
-            "key": subkey,
-            "label": group_label,
-            "description": group_desc,
-            "options": opts
-        }
-        if refer_to:
-            group_obj["refer_to"] = refer_to
-        if link_bio:
-            group_obj["link_biography"] = link_bio
+        g = {"key": entry, "label": group_label, "description": group_desc, "options": opts}
+        if refer_to: g["refer_to"] = refer_to
+        if link_bio: g["link_biography"] = link_bio
+        groups.append(g)
 
-        groups.append(group_obj)
-
-    groups.sort(key=lambda g: g.get("key", ""))
+    groups.sort(key=lambda g: g.get("key",""))
     return groups
 
-
-
-def expand_child_groups(base_groups, current_type, label_base_path, existing_labels):
+def expand_child_groups(*, base_groups, current_type, label_base_path, existing_labels):
     """
-    Recursively expand groups when a selected option has a matching child subfolder.
+    Expand nested child groups when a parent option is selected.
 
-    Example:
-      - Group key "work_building" with selected id "hospital"
-      - If folder exists: types/<type>/labels/work_building/hospital/
-        -> add a new group with key "work_building/hospital"
-      - If the user has already selected e.g. "royal_victoria" in that child group
-        AND a deeper folder exists (work_building/hospital/royal_victoria/),
-        this function will keep expanding.
-
-    Arguments:
-      base_groups:      list from collect_label_groups(...)
-      current_type:     the type name (e.g. "person")
-      label_base_path:  path like "types/<type>/labels"
-      existing_labels:  dict of previously selected labels for the current entry,
-                        shaped like { "work_building": {"id":"hospital", ...},
-                                      "work_building/hospital": {"id":"royal_victoria", ...} }
-
-    Returns:
-      A new list including all original groups plus any recursively discovered child groups.
+    - Supports self labels (current type) and cross-type labels (type_labels) with allow_children.
+    - Recurses so work_place -> hospital -> royal_victoria -> (etc) will appear as you select deeper.
+    - existing_labels may contain either raw strings or dicts with {label|id}.
+    - Child groups inherit parent's `refer_to` and `link_biography` so biography suggestions
+      render on the child group (not the parent).
     """
-    import os
-    import json
+    # Start with a copy and a queue so we can recurse without deep recursion
+    expanded = [dict(g) for g in base_groups]
+    seen_keys = {g["key"] for g in expanded}
+    queue = list(expanded)  # process newly-added groups as well
 
-    IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp"]
-
-    def _safe_json(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"[WARN] expand_child_groups: failed to parse {path}: {e}")
-            return {}
-
-    def _image_for(base_dir, base_name):
-        for ext in IMAGE_EXTS:
-            p = os.path.join(base_dir, base_name + ext)
-            if os.path.exists(p):
-                # build a web path like /types/<type>/labels/…/file.ext
-                rel = os.path.relpath(p, ".").replace("\\", "/")
-                return "/" + rel
+    def _selected_id_for(key: str):
+        sel = existing_labels.get(key)
+        if isinstance(sel, str):
+            return sel
+        if isinstance(sel, dict):
+            return sel.get("label") or sel.get("id")
         return None
 
-    def _load_options_from_folder(folder_abs_path):
-        """Load *.json in a folder as options (name/description/image if present)."""
+    def _collect_folder_options(folder_abs: str):
+        """Lightweight loader used for child folders."""
+        if not os.path.isdir(folder_abs):
+            return []
         opts = []
-        if not os.path.isdir(folder_abs_path):
-            return opts
-        for fn in sorted(os.listdir(folder_abs_path)):
-            if not fn.endswith(".json"):
+        for f in sorted(os.listdir(folder_abs)):
+            if not f.endswith(".json") or f == "_group.json":
                 continue
-            base = os.path.splitext(fn)[0]
-            data = _safe_json(os.path.join(folder_abs_path, fn))
-            name = (
+            try:
+                data = load_json_as_dict(os.path.join(folder_abs, f))
+            except Exception:
+                data = {}
+            lid = os.path.splitext(f)[0]
+            disp = (
                 data.get("properties", {}).get("name")
                 or data.get("name")
-                or base.replace("_", " ").title()
+                or lid
             )
             desc = data.get("description", data.get("properties", {}).get("description", ""))
-            img = _image_for(folder_abs_path, base)
-
-            opt = {"id": base, "display": name}
-            if desc:
-                opt["description"] = desc
-            if img:
-                opt["image_url"] = img
-            opts.append(opt)
+            opts.append({"id": lid, "display": disp, "description": desc})
         return opts
 
-    # We’ll loop until no more child groups can be added (supports multi-level).
-    expanded = list(base_groups)
-    seen_keys = {g["key"] for g in expanded}
+    while queue:
+        g = queue.pop(0)
 
-    changed = True
-    while changed:
-        changed = False
+        parent_key = g.get("key")
+        if not parent_key:
+            continue
 
-        # Iterate over a snapshot because we may append during the loop
-        for group in list(expanded):
-            group_key = group["key"]  # e.g. "work_building" or "work_building/hospital"
-            sel = existing_labels.get(group_key) or {}
-            selected_id = sel.get("id") or sel.get("label")
-            if not selected_id:
+        # Need a selection for THIS group to consider a child
+        parent_id = _selected_id_for(parent_key)
+        if not parent_id:
+            continue
+
+        # Determine where the parent's options come from
+        # (we look at normalised hints on the group)
+        src = g.get("refer_to") or g.get("source") or {}
+        kind = src.get("source") or src.get("kind") or ""   # "labels" | "biographies" | ""
+        allow_children = bool(src.get("allow_children"))
+
+        # Work out which type/path to look under for the CHILD labels
+        search_type = None
+        base_path = None
+
+        if kind == "labels":
+            # explicit cross-type labels
+            search_type = src.get("type") or current_type
+            base_path = (src.get("path") or parent_key).strip("/")
+            # require allow_children for cross-type expansion
+            if search_type != current_type and not allow_children:
                 continue
+        elif kind == "biographies":
+            # biographies do not yield child label groups
+            continue
+        else:
+            # no hint -> treat as this type's label tree
+            search_type = current_type
+            base_path = parent_key
 
-            # Resolve filesystem path to this group's folder
-            # group_key may be nested -> split
-            group_folder = os.path.join(label_base_path, *group_key.split("/"))
-            if not os.path.isdir(group_folder):
-                continue
+        # Resolve absolute folder for the child options
+        if search_type == current_type:
+            child_folder = os.path.join(label_base_path, *base_path.split("/"), parent_id)
+        else:
+            child_folder = os.path.join("types", search_type, "labels", *base_path.split("/"), parent_id)
 
-            # Child folder must be named exactly as selected_id
-            child_folder = os.path.join(group_folder, selected_id)
-            if not os.path.isdir(child_folder):
-                continue
+        if not os.path.isdir(child_folder):
+            continue
 
-            child_key = f"{group_key}/{selected_id}"
-            if child_key in seen_keys:
-                # Already added
-                continue
+        child_key = f"{base_path}/{parent_id}"
+        if child_key in seen_keys:
+            # already added from an earlier pass
+            continue
 
-            # Load this child folder as a new group
-            child_options = _load_options_from_folder(child_folder)
-            if not child_options:
-                continue
+        child_options = _collect_folder_options(child_folder)
+        if not child_options:
+            continue
 
-            new_group = {
-                "key": child_key,
-                "label": f"{group.get('label','').strip() or group_key.replace('_',' ').title()} → {selected_id.replace('_',' ').title()}",
-                "description": f"Options for {selected_id.replace('_',' ').title()}",
-                "options": child_options,
-            }
-            expanded.append(new_group)
-            seen_keys.add(child_key)
-            changed = True
+        # Build the child group
+        child_group = {
+            "key": child_key,
+            "label": f"{(g.get('label') or parent_key).replace('_',' ').title()} / {parent_id.replace('_',' ').title()}",
+            "options": child_options,
+        }
 
-    # Keep ordering stable-ish: parent keys first, then deeper ones
-    expanded.sort(key=lambda g: (g["key"].count("/"), g["key"]))
+        # Inherit hints so:
+        #  - deeper children can continue to expand
+        #  - biography suggestions render on the child group
+        if g.get("refer_to"):
+            child_group["refer_to"] = dict(g["refer_to"])
+        if g.get("link_biography"):
+            child_group["link_biography"] = dict(g["link_biography"])
+
+        expanded.append(child_group)
+        seen_keys.add(child_key)
+        queue.append(child_group)  # allow deeper nesting if the child is already selected
+
+    expanded.sort(key=lambda g: (len(g["key"].split("/")), g["key"]))
     return expanded
+
+
+
+
+# def expand_child_groups(base_groups, current_type, label_base_path, existing_labels):
+#     """
+#     Recursively expand groups when a selected option has a matching child subfolder.
+
+#     Example:
+#       - Group key "work_building" with selected id "hospital"
+#       - If folder exists: types/<type>/labels/work_building/hospital/
+#         -> add a new group with key "work_building/hospital"
+#       - If the user has already selected e.g. "royal_victoria" in that child group
+#         AND a deeper folder exists (work_building/hospital/royal_victoria/),
+#         this function will keep expanding.
+
+#     Arguments:
+#       base_groups:      list from collect_label_groups(...)
+#       current_type:     the type name (e.g. "person")
+#       label_base_path:  path like "types/<type>/labels"
+#       existing_labels:  dict of previously selected labels for the current entry,
+#                         shaped like { "work_building": {"id":"hospital", ...},
+#                                       "work_building/hospital": {"id":"royal_victoria", ...} }
+
+#     Returns:
+#       A new list including all original groups plus any recursively discovered child groups.
+#     """
+#     import os
+#     import json
+
+#     IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp"]
+
+#     def _safe_json(path):
+#         try:
+#             with open(path, "r", encoding="utf-8") as f:
+#                 return json.load(f)
+#         except Exception as e:
+#             print(f"[WARN] expand_child_groups: failed to parse {path}: {e}")
+#             return {}
+
+#     def _image_for(base_dir, base_name):
+#         for ext in IMAGE_EXTS:
+#             p = os.path.join(base_dir, base_name + ext)
+#             if os.path.exists(p):
+#                 # build a web path like /types/<type>/labels/…/file.ext
+#                 rel = os.path.relpath(p, ".").replace("\\", "/")
+#                 return "/" + rel
+#         return None
+
+#     def _load_options_from_folder(folder_abs_path):
+#         """Load *.json in a folder as options (name/description/image if present)."""
+#         opts = []
+#         if not os.path.isdir(folder_abs_path):
+#             return opts
+#         for fn in sorted(os.listdir(folder_abs_path)):
+#             if not fn.endswith(".json"):
+#                 continue
+#             base = os.path.splitext(fn)[0]
+#             data = _safe_json(os.path.join(folder_abs_path, fn))
+#             name = (
+#                 data.get("properties", {}).get("name")
+#                 or data.get("name")
+#                 or base.replace("_", " ").title()
+#             )
+#             desc = data.get("description", data.get("properties", {}).get("description", ""))
+#             img = _image_for(folder_abs_path, base)
+
+#             opt = {"id": base, "display": name}
+#             if desc:
+#                 opt["description"] = desc
+#             if img:
+#                 opt["image_url"] = img
+#             opts.append(opt)
+#         return opts
+
+#     # We’ll loop until no more child groups can be added (supports multi-level).
+#     expanded = list(base_groups)
+#     seen_keys = {g["key"] for g in expanded}
+
+#     changed = True
+#     while changed:
+#         changed = False
+
+#         # Iterate over a snapshot because we may append during the loop
+#         for group in list(expanded):
+#             group_key = group["key"]  # e.g. "work_building" or "work_building/hospital"
+#             sel = existing_labels.get(group_key) or {}
+#             selected_id = sel.get("id") or sel.get("label")
+#             if not selected_id:
+#                 continue
+
+#             # Resolve filesystem path to this group's folder
+#             # group_key may be nested -> split
+#             group_folder = os.path.join(label_base_path, *group_key.split("/"))
+#             if not os.path.isdir(group_folder):
+#                 continue
+
+#             # Child folder must be named exactly as selected_id
+#             child_folder = os.path.join(group_folder, selected_id)
+#             if not os.path.isdir(child_folder):
+#                 continue
+
+#             child_key = f"{group_key}/{selected_id}"
+#             if child_key in seen_keys:
+#                 # Already added
+#                 continue
+
+#             # Load this child folder as a new group
+#             child_options = _load_options_from_folder(child_folder)
+#             if not child_options:
+#                 continue
+
+#             new_group = {
+#                 "key": child_key,
+#                 "label": f"{group.get('label','').strip() or group_key.replace('_',' ').title()} → {selected_id.replace('_',' ').title()}",
+#                 "description": f"Options for {selected_id.replace('_',' ').title()}",
+#                 "options": child_options,
+#             }
+#             expanded.append(new_group)
+#             seen_keys.add(child_key)
+#             changed = True
+
+#     # Keep ordering stable-ish: parent keys first, then deeper ones
+#     expanded.sort(key=lambda g: (g["key"].count("/"), g["key"]))
+#     return expanded
 
 
 def map_existing_bio_selections(all_groups, entry_list):

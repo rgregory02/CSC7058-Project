@@ -56,9 +56,11 @@ from utils import (
     restore_type,
     archive_root,
     resolve_property_options,
-    _list_types,
-    _sanitize_key,
-    _checkbox_on
+    list_types,
+    sanitise_key,
+    checkbox_on,
+    list_label_groups_for_type,
+    build_label_groups_by_type
 )
 
 app = Flask(__name__)
@@ -258,6 +260,138 @@ def api_search_person_bios():
                 continue
 
     return jsonify(matches[:10])  # Return only first 10 matches for speed
+
+# ---------- AJAX: get child options for a parent selection ----------
+@app.route("/api/labels/children", methods=["POST"])
+def api_labels_children():
+    """
+    Body: { "type_name": "person", "group_key": "work_place", "selected_id": "hospital" }
+    Returns: { "ok": true, "child_key": "work_place/hospital", "options": [ {id,display,description?,image?}, ... ] }
+             or { "ok": false, "reason": "..." }
+    """
+    try:
+        data = request.get_json(force=True, silent=False) or {}
+        type_name   = (data.get("type_name") or "").strip()
+        group_key   = (data.get("group_key") or "").strip()
+        selected_id = (data.get("selected_id") or "").strip()
+        if not (type_name and group_key and selected_id):
+            return jsonify({"ok": False, "reason": "Missing type_name/group_key/selected_id"}), 400
+
+        label_base_path = os.path.join("types", type_name, "labels")
+
+        # Where are the child options located on disk?
+        # Mirrors expand_child_groups() logic (self or cross-type when allowed).
+        # First, figure out whether this group uses cross-type labels.
+        base_groups = collect_label_groups(label_base_path, type_name)
+        parent = next((g for g in base_groups if g.get("key") == group_key), None)
+        if not parent:
+            return jsonify({"ok": False, "reason": f"Unknown group '{group_key}'"}), 404
+
+        src = parent.get("refer_to") or parent.get("source") or {}
+        kind = src.get("source") or src.get("kind") or ""  # "labels"|"biographies"|"" (self)
+        allow_children = bool(src.get("allow_children"))
+
+        # default: same type
+        search_type = type_name
+        base_path   = group_key
+
+        if kind == "labels":
+            # cross-type labels
+            search_type = src.get("type") or type_name
+            base_path   = (src.get("path") or group_key).strip("/")
+            if search_type != type_name and not allow_children:
+                return jsonify({"ok": False, "reason": "Children not allowed for this cross-type source"}), 200
+
+        if kind == "biographies":
+            # bios don’t yield child label folders
+            return jsonify({"ok": True, "child_key": None, "options": []}), 200
+
+        # Resolve absolute folder
+        if search_type == type_name:
+            folder = os.path.join(label_base_path, *base_path.split("/"), selected_id)
+        else:
+            folder = os.path.join("types", search_type, "labels", *base_path.split("/"), selected_id)
+
+        if not os.path.isdir(folder):
+            return jsonify({"ok": True, "child_key": None, "options": []}), 200
+
+        # Load options from that folder
+        def _collect_opts(folder_abs):
+            out = []
+            for f in sorted(os.listdir(folder_abs)):
+                if not f.endswith(".json") or f == "_group.json":
+                    continue
+                p = os.path.join(folder_abs, f)
+                j = load_json_as_dict(p)
+                lid = os.path.splitext(f)[0]
+                disp = (j.get("properties", {}) or {}).get("name") or j.get("name") or lid
+                desc = j.get("description", (j.get("properties", {}) or {}).get("description", ""))
+                opt = {"id": lid, "display": disp, "description": desc}
+                # try sibling image
+                for ext in (".png", ".jpg", ".jpeg", ".webp"):
+                    imgp = os.path.join(folder_abs, lid + ext)
+                    if os.path.exists(imgp):
+                        rel = os.path.relpath(imgp, ".").replace("\\", "/")
+                        opt["image"] = "/" + rel if not rel.startswith("types/") else f"/{rel}"
+                        break
+                out.append(opt)
+            return out
+
+        options = _collect_opts(folder)
+        child_key = f"{base_path}/{selected_id}"
+        return jsonify({"ok": True, "child_key": child_key, "options": options}), 200
+
+    except Exception as e:
+        print("[/api/labels/children] ERROR:", e)
+        return jsonify({"ok": False, "reason": "Server error"}), 500
+
+
+# ---------- AJAX: suggest biographies for a (child) selection ----------
+@app.route("/api/labels/suggest_biographies", methods=["POST"])
+def api_suggest_biographies():
+    """
+    Body: {
+      "type_name": "person",
+      "group_key": "work_place/hospital",   # usually a child key
+      "selections": { "work_place": "hospital", "work_place/hospital": "royal_victoria" }
+    }
+    Returns: { "ok": true, "bios": [ {id, display, description?}, ... ] }
+    """
+    try:
+        data = request.get_json(force=True, silent=False) or {}
+        type_name  = (data.get("type_name") or "").strip()
+        group_key  = (data.get("group_key") or "").strip()
+        selections = data.get("selections") or {}
+        if not (type_name and group_key):
+            return jsonify({"ok": False, "reason": "Missing type_name/group_key"}), 400
+
+        label_base_path = os.path.join("types", type_name, "labels")
+        base_groups = collect_label_groups(label_base_path, type_name)
+
+        # We only need to compute suggestions for the relevant groups; pass selections as existing_labels.
+        # Make sure we feed a list of groups that includes this group (and possibly siblings).
+        # Easiest: reuse expand_child_groups to ensure any children exist, then run build_suggested_biographies.
+        expanded = expand_child_groups(
+            base_groups=base_groups,
+            current_type=type_name,
+            label_base_path=label_base_path,
+            existing_labels=selections,   # accepts {"key": "id"} or {"key": {"label": "id"}}
+        )
+
+        suggested = build_suggested_biographies(
+            current_type=type_name,
+            label_groups_list=expanded,
+            label_base_path=label_base_path,
+            existing_labels=selections
+        )
+
+        safe = group_key.replace("/", "__")
+        bios = suggested.get(safe, [])
+        return jsonify({"ok": True, "bios": bios}), 200
+
+    except Exception as e:
+        print("[/api/labels/suggest_biographies] ERROR:", e)
+        return jsonify({"ok": False, "reason": "Server error"}), 500
 
 
 @app.route('/person_iframe_wizard')
@@ -1235,6 +1369,23 @@ def restore_archived_type(archived_folder):
         flash(str(e), "error")
     return redirect(url_for("archived_types_list"))
 
+@app.route("/type/<type_name>/bio/<bio_id>")
+def biography_view(type_name, bio_id):
+    bio_path = os.path.join("types", type_name, "biographies", f"{bio_id}.json")
+    if not os.path.exists(bio_path):
+        return f"Biography '{bio_id}' not found for type '{type_name}'.", 404
+    bio = load_json_as_dict(bio_path)
+    return render_template(
+        "biography_view.html",
+        type_name=type_name,
+        bio_id=bio_id,
+        bio=bio
+    )
+
+
+def slugify_key(s: str) -> str:
+    import re
+    return re.sub(r"[^a-z0-9_]+", "_", (s or "").lower()).strip("_")
 
 # ---------- Properties: list ----------
 @app.route("/type/<type_name>/properties")
@@ -1269,9 +1420,12 @@ def new_property(type_name):
     os.makedirs(base, exist_ok=True)
 
     if request.method == "POST":
-        key = _sanitize_key(request.form.get("key"))
+        # Name -> key (auto if key blank)
+        name = (request.form.get("name") or "").strip()
+        raw_key = (request.form.get("key") or "").strip().lower()
+        key = slugify_key(raw_key or name)
         if not key:
-            flash("Please provide a valid property key (letters, numbers, underscores).", "error")
+            flash("Please provide a Name (the key will be auto‑generated) or a valid Key.", "error")
             return redirect(request.url)
 
         path = os.path.join(base, f"{key}.json")
@@ -1280,19 +1434,33 @@ def new_property(type_name):
             return redirect(request.url)
 
         payload = {
-            "name": (request.form.get("name") or key.replace("_", " ").title()).strip(),
+            "name": name or key.replace("_", " ").title(),
             "description": (request.form.get("description") or "").strip()
         }
 
-        # ----- Source block (optional) -----
+        # ----- Source block -----
         source_kind = (request.form.get("source_kind") or "").strip()
         source_type = (request.form.get("source_type") or "").strip()
-        if source_kind in ("type_labels", "type_biographies") and source_type:
+        source_path = (request.form.get("source_path") or "").strip()
+        allow_children = checkbox_on(request, "source_allow_children")
+
+        if source_kind == "self_labels":
+            # normalize to a type_labels that points to the current type
+            payload["source"] = {
+                "kind": "type_labels",
+                "type": type_name,
+                "path": source_path or key,   # default to the property key
+                "allow_children": bool(allow_children),
+            }
+        elif source_kind in ("type_labels", "type_biographies") and source_type:
             src = {"kind": source_kind, "type": source_type}
             if source_kind == "type_labels":
-                src["path"] = (request.form.get("source_path") or "").strip()
-                src["allow_children"] = _checkbox_on(request, "source_allow_children")
+                src["path"] = source_path
+                src["allow_children"] = bool(allow_children)
             payload["source"] = src
+        else:
+            payload.pop("source", None)
+
 
         # ----- Link biography block (optional) -----
         link_bio_type = (request.form.get("link_bio_type") or "").strip()
@@ -1312,8 +1480,10 @@ def new_property(type_name):
         type_name=type_name,
         mode="new",
         prop=None,
-        all_types=_list_types()
+        available_types=list_types(),
+        label_groups_by_type=build_label_groups_by_type(),
     )
+
 
 # ---------- Properties: edit ----------
 @app.route("/type/<type_name>/properties/<prop_key>", methods=["GET", "POST"])
@@ -1323,33 +1493,43 @@ def edit_property(type_name, prop_key):
     if not os.path.exists(path):
         return f"Property {prop_key} not found for {type_name}.", 404
 
-    prop = load_json_as_dict(path) if os.path.exists(path) else {}
+    prop = load_json_as_dict(path)
 
     if request.method == "POST":
-        # Allow renaming the key
-        new_key = _sanitize_key(request.form.get("key"), fallback=prop_key)
+        # Allow rename of key (auto‑slug if blank)
+        name = (request.form.get("name") or "").strip() or prop.get("name") or prop_key.replace("_", " ").title()
+        raw_new_key = (request.form.get("key") or prop_key).strip().lower()
+        new_key = slugify_key(raw_new_key or name) or prop_key
 
-        # Start from existing so we don’t accidentally drop unknown fields
+        # Start from existing to avoid losing unknown future fields
         payload = dict(prop)
-        payload["name"] = (request.form.get("name") or "").strip() or prop.get("name") or new_key.replace("_", " ").title()
+        payload["name"] = name
         payload["description"] = (request.form.get("description") or "").strip()
 
-        # ----- Source block -----
         source_kind = (request.form.get("source_kind") or "").strip()
         source_type = (request.form.get("source_type") or "").strip()
+        source_path = (request.form.get("source_path") or "").strip()
+        allow_children = checkbox_on(request, "source_allow_children")
 
-        if source_kind in ("type_labels", "type_biographies") and source_type:
+        if source_kind == "self_labels":
+            # normalize to a type_labels that points to the current type
+            payload["source"] = {
+                "kind": "type_labels",
+                "type": type_name,
+                "path": source_path or new_key,   # default to the property key
+                "allow_children": bool(allow_children),
+            }
+        elif source_kind in ("type_labels", "type_biographies") and source_type:
             src = {"kind": source_kind, "type": source_type}
             if source_kind == "type_labels":
-                src["path"] = (request.form.get("source_path") or "").strip()
-                src["allow_children"] = _checkbox_on(request, "source_allow_children")
+                src["path"] = source_path
+                src["allow_children"] = bool(allow_children)
             payload["source"] = src
         else:
-            # If user cleared the source settings, remove it
-            if "source" in payload:
-                payload.pop("source", None)
+            payload.pop("source", None)
 
-        # ----- Link biography block -----
+
+        # Link biography (optional)
         link_bio_type = (request.form.get("link_bio_type") or "").strip()
         if link_bio_type:
             payload["link_biography"] = {
@@ -1378,8 +1558,10 @@ def edit_property(type_name, prop_key):
         mode="edit",
         prop_key=prop_key,
         prop=prop,
-        all_types=_list_types()
+        available_types=list_types(),
+        label_groups_by_type=build_label_groups_by_type(),
     )
+
 
 # ---------- Properties: delete ----------
 @app.route("/type/<type_name>/properties/<prop_key>/delete", methods=["POST"])

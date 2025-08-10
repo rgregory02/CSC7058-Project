@@ -1,0 +1,17 @@
+{
+    "name": "Teddy",
+    "type": "person",
+    "created": "2025-08-10T19:40:36.843141",
+    "entries": [
+        {
+            "time": {
+                "label": "2025-08-04",
+                "confidence": 100,
+                "label_type": "date",
+                "date_value": "2025-08-04",
+                "subvalue": ""
+            },
+            "created": "2025-08-10T19:40:46.421324"
+        }
+    ]
+}

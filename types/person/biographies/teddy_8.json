@@ -1,0 +1,31 @@
+{
+    "name": "Teddy",
+    "type": "person",
+    "created": "2025-08-10T20:10:54.230726",
+    "entries": [
+        {
+            "time": {
+                "label": "preteen",
+                "confidence": 100,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "preteen"
+            },
+            "created": "2025-08-10T20:11:04.660688",
+            "person": [
+                {
+                    "label_type": "work_place",
+                    "confidence": 100,
+                    "id": "hospital",
+                    "biography": "royal_victoria_hospital",
+                    "biography_confidence": 100
+                },
+                {
+                    "label_type": "hospital",
+                    "confidence": 100,
+                    "id": "royal_victoria_hospital"
+                }
+            ]
+        }
+    ]
+}

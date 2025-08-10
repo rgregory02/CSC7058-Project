@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>{{ (bio.name or bio_id|replace('_',' ')|title) }} — {{ type_name|replace('_',' ')|title }}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    body{ background:#f6f7fb; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
+    .wrap{ max-width:1100px; margin:32px auto; background:#fff; border:1px solid #e7e9f2; border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,.05); padding:24px; }
+    .header{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    h1{ margin:0; }
+    .muted{ color:#6b7280; }
+    .toolbar{ display:flex; flex-wrap:wrap; gap:10px; }
+    .btn{display:inline-block;padding:10px 16px;border-radius:10px;background:#6c63ff;color:#fff;text-decoration:none;font-weight:600}
+    .btn.secondary{background:#eef0f7;color:#333}
+    .btn.ghost{background:transparent;color:#6c63ff;border:1px solid #6c63ff}
+    .grid{ display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+    @media (max-width: 900px){ .grid{ grid-template-columns: 1fr; } }
+    .card{ background:#fff; border:1px solid #e7e9f2; border-radius:12px; padding:16px; }
+    .section-title{ margin:0 0 8px; font-size:18px; color:#2f2f36; }
+    .pill{ display:inline-block; padding:3px 8px; border-radius:999px; font-size:12px; background:#eef0f7; color:#333; }
+    .label-row{ border-left:4px solid #e5e7eb; padding:10px 12px; border-radius:8px; margin:10px 0; background:#fafafa; }
+    .conf{ font-size:12px; font-weight:700; margin-left:6px; }
+    .conf.high{ color:#16a34a; }
+    .conf.med{ color:#f59e0b; }
+    .conf.low{ color:#ef4444; }
+    .biochip{ background:#eef5f2; border-left:4px solid #2e7d32; padding:8px 10px; border-radius:8px; margin-top:8px; }
+    .kv{ display:grid; grid-template-columns: 160px 1fr; gap:6px; }
+    .small{ font-size:12px; color:#6b7280; }
+    details.summary{ cursor:default; }
+    details > summary { cursor:pointer; user-select:none; }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div>
+        <h1>{{ bio.name or bio_id|replace('_',' ')|title }}</h1>
+        <div class="muted">{{ type_name|replace('_',' ')|title }} • ID: <span class="mono">{{ bio_id }}</span></div>
+      </div>
+      <div class="toolbar">
+        <a class="btn secondary" href="{{ url_for('type_browse', type_name=type_name) }}">⬅️ Back to {{ type_name|replace('_',' ')|title }}</a>
+        <a class="btn" href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='labels') }}">🧩 Open Label Wizard</a>
+        <a class="btn ghost" href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='time') }}">⏱️ Add Time Period</a>
+        <a class="btn secondary" href="{{ url_for('search_or_add_biography', type_name=type_name, q=bio.name or bio_id) }}">🔎 Find / Edit</a>
+      </div>
+    </div>
+
+    {% set entries = bio.entries or [] %}
+    {% set entry = entries[-1] if entries else {} %}
+
+    <div class="grid" style="margin-top:16px">
+      <!-- Left: snapshot -->
+      <div class="card">
+        <h3 class="section-title">📄 Snapshot</h3>
+        <div class="kv">
+          <div class="muted">Last updated</div>
+          <div>{{ bio.updated or bio.created or '—' }}</div>
+
+          <div class="muted">Time</div>
+          <div>
+            {% if entry.time %}
+              {% if entry.time.date_value %}{{ entry.time.date_value }}
+              {% elif entry.time.subvalue %}{{ entry.time.subvalue|replace('_',' ')|title }}
+              {% else %}—{% endif %}
+              {% set c = entry.time.confidence or 100 %}
+              <span class="conf {% if c>=67 %}high{% elif c>=34 %}med{% else %}low{% endif %}">{{ c }}%</span>
+            {% else %}—{% endif %}
+          </div>
+
+          {% if bio.description %}
+            <div class="muted">Description</div>
+            <div>{{ bio.description }}</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Right: actions / meta -->
+      <div class="card">
+        <h3 class="section-title">⚙️ Actions</h3>
+        <p class="small">Use the Label Wizard to change labels; add more time entries; or search/edit the raw biography.</p>
+        <ul class="small" style="margin:0 0 0 18px">
+          <li><a href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='start') }}">Start Wizard</a></li>
+          <li><a href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='labels') }}">Edit Labels</a></li>
+          <li><a href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='review') }}">Review Entry</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Labels for the current (latest) entry -->
+    <div class="card" style="margin-top:16px">
+      <h3 class="section-title">🏷️ Labels (latest entry)</h3>
+      {% if entry %}
+        {% for type_key, type_items in entry.items() %}
+          {% if type_key not in ['time','created','status'] and type_items %}
+            <h4 style="margin:18px 0 8px">{{ type_key|replace('_',' ')|title }}</h4>
+
+            {% for label in type_items %}
+              {% if label is mapping %}
+                {% set conf = label.confidence or 100 %}
+                <div class="label-row">
+                  <div>
+                    <strong>{{ (label.get('label_type') or 'Label')|replace('_',' ')|title }}</strong>
+                    —
+                    {% set display_text = (label.get('display') or label.get('label') or label.get('id') or 'Unnamed') %}
+                    {{ display_text|replace('_',' ')|title }}
+                    <span class="conf {% if conf>=67 %}high{% elif conf>=34 %}med{% else %}low{% endif %}">{{ conf }}%</span>
+                  </div>
+
+                  {% if label.biography_data %}
+                    <div class="biochip">
+                      📖 <strong>{{ label.biography_data.get('name','') }}</strong>
+                      {% if label.biography_data.get('description') %}
+                        <div class="small">{{ label.biography_data.description }}</div>
+                      {% endif %}
+                    </div>
+                  {% elif label.biography %}
+                    <div class="biochip">
+                      📖 Linked biography: <span class="mono">{{ label.biography }}</span>
+                    </div>
+                  {% endif %}
+
+                  {% if label.description %}
+                    <div class="small" style="margin-top:6px">{{ label.description }}</div>
+                  {% endif %}
+
+                  {% if label.image_url %}
+                    <div style="margin-top:8px"><img src="{{ label.image_url }}" style="max-height:90px;border-radius:8px"></div>
+                  {% endif %}
+                </div>
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+        {% endfor %}
+      {% else %}
+        <div class="muted">No entries yet.</div>
+      {% endif %}
+    </div>
+
+    <!-- Timeline (compact) -->
+    <div class="card" style="margin-top:16px">
+      <h3 class="section-title">🗓️ Entries</h3>
+      {% if entries %}
+        <ol class="small" style="margin:0 0 0 18px">
+          {% for e in entries|reverse %}
+            <li>
+              {% if e.time and e.time.date_value %}
+                {{ e.time.date_value }}
+              {% elif e.time and e.time.subvalue %}
+                {{ e.time.subvalue|replace('_',' ')|title }}
+              {% else %}Unknown time{% endif %}
+              {% if e.created %}<span class="muted"> • created {{ e.created }}</span>{% endif %}
+            </li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <div class="muted">No entries recorded.</div>
+      {% endif %}
+    </div>
+
+    <!-- Raw JSON (debug) -->
+    <div class="card" style="margin-top:16px">
+      <details>
+        <summary class="section-title">🧪 Debug JSON</summary>
+        <pre class="mono" style="white-space:pre-wrap">{{ bio | tojson(indent=2) }}</pre>
+      </details>
+    </div>
+  </div>
+</body>
+</html>

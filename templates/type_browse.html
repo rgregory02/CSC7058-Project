@@ -18,7 +18,11 @@
       padding:10px 12px; border:1px solid #dfe3ee; border-radius:10px; background:#fff; min-width:220px;
     }
     .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
-    .card{background:#fff;border:1px solid #e7e9f2;border-radius:12px;padding:16px}
+
+    /* clickable cards */
+    .bio-card{ display:block; text-decoration:none; color:inherit; }
+    .card{background:#fff;border:1px solid #e7e9f2;border-radius:12px;padding:16px; transition:transform .12s ease, box-shadow .12s ease; cursor:pointer}
+    .bio-card:hover .card{ transform:translateY(-2px); box-shadow:0 8px 18px rgba(0,0,0,.07); }
     .card h3{margin:0 0 6px;font-size:18px}
     .muted{color:#657085;font-size:12px}
     .desc{color:#3a3f4c;font-size:13px;margin:6px 0 10px}
@@ -49,32 +53,32 @@
 
     {% if bios and bios|length > 0 %}
       <div id="cards" class="grid">
-        {# Support either dict-like or tuple-like items #}
+        {# Support dict-like or tuple-like items #}
         {% for b in bios %}
-          {% set _id   = (b.id if b.id is defined else (b[0] if b|length>0 else '')) %}
-          {% set _name = (b.name if b.name is defined else (b[1] if b|length>1 else _id.replace('_',' '))) %}
-          {% set _desc = (b.description if b.description is defined else (b[2] if b|length>2 else '')) %}
-          {% set _updated = (b.updated if b.updated is defined else (b.created if b.created is defined else (b[3] if b|length>3 else ''))) %}
+          {% set _id   = (b.id if b is mapping else (b[0] if b is sequence else '')) %}
+          {% set _name = (b.name if b is mapping else (b[1] if b is sequence and b|length>1 else _id.replace('_',' ')|title)) %}
+          {% set _desc = (b.description if b is mapping else (b[2] if b is sequence and b|length>2 else '')) %}
+          {% set _updated = (
+                b.updated if b is mapping and b.updated is defined
+                else (b.created if b is mapping and b.created is defined
+                else (b[3] if b is sequence and b|length>3 else ''))
+          ) %}
 
-          <div class="card"
-               data-name="{{ _name|lower }}"
-               data-updated="{{ _updated }}">
-            <h3>{{ _name }}</h3>
-            {% if _desc %}<div class="desc">{{ _desc }}</div>{% endif %}
-            <div class="muted">
-              {% if _updated %}Last updated: {{ _updated }}{% else %}No timestamp{% endif %}
+          <a class="bio-card"
+             href="{{ url_for('biography_view', type_name=type_name, bio_id=_id) }}"
+             data-name="{{ _name|lower }}"
+             data-updated="{{ _updated }}">
+            <div class="card" role="button" aria-label="View {{ _name }}">
+              <h3>{{ _name }}</h3>
+              {% if _desc %}<div class="desc">{{ _desc }}</div>{% endif %}
+              <div class="muted">
+                {% if _updated %}Last updated: {{ _updated }}{% else %}No timestamp{% endif %}
+              </div>
+              <div class="quick" style="margin-top:10px">
+                <span class="btn">🔎 View/Edit This Biography</span>
+              </div>
             </div>
-            <div class="quick" style="margin-top:10px">
-              <a class="btn" href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='labels')
- }}">🧩 Open Label Wizard</a>
-              <a class="btn secondary"
-                 href="{{ url_for('search_or_add_biography', type_name=type_name, return_url=request.url) }}?q={{ _name|urlencode }}">
-                 🔎 Find / Edit
-              </a>
-            </div>
-            <a class="btn secondary" href="{{ url_for('type_properties', type_name=type_name) }}">⚙️ Manage Properties</a>
-
-          </div>
+          </a>
         {% endfor %}
       </div>
     {% else %}
@@ -88,7 +92,7 @@
   <script>
     function filterCards() {
       const q = (document.getElementById('searchInput').value || '').trim().toLowerCase();
-      const cards = document.querySelectorAll('#cards .card');
+      const cards = document.querySelectorAll('#cards .bio-card');
       cards.forEach(c => {
         const name = c.getAttribute('data-name') || '';
         c.style.display = name.includes(q) ? '' : 'none';
@@ -100,7 +104,7 @@
       const grid = document.getElementById('cards');
       if (!grid) return;
 
-      const cards = Array.from(grid.children);
+      const cards = Array.from(grid.querySelectorAll('.bio-card'));
       cards.sort((a, b) => {
         const nameA = a.getAttribute('data-name') || '';
         const nameB = b.getAttribute('data-name') || '';
@@ -119,9 +123,11 @@
       cards.forEach(c => grid.appendChild(c));
     }
 
-    // Initial sort on load
-    document.addEventListener('DOMContentLoaded', sortCards);
+    document.addEventListener('DOMContentLoaded', () => {
+      sortCards();
+    });
   </script>
 </body>
 </html>
+
 

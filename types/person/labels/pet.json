@@ -1,0 +1,15 @@
+{
+    "name": "Pet",
+    "description": "Pet that the person owns",
+    "source": {
+        "kind": "type_labels",
+        "type": "pet",
+        "path": "species",
+        "allow_children": true
+    },
+    "link_biography": {
+        "type": "pet",
+        "path": "",
+        "mode": "child_or_parent"
+    }
+}

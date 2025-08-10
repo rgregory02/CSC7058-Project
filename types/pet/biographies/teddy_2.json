@@ -1,0 +1,17 @@
+{
+    "name": "Teddy",
+    "type": "pet",
+    "created": "2025-08-10T20:28:53.343946",
+    "entries": [
+        {
+            "time": {
+                "label": "childhood",
+                "confidence": 100,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "childhood"
+            },
+            "created": "2025-08-10T20:28:59.773435"
+        }
+    ]
+}
