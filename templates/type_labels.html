@@ -5,81 +5,131 @@
   <title>{{ type_name|replace('_',' ')|title }} — Labels</title>
   <link rel="stylesheet" href="/static/styles.css">
   <style>
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
-    .card{border:1px solid #e3e5ee;border-radius:10px;padding:14px;background:#fff}
-    .muted{color:#666}
-    .tag{font-size:12px;background:#eef0f7;border-radius:999px;padding:2px 8px;margin-left:8px}
-    .search{width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin:12px 0}
+    body{background:#f6f7fb;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    .box{max-width:1100px;margin:40px auto;background:#fff;padding:24px;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.06)}
+    h1{margin:0 0 10px}
+    .search{width:100%;padding:10px;border:1px solid #dfe3ee;border-radius:10px;margin:10px 0 18px;background:#fff}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+    .card{border:1px solid #e3e5ee;border-radius:12px;padding:14px;background:#fff;position:relative}
+    .card.focused{outline:2px solid #6c63ff}
+    .muted{color:#657085}
+    .tag{font-size:12px;background:#eef0f7;border-radius:999px;padding:3px 8px;margin-left:8px}
+    .badge{font-size:11px;border-radius:6px;padding:2px 6px;margin-left:8px;border:1px solid #e3e5ee;background:#fafbff;color:#495}
     details{border:1px dashed #e4e6f1;border-radius:8px;padding:10px;margin-top:8px;background:#fafbff}
     summary{cursor:pointer;font-weight:600}
-    .option{border:1px solid #e7e9f2;border-radius:8px;padding:10px;margin:8px 0;background:#fff}
+    .option{border:1px solid #e7e9f2;border-radius:10px;padding:10px;margin:8px 0;background:#fff}
     .children{margin:8px 0 0 14px;border-left:3px solid #e7e9f2;padding-left:10px}
     .thumb{max-height:40px;max-width:80px;vertical-align:middle;margin-left:8px;border-radius:6px}
     .header-row{display:flex;align-items:center;gap:8px}
+    .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .btn{display:inline-block;padding:8px 12px;border-radius:10px;background:#eef0f7;color:#333;text-decoration:none;font-weight:600;border:1px solid #e3e5ee}
+    .empty{color:#657085;font-size:13px;margin-top:6px}
   </style>
 </head>
 <body>
   <div class="box">
     <h1>🏷️ Labels — {{ type_name|replace('_',' ')|title }}</h1>
     <input class="search" placeholder="Filter label groups…" oninput="filterGroups(this.value)">
+
     <div class="grid" id="groups">
       {% for g in groups %}
-      <div class="card group" data-key="{{ (g.key ~ ' ' ~ g.label)|lower }}">
-        <div class="header-row">
-          <h3 style="margin:0">{{ g.label }}</h3>
-          <span class="tag">{{ g.count }} options</span>
-        </div>
-        {% if g.description %}<div class="muted">{{ g.description }}</div>{% endif %}
-        <div class="muted" style="margin-top:6px">{{ g.kind.replace('_',' ')|title }}</div>
+        {# key used for filtering and optional focus highlight #}
+        <div class="card group" id="group_{{ g.key|replace('/','__') }}" data-key="{{ (g.key ~ ' ' ~ g.label)|lower }}">
+          <div class="header-row">
+            <h3 style="margin:0">{{ g.label }}</h3>
+            <span class="tag">{{ g.count }} options</span>
+            {% if g.kind == 'folder' %}
+              <span class="badge">Folder</span>
+            {% elif g.kind == 'property_link' %}
+              <span class="badge">Property link</span>
+            {% endif %}
+          </div>
 
-        {% if g.options %}
-          <details>
-            <summary>Show options</summary>
-            <div>
-              {% for o in g.options %}
-                <div class="option">
-                  <div class="header-row">
-                    <div><strong>{{ o.display or o.id }}</strong></div>
-                    {% if o.image_url %}<img class="thumb" src="{{ o.image_url }}" alt="">{% endif %}
-                  </div>
-                  {% if o.description %}<div class="muted">{{ o.description }}</div>{% endif %}
+          {% if g.description %}<div class="muted" style="margin-top:4px">{{ g.description }}</div>{% endif %}
 
-                  {% if o.children %}
-                    <details class="children">
-                      <summary>{{ o.child_count }} child option{{ 's' if o.child_count != 1 else '' }}</summary>
-                      <div>
-                        {% for c in o.children %}
-                          <div class="option">
-                            <div class="header-row">
-                              <div>{{ c.display or c.id }}</div>
-                              {% if c.image_url %}<img class="thumb" src="{{ c.image_url }}" alt="">{% endif %}
-                            </div>
-                            {% if c.description %}<div class="muted">{{ c.description }}</div>{% endif %}
-                          </div>
-                        {% endfor %}
-                      </div>
-                    </details>
-                  {% endif %}
-                </div>
-              {% endfor %}
+          {% if g.kind == 'property_link' and g.target_type and g.target_type != type_name %}
+            <div class="muted" style="margin-top:6px">
+              From <a href="{{ url_for('type_labels', type_name=g.target_type) }}?focus={{ g.target_path|urlencode }}">{{ g.target_type }}</a>
+              <span class="badge">{{ g.target_path }}</span>
             </div>
-          </details>
-        {% endif %}
-      </div>
+          {% elif g.kind == 'property_link' and g.target_path %}
+            <div class="muted" style="margin-top:6px">
+              Path <span class="badge">{{ g.target_path }}</span>
+            </div>
+          {% endif %}
+
+          {% if g.options and g.options|length > 0 %}
+            <details {% if request.args.get('focus') and (g.key == request.args.get('focus') or g.target_path == request.args.get('focus')) %} open {% endif %}>
+              <summary>Show options</summary>
+              <div>
+                {% for o in g.options %}
+                  <div class="option">
+                    <div class="header-row">
+                      <div><strong>{{ o.display or o.id }}</strong></div>
+                      {% if o.image_url %}<img class="thumb" src="{{ o.image_url }}" alt="">{% endif %}
+                    </div>
+                    {% if o.description %}<div class="muted">{{ o.description }}</div>{% endif %}
+
+                    {% if o.children %}
+                      <details class="children">
+                        <summary>{{ o.child_count }} child option{{ 's' if o.child_count != 1 else '' }}</summary>
+                        <div>
+                          {% for c in o.children %}
+                            <div class="option">
+                              <div class="header-row">
+                                <div>{{ c.display or c.id }}</div>
+                                {% if c.image_url %}<img class="thumb" src="{{ c.image_url }}" alt="">{% endif %}
+                              </div>
+                              {% if c.description %}<div class="muted">{{ c.description }}</div>{% endif %}
+                            </div>
+                          {% endfor %}
+                        </div>
+                      </details>
+                    {% endif %}
+                  </div>
+                {% endfor %}
+              </div>
+            </details>
+          {% else %}
+            <div class="empty">No options to show.</div>
+          {% endif %}
+        </div>
       {% endfor %}
     </div>
-    <div style="margin-top:16px">
-      <a class="btn secondary" href="{{ url_for('dashboard') }}">⬅ Back</a>
+
+    <div style="margin-top:16px" class="row">
+      <a class="btn" href="{{ url_for('dashboard') }}">⬅ Back</a>
+      <a class="btn" href="{{ url_for('create_subfolder', type_name=type_name, return_url=request.url) }}">➕ Add Label Group</a>
     </div>
   </div>
+
   <script>
     function filterGroups(q){
       q = (q||"").toLowerCase();
       document.querySelectorAll("#groups .group").forEach(card=>{
-        const key = card.getAttribute("data-key");
-        card.style.display = key.includes(q) ? "block" : "none";
+        const key = card.getAttribute("data-key") || "";
+        card.style.display = key.includes(q) ? "" : "none";
       });
     }
+
+    // Optional focus support: ?focus=<path or key>
+    (function(){
+      const params = new URLSearchParams(location.search);
+      const focus = params.get('focus');
+      if(!focus) return;
+      // try key id
+      let el = document.getElementById('group_' + focus.replace(/\//g,'__'));
+      if(!el){
+        // fallback: find by data-key substring
+        document.querySelectorAll('#groups .group').forEach(card=>{
+          if(!el && (card.getAttribute('data-key')||'').includes(focus.toLowerCase())) el = card;
+        });
+      }
+      if(el){
+        el.classList.add('focused');
+        el.scrollIntoView({behavior:'smooth', block:'center'});
+      }
+    })();
   </script>
 </body>
 </html>

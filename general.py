@@ -705,6 +705,7 @@ def time_step(type_name, bio_id):
         edit_entry_index=session.get("edit_entry_index")
     )
 
+# /type/<type_name>/labels – folder-first label browser
 @app.route("/type/<type_name>/labels")
 def type_labels(type_name):
     label_dir = os.path.join("types", type_name, "labels")
@@ -713,17 +714,16 @@ def type_labels(type_name):
 
     IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp"]
 
-    def load_json_safely(p):
+    def _is_mapping(x): return isinstance(x, dict)
+
+    def _load_json(p):
         try:
             return load_json_as_dict(p)
         except Exception as e:
             print(f"[labels view] bad json {p}: {e}")
             return {}
 
-    def is_mapping(x):
-        return isinstance(x, dict)
-
-    def sibling_image(folder, base):
+    def _sibling_image(folder, base):
         for ext in IMAGE_EXTS:
             cand = os.path.join(folder, base + ext)
             if os.path.exists(cand):
@@ -731,144 +731,127 @@ def type_labels(type_name):
                 return "/" + rel
         return None
 
-    def build_child_options(group_key, option_id):
+    def _folder_options_for(type_key, rel_path):
         """
-        Look for nested child options at:
-          types/<type>/labels/<group_key>/<option_id>/*.json
+        Return 1-level options for types/<type_key>/labels/<rel_path>/*.json
+        (ignores _group.json)
         """
-        results = []
-        child_dir = os.path.join(label_dir, group_key, option_id)
-        if not os.path.isdir(child_dir):
-            return results
-        for f in sorted(os.listdir(child_dir)):
+        out = []
+        base = os.path.join("types", type_key, "labels", *rel_path.split("/")) if rel_path else os.path.join("types", type_key, "labels")
+        if not os.path.isdir(base):
+            return out
+        for f in sorted(os.listdir(base)):
             if not f.endswith(".json") or f == "_group.json":
                 continue
-            base = os.path.splitext(f)[0]
-            jp = os.path.join(child_dir, f)
-            data = load_json_safely(jp)
-            if is_mapping(data):
-                name = data.get("properties", {}).get("name") or data.get("name") or base
-                desc = data.get("description") or data.get("properties", {}).get("description", "")
-            else:
-                name, desc = base, ""
-            img = sibling_image(child_dir, base)
-            results.append({"id": base, "display": name, "description": desc, "image_url": img})
-        return results
+            lid = os.path.splitext(f)[0]
+            jp = os.path.join(base, f)
+            data = _load_json(jp)
+            name = (data.get("properties", {}) or {}).get("name") or data.get("name") or lid
+            desc = data.get("description") or (data.get("properties", {}) or {}).get("description", "") or ""
+            img = _sibling_image(os.path.dirname(jp), lid)
+            out.append({"id": lid, "display": name, "description": desc, "image_url": img})
+        return out
 
-    def build_group_options(group_key, prop_meta):
-        """
-        Prefer property‑driven resolution via resolve_property_options (works for:
-          - local folder options (labels/<group_key>/*.json)
-          - cross‑type sources when configured)
-        Then, for every resolved option, attach 'children' if a nested folder exists.
-        """
-        options = []
-        try:
-            options = resolve_property_options(
-                current_type=type_name,
-                label_base_path=label_dir,
-                prop_key=group_key,
-                prop_meta=prop_meta if is_mapping(prop_meta) else {}
-            ) or []
-        except Exception as e:
-            print(f"[labels view] resolve_property_options failed for {group_key}: {e}")
-            options = []
-
-        # Attach children for each local option
-        enhanced = []
-        for opt in options:
-            oid = opt.get("id")
-            if not oid:
-                enhanced.append(opt)
-                continue
-            # If this is a local label (common case), try to find children
-            children = build_child_options(group_key, oid)
-            if children:
-                opt = dict(opt)  # shallow copy
-                opt["children"] = children
-                opt["child_count"] = len(children)
-            enhanced.append(opt)
-        return enhanced
+    def _child_options_here(group_key, option_id):
+        # types/<this>/labels/<group_key>/<option_id>/*.json
+        child_dir = os.path.join(label_dir, *group_key.split("/"), option_id)
+        return _folder_options_for(type_name, os.path.relpath(child_dir, os.path.join("types", type_name, "labels")).replace("\\", "/")) if os.path.isdir(child_dir) else []
 
     groups = []
 
-    # 1) Property-json groups (top-level *.json files)
-    top_level_jsons = [
+    # ---------- 1) Show FOLDERS FIRST ----------
+    top_level_jsons = {
         f for f in os.listdir(label_dir)
         if f.endswith(".json") and os.path.isfile(os.path.join(label_dir, f))
-    ]
+    }
 
-    for jf in sorted(top_level_jsons):
-        prop_key  = os.path.splitext(jf)[0]
-        prop_path = os.path.join(label_dir, jf)
-        meta = load_json_safely(prop_path)
-
-        if is_mapping(meta):
-            prop_name = meta.get("name") or meta.get("properties", {}).get("name") or prop_key.replace("_", " ").title()
-            prop_desc = meta.get("description") or meta.get("properties", {}).get("description", "")
-        else:
-            prop_name = prop_key.replace("_", " ").title()
-            prop_desc = ""
-
-        options = build_group_options(prop_key, meta)
-        groups.append({
-            "key": prop_key,
-            "label": prop_name,
-            "description": prop_desc,
-            "options": options,
-            "count": len(options),
-            "kind": "property_json"
-        })
-
-    # 2) Legacy folder groups (subdirectories without a matching property json)
     for entry in sorted(os.listdir(label_dir)):
         full = os.path.join(label_dir, entry)
         if not os.path.isdir(full):
             continue
-        if f"{entry}.json" in top_level_jsons:
-            continue  # represented by property-json already
 
-        # Optional _group.json
+        # If there's a property JSON with the same name, we'll still show the folder
+        # as the main card (your requested behavior).
         gname = entry.replace("_", " ").title()
         gdesc = ""
         meta_path = os.path.join(full, "_group.json")
-        meta = load_json_safely(meta_path) if os.path.exists(meta_path) else {}
-        if is_mapping(meta):
-            gname = meta.get("name") or meta.get("properties", {}).get("name") or gname
-            gdesc = meta.get("description") or meta.get("properties", {}).get("description", "") or ""
+        meta = _load_json(meta_path) if os.path.exists(meta_path) else {}
+        if _is_mapping(meta):
+            gname = meta.get("name") or (meta.get("properties", {}) or {}).get("name") or gname
+            gdesc = meta.get("description") or (meta.get("properties", {}) or {}).get("description", "") or ""
 
-        # Legacy options: list files in subfolder
-        options = []
-        for f in sorted(os.listdir(full)):
-            if not f.endswith(".json") or f == "_group.json":
-                continue
-            base = os.path.splitext(f)[0]
-            jp = os.path.join(full, f)
-            data = load_json_safely(jp)
-            if is_mapping(data):
-                name = data.get("properties", {}).get("name") or data.get("name") or base
-                desc = data.get("description") or data.get("properties", {}).get("description", "")
-            else:
-                name, desc = base, ""
-            img = sibling_image(full, base)
-            opt = {"id": base, "display": name, "description": desc, "image_url": img}
-            # attach children if folder exists
-            children = build_child_options(entry, base)
-            if children:
-                opt["children"] = children
-                opt["child_count"] = len(children)
-            options.append(opt)
+        # options = files directly under this folder
+        options = _folder_options_for(type_name, entry)
+        # attach children one level deeper for each option
+        enhanced = []
+        for opt in options:
+            kids = _child_options_here(entry, opt["id"])
+            if kids:
+                opt = dict(opt)
+                opt["children"] = kids
+                opt["child_count"] = len(kids)
+            enhanced.append(opt)
 
         groups.append({
             "key": entry,
             "label": gname,
             "description": gdesc,
-            "options": options,
-            "count": len(options),
-            "kind": "legacy_folder"
+            "options": enhanced,
+            "count": len(enhanced),
+            "kind": "folder"
         })
 
+    # ---------- 2) Also surface PROPERTY JSONS that point to LABELS ----------
+    # (useful when a property points to another type/path; we’ll render those options here too)
+    for jf in sorted(top_level_jsons):
+        prop_key = os.path.splitext(jf)[0]
+        prop_path = os.path.join(label_dir, jf)
+        meta = _load_json(prop_path)
+
+        if not _is_mapping(meta):
+            continue
+
+        # source.kind can be "self_labels", "type_labels", "type_biographies", or None
+        src = meta.get("source") or (meta.get("properties", {}) or {}).get("source") or {}
+        if not _is_mapping(src):
+            continue
+
+        kind = src.get("kind")
+        if kind not in ("self_labels", "type_labels"):
+            # ignore type_biographies here (this page is for labels)
+            continue
+
+        # Resolve where to read options from
+        if kind == "self_labels":
+            target_type = type_name
+            target_path = src.get("path") or prop_key  # default to property key
+        else:  # type_labels
+            target_type = src.get("type")
+            target_path = src.get("path") or prop_key
+            if not target_type:
+                continue  # malformed
+
+        prop_name = meta.get("name") or (meta.get("properties", {}) or {}).get("name") or prop_key.replace("_", " ").title()
+        prop_desc = meta.get("description") or (meta.get("properties", {}) or {}).get("description", "") or ""
+
+        options = _folder_options_for(target_type, target_path)
+        # If the property points to a different type/path, annotate so the template can show a hint/link.
+        groups.append({
+            "key": prop_key,
+            "label": prop_name,
+            "description": prop_desc if target_type == type_name else f"{prop_desc} (from {target_type} / {target_path})",
+            "options": options,
+            "count": len(options),
+            "kind": "property_link",
+            "target_type": target_type,
+            "target_path": target_path
+        })
+
+    # stable order: folders first, then property links (keep name order within each)
+    groups.sort(key=lambda g: (0 if g["kind"] == "folder" else 1, g["key"]))
+
     return render_template("type_labels.html", type_name=type_name, groups=groups)
+
 
 @app.route("/api/type/<type_name>/label_paths")
 def api_label_paths(type_name):
