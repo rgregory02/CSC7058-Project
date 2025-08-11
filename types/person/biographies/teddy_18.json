@@ -1,0 +1,36 @@
+{
+    "id": "teddy_18",
+    "uid": "eaa59617979a46caadead6ee571bbdef",
+    "name": "Teddy",
+    "type": "person",
+    "created": "2025-08-11T20:54:13.122080+00:00",
+    "updated": "2025-08-11T21:18:04.776206+00:00",
+    "entries": [
+        {
+            "time": {
+                "label_type": "date",
+                "confidence": 100,
+                "date_value": "2025-07-28"
+            },
+            "time_normalised": {
+                "kind": "date",
+                "start_iso": "2025-07-28",
+                "end_iso": "2025-07-28",
+                "start_ts": 1753660800,
+                "end_ts": 1753660800,
+                "precision": "exact",
+                "age_years": null,
+                "notes": "Direct date entry"
+            },
+            "created": "2025-08-11T20:54:51.462856+00:00",
+            "updated": "2025-08-11T21:18:04.776206+00:00",
+            "person": [
+                {
+                    "label_type": "hair_colour",
+                    "confidence": 100,
+                    "id": "brown_hair"
+                }
+            ]
+        }
+    ]
+}

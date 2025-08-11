@@ -1,13 +1,12 @@
 import os
 import json
-import shutil  # For moving files and folders
-import time  # For unique timestamps
+import shutil  
+import time 
 import re
 import math
 import uuid
 
 from collections import defaultdict
-
 from flask import Flask, Response, jsonify, request, url_for, redirect, render_template, flash, get_flashed_messages, send_from_directory, render_template_string, session
 from markupsafe import Markup, escape
 from urllib.parse import quote, unquote
@@ -15,7 +14,7 @@ from datetime import datetime, timezone, timedelta
 from openai import OpenAI
 from dotenv import load_dotenv
 from requests import get
-from typing import Optional
+from typing import Optional, Dict, Any, List
 
 load_dotenv()
 oai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -75,6 +74,8 @@ from utils import (
     build_label_catalog_for_type
 )
 
+from time_utils import normalise_time_for_bio_entry
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'the_random_string')  # Use environment variable if available
 
@@ -101,11 +102,21 @@ def serve_type_images(filename):
 @app.template_filter("uk_date")
 def uk_date(value):
     from datetime import datetime
+    if not value:
+        return ""
     try:
-        dt = datetime.strptime(value, "%Y-%m-%d")
-        return dt.strftime("%d/%m/%Y")
+        if len(value) == 4:  # year only
+            return value
+        if len(value) == 7:  # YYYY-MM
+            dt = datetime.strptime(value, "%Y-%m")
+            return dt.strftime("%m/%Y")
+        if len(value) == 10:  # YYYY-MM-DD
+            dt = datetime.strptime(value, "%Y-%m-%d")
+            return dt.strftime("%d/%m/%Y")
     except:
-        return value
+        pass
+    return value
+
 
 @app.template_filter("uk_datetime")
 def uk_datetime(value):
@@ -1318,9 +1329,7 @@ def general_iframe_wizard():
     )
 
 
-
-
-@app.route("/general_step/time/<type_name>/<bio_id>", methods=["GET","POST"])
+@app.route("/general_step/time/<type_name>/<bio_id>", methods=["GET", "POST"])
 def general_step_time(type_name, bio_id):
     labels_folder = "./types/time/labels"
     bio_file = f"./types/{type_name}/biographies/{bio_id}.json"
@@ -1331,56 +1340,82 @@ def general_step_time(type_name, bio_id):
 
     bio_data = load_json_as_dict(bio_file) or {}
     bio_data.setdefault("entries", [])
+    name = bio_data.get("name", bio_id)
 
+    # ---- defaults and prefill holders
     selected_label_type = ""
     selected_subvalue = ""
     selected_date = ""
     selected_confidence = ""
+    selected_range_start = ""
+    selected_range_end = ""
 
+    # ---- POST: capture, normalise, save
     if request.method == "POST":
-        selected_label_type   = (request.form.get("label_type") or "").strip()
-        selected_subvalue     = (request.form.get("subvalue") or "").strip()
-        selected_date         = (request.form.get("date_value") or "").strip()
-        selected_confidence   = (request.form.get("confidence") or "100").strip()
+        selected_label_type = (request.form.get("label_type") or "").strip().lower()
+        selected_subvalue   = (request.form.get("subvalue") or "").strip()
+        selected_date       = (request.form.get("date_value") or "").strip()
+        selected_confidence = (request.form.get("confidence") or "100").strip()
+        selected_range_start = (request.form.get("start_date") or "").strip()
+        selected_range_end   = (request.form.get("end_date") or "").strip()
 
         try:
             confidence_value = int(selected_confidence)
         except (TypeError, ValueError):
             confidence_value = 100
 
-        valid = confidence_value is not None and (
-            (selected_label_type == "date" and selected_date) or
-            (selected_label_type != "date" and selected_subvalue)
-        )
+        # Validate minimal inputs per kind
+        valid = False
+        if selected_label_type == "date":
+            valid = bool(selected_date)
+        elif selected_label_type == "range":
+            # allow open-ended, but prefer at least one
+            valid = bool(selected_range_start or selected_range_end)
+        else:
+            valid = bool(selected_subvalue)
 
         if valid:
-            # Build the normalized time payload we keep in session + entry["time"]
-            time_payload = {
+            # Build raw time payload (data-driven; add fields as needed)
+            raw = {
                 "label_type": selected_label_type,
                 "confidence": confidence_value
             }
             if selected_label_type == "date":
-                time_payload["date_value"] = selected_date
-                label_value = selected_date
+                raw["date_value"] = selected_date
+            elif selected_label_type == "range":
+                if selected_range_start:
+                    raw["start_date"] = selected_range_start
+                if selected_range_end:
+                    raw["end_date"] = selected_range_end
             else:
-                time_payload["subvalue"] = selected_subvalue
-                label_value = selected_subvalue
+                raw["subvalue"] = selected_subvalue
 
+            # Load option metadata if a sublabel was chosen (for decade/era/life_stage…)
+            option_meta = None
+            if selected_label_type not in ("date", "range") and selected_subvalue:
+                opt_path = os.path.join(labels_folder, selected_label_type, f"{selected_subvalue}.json")
+                if os.path.isfile(opt_path):
+                    try:
+                        option_meta = load_json_as_dict(opt_path) or {}
+                    except Exception:
+                        option_meta = None
+
+            # Normalise using your utility (uses dob_iso/founded_on/etc if present)
+            normalised = normalise_time_for_bio_entry(raw, biography=bio_data, option_meta=option_meta)
+
+            # Session mirror for prefill
             session["time_selection"] = {
-                "label": label_value,
-                "confidence": confidence_value,
-                "label_type": selected_label_type,
-                "date_value": selected_date if selected_label_type == "date" else "",
-                "subvalue": selected_subvalue if selected_label_type != "date" else ""
+                **raw,  # keeps label_type, date_value/subvalue/range fields, confidence
             }
 
-            # Ensure a current entry exists; otherwise create one
+            # Ensure an in-progress entry; overwrite time if re-posting
             entry_index = session.get("entry_index")
             now = now_iso_utc()
 
             if entry_index is None or not (0 <= int(entry_index) < len(bio_data["entries"])):
                 entry = {
-                    "time": time_payload,
+                    "time": raw,
+                    "time_normalised": normalised,
                     "created": now,
                     "updated": now
                 }
@@ -1388,25 +1423,37 @@ def general_step_time(type_name, bio_id):
                 entry_index = len(bio_data["entries"]) - 1
                 session["entry_index"] = entry_index
             else:
-                # Overwrite time in existing entry; keep created, bump updated
-                e = bio_data["entries"][entry_index]
+                idx = int(entry_index)
+                e = bio_data["entries"][idx]
                 if not isinstance(e, dict):
                     e = {}
-                    bio_data["entries"][entry_index] = e
-                e["time"] = time_payload
+                    bio_data["entries"][idx] = e
+                e["time"] = raw
+                e["time_normalised"] = normalised
                 if "created" not in e:
                     e["created"] = now
                 e["updated"] = now
 
-            # Update the biography-level updated timestamp as well
             bio_data["updated"] = now
-
             save_dict_as_json(bio_file, bio_data)
 
-            # Next: go to the *general* labels step in the iframe wizard
+            # Proceed to the next (labels) step in your generalised iframe wizard
             return redirect(url_for("general_iframe_wizard", type=type_name, bio_id=bio_id, step="labels"))
 
-    # --- GET: build time label options ---
+    # ---- GET / initial render: prefill from session if present
+    if request.method == "GET":
+        sess_time = session.get("time_selection") or {}
+        selected_label_type = selected_label_type or (sess_time.get("label_type") or "")
+        selected_subvalue   = selected_subvalue or (sess_time.get("subvalue") or "")
+        selected_date       = selected_date or (sess_time.get("date_value") or "")
+        selected_range_start = selected_range_start or (sess_time.get("start_date") or "")
+        selected_range_end   = selected_range_end or (sess_time.get("end_date") or "")
+        if not selected_confidence:
+            sc = sess_time.get("confidence")
+            selected_confidence = str(sc) if sc is not None else ""
+
+    # ---- Build available time label files (purely folder-driven)
+    # e.g. date.json, life_stage.json, decade.json, era.json, range.json
     label_files = []
     if os.path.exists(labels_folder):
         for f in os.listdir(labels_folder):
@@ -1416,13 +1463,15 @@ def general_step_time(type_name, bio_id):
                     data = load_json_as_dict(full) or {}
                     label = os.path.splitext(f)[0]
                     desc  = data.get("description", "")
-                    label_files.append((label, desc))
+                    order = data.get("order", 999)
+                    label_files.append({"key": label, "desc": desc, "order": order})
                 except Exception:
                     pass
+    label_files.sort(key=lambda d: (d.get("order", 999), d["key"]))
 
-    # sublabels for a selected label_type (if any)
+    # If a non-date/non-range label type is selected, load its sublabels (if a folder exists)
     subfolder_labels = []
-    if selected_label_type and selected_label_type != "date":
+    if selected_label_type and selected_label_type not in ("date", "range"):
         subfolder_path = os.path.join(labels_folder, selected_label_type)
         if os.path.isdir(subfolder_path):
             for f in os.listdir(subfolder_path):
@@ -1438,29 +1487,41 @@ def general_step_time(type_name, bio_id):
                         pass
             subfolder_labels.sort(key=lambda x: (x.get("order", 999), x["name"]))
 
-    # for display list on the page
+    # Existing entries list → prefer the normalised bounds
     display_list = []
     for entry in bio_data.get("entries", []):
-        time_info = entry.get("time", {}) or {}
-        tag = time_info.get("subvalue") or time_info.get("date_value") or "[unspecified]"
-        conf = time_info.get("confidence", "unknown")
-        display_list.append((tag, conf))
+        tnorm = entry.get("time_normalised") or {}
+        traw  = entry.get("time") or {}
+        label_text = ""
+        if tnorm.get("start_iso") or tnorm.get("end_iso"):
+            s = tnorm.get("start_iso") or "?"
+            e = tnorm.get("end_iso") or s
+            prec = tnorm.get("precision") or "unknown"
+            label_text = f"{s} → {e} ({prec})"
+        else:
+            # fallback to raw
+            label_text = traw.get("subvalue") or traw.get("date_value") or "[unspecified]"
+        conf = traw.get("confidence", "unknown")
+        display_list.append((label_text, conf))
 
     return render_template(
         "time_step.html",
-        type_name=type_name, bio_id=bio_id,
+        name=name,
+        type_name=type_name,
+        bio_id=bio_id,
         label_files=label_files,
         selected_label_type=selected_label_type,
         selected_subvalue=selected_subvalue,
         selected_date=selected_date,
         selected_confidence=selected_confidence,
+        selected_range_start=selected_range_start,
+        selected_range_end=selected_range_end,
         subfolder_labels=subfolder_labels,
-        existing_entries=display_list
+        existing_entries=display_list,
+        edit_entry_index=None
     )
 
 
-# ---------- 5) Step: Labels (re-use your label_step; one big page) ----------
-# ---------- General Wizard: Labels (data-driven, type-agnostic) ----------
 @app.route("/general_step/labels/<type_name>/<bio_id>", methods=["GET", "POST"])
 def general_step_labels(type_name, bio_id):
     """
@@ -1477,39 +1538,61 @@ def general_step_labels(type_name, bio_id):
     if not os.path.exists(bio_file_path):
         return f"Biography file {bio_id} not found for type {type_name}.", 404
 
-    bio_data = load_json_as_dict(bio_file_path)
+    bio_data = load_json_as_dict(bio_file_path) or {}
     bio_data.setdefault("entries", [])
 
-    # Current entry (create if needed, bring across time selection)
-    entry_index = session.get("entry_index")
+    # --- helper: cast to int safely ---
+    def _as_int(x, default=None):
+        try:
+            return int(x)
+        except (TypeError, ValueError):
+            return default
+
+    # --- helper: build id -> group_key index
+    def _build_option_index(groups: List[Dict]) -> Dict[str, str]:
+        idx: Dict[str, str] = {}
+        for g in groups or []:
+            gkey = g.get("key")
+            for opt in g.get("options", []) or []:
+                oid = opt.get("id")
+                if oid and gkey:
+                    idx[str(oid)] = gkey
+        return idx
+
+    # ===== current entry (create if needed, bring across time selection) =====
+    entry_index = _as_int(session.get("entry_index"))
     if entry_index is None or not (0 <= entry_index < len(bio_data["entries"])):
-        new_entry = {"created": datetime.now(timezone.utc).isoformat()}
+        now = datetime.now(timezone.utc).isoformat()
+        new_entry = {"created": now, "updated": now}
+        # carry over time selection if present
         if session.get("time_selection"):
             new_entry["time"] = session["time_selection"]
+        # initialise an empty labels list for this type
+        new_entry[type_name] = []
         bio_data["entries"].append(new_entry)
         entry_index = len(bio_data["entries"]) - 1
         session["entry_index"] = entry_index
         save_dict_as_json(bio_file_path, bio_data)
 
+    # Ensure the current entry has a bucket for this type
+    bio_data["entries"][entry_index].setdefault(type_name, [])
+
     # -------- build base groups --------
     base_groups = collect_label_groups(label_base_path, type_name)
+    base_index = _build_option_index(base_groups)
 
-    # -------- map saved selections -> existing_labels (for preselects) --------
-    # We try to attach to real property keys; fall back to label_type if needed.
-    existing_labels: dict[str, dict] = {}
+    # -------- map saved selections -> existing_labels (initial, using base index) --------
+    existing_labels: Dict[str, dict] = {}
     saved_items = bio_data["entries"][entry_index].get(type_name, [])
     for it in saved_items:
         lt  = (it.get("label_type") or "").strip()
-        lid = it.get("id")
+        lid = (it.get("id") or "").strip()
         payload = {"confidence": it.get("confidence", 100), "source": it.get("source", "")}
         if lid:
             payload["label"] = lid
             payload["id"]    = lid
-
-        # Prefer an exact property-key match; else use the last path segment
-        key = lt
-        if not any(g.get("key") == lt for g in base_groups):
-            key = lt  # best-effort; many schemas save label_type == property key
+        # Prefer exact group via id → group map; else fall back to label_type
+        key = base_index.get(lid) or lt
         existing_labels[key] = payload
 
     # -------- preview overlay (so a click can reveal children without saving) --------
@@ -1540,24 +1623,41 @@ def general_step_labels(type_name, bio_id):
         print(f"[WARN] expand_child_groups failed: {e}")
         expanded_groups = base_groups
 
+    # ---- REBUILD existing_labels using expanded index so child groups preselect correctly
+    expanded_index = _build_option_index(expanded_groups)
+    rebuilt_existing: Dict[str, dict] = {}
+    for it in saved_items:
+        lt  = (it.get("label_type") or "").strip()
+        lid = (it.get("id") or "").strip()
+        payload = {"confidence": it.get("confidence", 100), "source": it.get("source", "")}
+        if lid:
+            payload["label"] = lid
+            payload["id"]    = lid
+        key = expanded_index.get(lid) or lt
+        rebuilt_existing[key] = payload
+
+    # Preserve preview on top
+    if preview_key and preview_val:
+        rebuilt_existing[preview_key] = {
+            "label": preview_val, "id": preview_val, "confidence": 100, "source": "preview"
+        }
+
+    display_labels = rebuilt_existing
+
     # -------- helper: find a group for a raw option id (used by GPT ingestion) --------
     def find_group_key_for_id(opt_id: str) -> Optional[str]:
-        for g in expanded_groups:
-            for o in g.get("options", []):
-                if o.get("id") == opt_id:
-                    return g.get("key")
-        return None
+        return expanded_index.get(opt_id or "")
 
     # ======================= POST (save) =======================
     if request.method == "POST":
-        new_entries: list[dict] = []
+        new_entries: List[dict] = []
 
         # ---- (A) GPT suggestions ----
         # Accepts a list of objects, minimal shape:
         #   {"id": "<option_id>"}                   -> we'll resolve its label_type
         # Optional fields we respect:
         #   label_type, confidence, source
-        gpt_raw = request.form.get("gpt_selected_labels_json", "").strip()
+        gpt_raw = (request.form.get("gpt_selected_labels_json") or "").strip()
         if gpt_raw:
             try:
                 gpt_items = json.loads(gpt_raw)
@@ -1570,14 +1670,15 @@ def general_step_labels(type_name, bio_id):
                             continue
                         lt  = (lab.get("label_type") or "").strip()
                         if not lt:
-                            # resolve by searching expanded groups for this id
                             maybe = find_group_key_for_id(lid)
                             if maybe:
-                                lt = maybe.split("/")[-1]     # store last segment for compat
+                                lt = maybe.split("/")[-1]     # store last segment
                             else:
-                                lt = type_name                # limp fallback
-
-                        conf = int(lab.get("confidence", 100))
+                                lt = type_name                # fallback (keeps schema tolerant)
+                        try:
+                            conf = int(lab.get("confidence", 100))
+                        except Exception:
+                            conf = 100
                         new_entries.append({
                             "id": lid,
                             "label_type": lt.split("/")[-1],  # always last segment in stored data
@@ -1610,8 +1711,9 @@ def general_step_labels(type_name, bio_id):
                 new_entries.append(entry)
 
         # Overwrite this entry’s labels for the current type and bump updated timestamp
-        bio_data["entries"][entry_index][type_name] = new_entries
-        bio_data["updated"] = datetime.now(timezone.utc).isoformat()
+        bio_data["entries"][entry_index][type_name] = new_entries  # overwrite even if empty (supports deselect)
+        bio_data["entries"][entry_index]["updated"] = datetime.now(timezone.utc).isoformat()
+        bio_data["updated"] = bio_data["entries"][entry_index]["updated"]
         save_dict_as_json(bio_file_path, bio_data)
 
         return redirect(url_for("general_iframe_wizard", type=type_name, bio_id=bio_id, step="review"))
@@ -1652,9 +1754,6 @@ def general_step_labels(type_name, bio_id):
         bio_name=bio_data.get("name", bio_id),
         skip_allowed=(len(expanded_groups) == 0)
     )
-
-
-
 
 # ---------- 6) Step: Review ----------
 @app.route("/general_step/review/<type_name>/<bio_id>")

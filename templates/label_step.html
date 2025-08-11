@@ -1,7 +1,7 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8">
   <title>Select Labels – {{ current_type|replace('_',' ')|title }}</title>
   <link rel="stylesheet" href="/static/styles.css">
   <style>
@@ -28,11 +28,10 @@
     .back-link { margin:0 10px; text-decoration:none; border:1px solid #007bff; padding:6px 12px; border-radius:6px; color:#007bff; background:#fff; }
     .bio-suggestions { margin-top:14px; background:#f9f9ff; border:1px dashed #ccd; border-radius:10px; padding:14px; }
     .muted { color:#666; font-size:.9em; }
-.sugg-card{
-  border:1px solid #e7e9f2; border-radius:8px; padding:10px; margin:8px 0; background:#fff; cursor:pointer;
-}
-.sugg-card.selected{ background:#eaffee; border-color:#46b36a; }
-
+    .sugg-card{ border:1px solid #e7e9f2; border-radius:8px; padding:10px; margin:8px 0; background:#fff; cursor:pointer; }
+    .sugg-card.selected{ background:#eaffee; border-color:#46b36a; }
+    .clear-btn { background:#fff; border:1px solid #bbb; color:#444; padding:4px 10px; border-radius:6px; cursor:pointer; font-size:.85em; margin-left:auto; }
+    .clear-btn:hover { background:#f6f6f6; }
   </style>
 </head>
 <body>
@@ -43,192 +42,191 @@
     {% if time_selection and (time_selection.label or time_selection.date_value) %}
       <div><strong>Time:</strong>
         {% if time_selection.label %}{{ time_selection.label.replace('_',' ')|title }}
-        {% else %}{{ time_selection.date_value }}{% endif %}
+        {% else %}{{ time_selection.date_value|uk_date }}{% endif %}
       </div>
     {% endif %}
   </div>
 
   <form method="POST">
-  {% for group in label_groups_list %}
-    {% set safe_key     = group.key.replace('/', '__') %}
-    {% set is_child     = ('/' in group.key) %}
-    {% set existing     = existing_labels.get(group.key, {}) %}
-    {% set selected_id  = existing.get('label') or existing.get('id') %}
-    {% set matched_conf = existing.get('confidence', 100) %}
+    {% for group in label_groups_list %}
+      {% set safe_key     = group.key.replace('/', '__') %}
+      {% set is_child     = ('/' in group.key) %}
+      {% set existing     = existing_labels.get(group.key, {}) %}
+      {% set selected_id  = existing.get('label') or existing.get('id') %}
+      {% set matched_conf = existing.get('confidence', 100) %}
 
-    <div class="label-group-box" id="group_{{ safe_key }}">
-      <div class="label-title">
-        {{ group.label or group.key.split('/')[-1]|replace('_',' ')|title }}
-        {% if group.description %}<span class="muted">— {{ group.description }}</span>{% endif %}
-      </div>
-
-      {% if group.refer_to %}
-        <div class="group-note">
-          This field links to <strong>{{ group.refer_to.type|replace('_',' ')|title }}</strong> biographies.
-          Choose an existing biography or create a new one below.
-        </div>
-      {% endif %}
-
-      {% if group.options and not (group.refer_to and group.refer_to.source == 'biographies') %}
-        <input
-          type="text"
-          class="label-search"
-          placeholder="Search {{ group.label or group.key }}…"
-          oninput="filterLabels(this, '{{ group.key }}')"
-          data-group="{{ group.key }}">
-      {% endif %}
-
-      <!-- Hidden selected value for this group -->
-      <input type="hidden"
-             name="selected_id_{{ group.key }}"
-             id="input_{{ safe_key }}"
-             class="group-selection-tracker"
-             value="{{ selected_id or '' }}">
-
-      {% set is_cross_bio = group.refer_to and group.refer_to.source == 'biographies' %}
-      {% if group.options and not is_cross_bio %}
-        <div class="label-options">
-          {% for item in group.options %}
-            {% set is_selected = (selected_id == item.id) %}
-            <div class="label-card {% if is_selected %}selected{% endif %}"
-                 id="card_{{ safe_key }}_{{ item.id }}"
-                 data-group="{{ group.key }}"
-                 data-value="{{ item.id }}"
-                 onclick="selectLabel('{{ group.key }}','{{ item.id }}', {{ 'true' if is_child else 'false' }})">
-              {% if item.image %}
-                <img src="{{ item.image }}" alt="{{ item.display }}">
-              {% endif %}
-              <div><strong>{{ item.display or item.id }}</strong></div>
-              {% if item.description %}<div class="label-description">{{ item.description }}</div>{% endif %}
-            </div>
-          {% endfor %}
+      <div class="label-group-box" id="group_{{ safe_key }}">
+        <div class="label-title">
+          {{ group.label or group.key.split('/')[-1]|replace('_',' ')|title }}
+          {% if group.description %}<span class="muted">— {{ group.description }}</span>{% endif %}
+          <button type="button" class="clear-btn" onclick="clearGroupUI('{{ group.key }}')">Clear</button>
         </div>
 
-        <div class="confidence-slider">
-          <label for="confidence_{{ safe_key }}">🎯 Confidence:</label><br>
-          <input type="range"
-                 name="confidence_{{ group.key }}"
-                 id="confidence_{{ safe_key }}"
-                 min="0" max="100"
-                 value="{{ matched_conf }}"
-                 oninput="updateConfidence('{{ group.key }}')">
-          <div class="confidence-display">
-            <span id="confidence_display_{{ safe_key }}">{{ matched_conf }}%</span>
-            <span id="confidence_level_{{ safe_key }}"></span>
+        {% if group.refer_to %}
+          <div class="group-note">
+            This field links to <strong>{{ group.refer_to.type|replace('_',' ')|title }}</strong> biographies.
+            Choose an existing biography or create a new one below.
           </div>
-        </div>
-      {% endif %}
+        {% endif %}
 
-      {# ---------- Linked biographies (server-rendered) ---------- #}
-      {# Only render when this group is a CHILD and backend returned suggestions #}
-      {% set sugg_key = group.key.replace('/', '__') %}
-      {% set bio_list = suggested_biographies.get(sugg_key) %}
-      {% if is_child and bio_list and bio_list|length > 0 %}
-        {% set bio_input_name   = 'selected_id_' ~ group.key ~ '_bio' %}
-        {% set bio_hidden_id    = 'input_' ~ sugg_key ~ '_bio' %}
-        {% set bio_selected_id  = (existing_bio_selections.get(group.key ~ '_bio','') if existing_bio_selections else '') %}
-        {% set bio_conf_val     = (existing_bio_selections.get(group.key ~ '_bio_conf', 100) if existing_bio_selections else 100) %}
+        {% if group.options and not (group.refer_to and group.refer_to.source == 'biographies') %}
+          <input
+            type="text"
+            class="label-search"
+            placeholder="Search {{ group.label or group.key }}…"
+            oninput="filterLabels(this, '{{ group.key }}')"
+            data-group="{{ group.key }}">
+        {% endif %}
 
-        <div class="bio-suggestions" id="bio_suggestions_{{ sugg_key }}">
-          <div class="label-title">📖 Linked Biographies</div>
+        <!-- Hidden selected value for this group -->
+        <input type="hidden"
+               name="selected_id_{{ group.key }}"
+               id="input_{{ safe_key }}"
+               class="group-selection-tracker"
+               value="{{ selected_id or '' }}">
 
-          <input type="hidden"
-                 name="{{ bio_input_name }}"
-                 id="{{ bio_hidden_id }}"
-                 class="group-selection-tracker"
-                 value="{{ bio_selected_id }}">
-
-          <input type="text"
-                 class="label-search"
-                 placeholder="Search biographies…"
-                 oninput="filterLabels(this, '{{ sugg_key }}_bio')"
-                 data-group="{{ sugg_key }}_bio">
-
+        {% set is_cross_bio = group.refer_to and group.refer_to.source == 'biographies' %}
+        {% if group.options and not is_cross_bio %}
           <div class="label-options">
-            {% for option in bio_list %}
-              {% set bio_selected = (option.id == bio_selected_id) %}
-              <div class="label-card{% if bio_selected %} selected{% endif %}"
-                   data-group="{{ sugg_key }}_bio"
-                   data-value="{{ option.id }}"
-                   onclick="toggleBioSelection(this, '{{ bio_hidden_id }}')">
-                <div><strong>{{ option.display or option.id }}</strong></div>
-                {% if option.description %}<div class="label-description">{{ option.description }}</div>{% endif %}
+            {% for item in group.options %}
+              {% set is_selected = (selected_id == item.id) %}
+              {% set img = item.image or item.image_url %}
+              <div class="label-card {% if is_selected %}selected{% endif %}"
+                   id="card_{{ safe_key }}_{{ item.id }}"
+                   data-group="{{ group.key }}"
+                   data-value="{{ item.id }}"
+                   tabindex="0"
+                   onclick="selectLabel('{{ group.key }}','{{ item.id }}', {{ 'true' if is_child else 'false' }})"
+                   onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); this.click();}">
+                {% if img %}<img src="{{ img }}" alt="{{ item.display or item.id }}">{% endif %}
+                <div><strong>{{ item.display or item.id }}</strong></div>
+                {% if item.description %}<div class="label-description">{{ item.description }}</div>{% endif %}
               </div>
             {% endfor %}
           </div>
 
-          <div class="confidence-slider" style="margin-top:10px;">
-            <label for="confidence_{{ safe_key }}_bio">🎯 Biography Match Confidence:</label><br>
+          <div class="confidence-slider">
+            <label for="confidence_{{ safe_key }}">🎯 Confidence:</label><br>
             <input type="range"
-                   name="confidence_{{ group.key }}_bio"
-                   id="confidence_{{ safe_key }}_bio"
+                   name="confidence_{{ group.key }}"
+                   id="confidence_{{ safe_key }}"
                    min="0" max="100"
-                   value="{{ bio_conf_val }}"
-                   oninput="updateConfidence('{{ group.key }}_bio')">
+                   value="{{ matched_conf }}"
+                   oninput="updateConfidence('{{ group.key }}')">
             <div class="confidence-display">
-              <span id="confidence_display_{{ safe_key }}_bio">{{ bio_conf_val }}%</span>
-              <span id="confidence_level_{{ safe_key }}_bio"></span>
+              <span id="confidence_display_{{ safe_key }}">{{ matched_conf }}%</span>
+              <span id="confidence_level_{{ safe_key }}"></span>
             </div>
           </div>
-        </div>
-      {% elif (not is_child) and bio_list %}
-        <div class="muted" style="margin-top:8px">
-          Select a child option to see matching biographies.
-        </div>
-      {% endif %}
+        {% endif %}
 
-      {# ---------- AJAX injection targets (for live children + bios) ---------- #}
-      <div id="children_for_{{ safe_key }}"></div>
-      <div id="bios_for_{{ safe_key }}"></div>
+        {# ---------- Linked biographies (server-rendered) ---------- #}
+        {% set sugg_key = group.key.replace('/', '__') %}
+        {% set bio_list = suggested_biographies.get(sugg_key) %}
+        {% if is_child and bio_list and bio_list|length > 0 %}
+          {% set bio_input_name   = 'selected_id_' ~ group.key ~ '_bio' %}
+          {% set bio_hidden_id    = 'input_' ~ sugg_key ~ '_bio' %}
+          {% set bio_selected_id  = (existing_bio_selections.get(group.key ~ '_bio','') if existing_bio_selections else '') %}
+          {% set bio_conf_val     = (existing_bio_selections.get(group.key ~ '_bio_conf', 100) if existing_bio_selections else 100) %}
 
-      {% if (not group.options) and (not is_child) and (not bio_list) %}
-        <div class="muted">No labels available yet for this group.</div>
-      {% endif %}
+          <div class="bio-suggestions" id="bio_suggestions_{{ sugg_key }}">
+            <div class="label-title">📖 Linked Biographies</div>
+
+            <input type="hidden"
+                   name="{{ bio_input_name }}"
+                   id="{{ bio_hidden_id }}"
+                   class="group-selection-tracker"
+                   value="{{ bio_selected_id }}">
+
+            <input type="text"
+                   class="label-search"
+                   placeholder="Search biographies…"
+                   oninput="filterLabels(this, '{{ sugg_key }}_bio')"
+                   data-group="{{ sugg_key }}_bio">
+
+            <div class="label-options">
+              {% for option in bio_list %}
+                {% set bio_selected = (option.id == bio_selected_id) %}
+                <div class="label-card{% if bio_selected %} selected{% endif %}"
+                     data-group="{{ sugg_key }}_bio"
+                     data-value="{{ option.id }}"
+                     tabindex="0"
+                     onclick="toggleBioSelection(this, '{{ bio_hidden_id }}')"
+                     onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); this.click();}">
+                  <div><strong>{{ option.display or option.id }}</strong></div>
+                  {% if option.description %}<div class="label-description">{{ option.description }}</div>{% endif %}
+                </div>
+              {% endfor %}
+            </div>
+
+            <div class="confidence-slider" style="margin-top:10px;">
+              <label for="confidence_{{ safe_key }}_bio">🎯 Biography Match Confidence:</label><br>
+              <input type="range"
+                     name="confidence_{{ group.key }}_bio"
+                     id="confidence_{{ safe_key }}_bio"
+                     min="0" max="100"
+                     value="{{ bio_conf_val }}"
+                     oninput="updateConfidence('{{ group.key }}_bio')">
+              <div class="confidence-display">
+                <span id="confidence_display_{{ safe_key }}_bio">{{ bio_conf_val }}%</span>
+                <span id="confidence_level_{{ safe_key }}_bio"></span>
+              </div>
+            </div>
+          </div>
+        {% elif (not is_child) and bio_list %}
+          <div class="muted" style="margin-top:8px">
+            Select a child option to see matching biographies.
+          </div>
+        {% endif %}
+
+        {# ---------- AJAX injection targets (for live children + bios) ---------- #}
+        <div id="children_for_{{ safe_key }}"></div>
+        <div id="bios_for_{{ safe_key }}"></div>
+
+        {% if (not group.options) and (not is_child) and (not bio_list) %}
+          <div class="muted">No labels available yet for this group.</div>
+        {% endif %}
+      </div>
+    {% endfor %}
+
+    <!-- GPT assist -->
+    <div class="label-group-box">
+      <h3>🤖 Need help choosing labels?</h3>
+      <p class="muted">
+        Describe this {{ current_type.replace('_',' ') }} and we’ll suggest labels.
+        You can tweak or deselect before saving.
+      </p>
+
+      <textarea id="labelPromptInput" rows="3"
+                style="width:100%; padding:10px; border:1px solid #ccc; border-radius:8px;"
+                placeholder="e.g. I am a nurse who loves working with children"></textarea>
+
+      <div style="margin-top:10px; display:flex; gap:8px; align-items:center;">
+        <button id="gptSuggestBtn"
+            type="button"
+            class="primary-button"
+            onclick='suggestLabels("{{ current_type }}", {{ label_groups_list|map(attribute="key")|list|tojson }})'>
+          🔍 Suggest Labels
+        </button>
+        <span id="gptHint" class="muted" style="display:none;">Generating…</span>
+      </div>
+
+      <!-- Suggestions render here -->
+      <div id="gptSuggestions" class="label-options" style="margin-top:12px;"></div>
+
+      <!-- This is what gets POSTed back and saved -->
+      <input type="hidden" name="gpt_selected_labels_json" id="gpt_selected_labels_json" value="[]">
     </div>
-  {% endfor %}
 
-<!-- GPT assist -->
-<div class="label-group-box">
-  <h3>🤖 Need help choosing labels?</h3>
-  <p class="muted">
-    Describe this {{ current_type.replace('_',' ') }} and we’ll suggest labels.
-    You can tweak or deselect before saving.
-  </p>
-
-  <textarea id="labelPromptInput" rows="3"
-            style="width:100%; padding:10px; border:1px solid #ccc; border-radius:8px;"
-            placeholder="e.g. I am a nurse who loves working with children"></textarea>
-
-  <div style="margin-top:10px; display:flex; gap:8px; align-items:center;">
-    <button id="gptSuggestBtn"
-        type="button"
-        class="primary-button"
-        onclick='suggestLabels("{{ current_type }}", {{ label_groups_list|map(attribute="key")|list|tojson }})'>
-  🔍 Suggest Labels
-</button>
-
-    <span id="gptHint" class="muted" style="display:none;">Generating…</span>
-  </div>
-
-  <!-- Suggestions render here -->
-  <div id="gptSuggestions" class="label-options" style="margin-top:12px;"></div>
-
-  <!-- This is what gets POSTed back and saved -->
-  <input type="hidden" name="gpt_selected_labels_json"
-         id="gpt_selected_labels_json" value="[]">
-</div>
-
-
-  <div class="bottom-card">
-    <div style="margin-bottom:12px;">
-      <button type="submit" id="saveButton" class="primary-button">➡️ Move to next page with no labels selected</button>
+    <div class="bottom-card">
+      <div style="margin-bottom:12px;">
+        <button type="submit" id="saveButton" class="primary-button">➡️ Move to next page with no labels selected</button>
+      </div>
+      <div>
+        <a href="/" class="back-link">🏠 Home</a>
+      </div>
     </div>
-    <div>
-      <a href="/" class="back-link">🏠 Home</a>
-    </div>
-  </div>
-</form>
-
+  </form>
 </div>
 
 <script>
@@ -238,32 +236,8 @@
   const qsa = sel => Array.from(document.querySelectorAll(sel));
   const safe = k => (k || "").replaceAll("/", "__");
   const uns  = k => (k || "").replaceAll("__", "/");
-  const cssEscape = (s) => (window.CSS && CSS.escape ? CSS.escape(s) : String(s).replace(/[^a-zA-Z0-9_-]/g,'\\$&')); // FIX
-
+  const cssEscape = (s) => (window.CSS && CSS.escape ? CSS.escape(s) : String(s).replace(/[^a-zA-Z0-9_-]/g,'\\$&'));
   function titleCase(s){ return (s||"").replace(/_/g," ").replace(/\b\w/g,m=>m.toUpperCase()); }
-
-  /* ----------------------- read current hidden selections ------------------ */
-  function collectSelectionsMap() {
-    const map = {};
-    qsa("input.group-selection-tracker[id^='input_']").forEach(inp => {
-      const key  = uns(inp.id.replace(/^input_/, ""));
-      const val  = (inp.value || "").trim();
-      if (val) map[key] = val;
-    });
-    return map;
-  }
-  function collectCurrentSelectionsList() {
-    const arr = [];
-    qsa(".group-selection-tracker").forEach(input => {
-      const key = (input.name || "").replace(/^selected_id_/, "");
-      const id  = (input.value || "").trim();
-      if (!id) return;
-      const confEl = qs("#confidence_" + safe(key));
-      const conf = confEl ? parseInt(confEl.value || "100", 10) : 100;
-      arr.push({ label_type: key.split("/").pop(), id, confidence: conf });
-    });
-    return arr;
-  }
 
   /* --------------------------- confidence display -------------------------- */
   function updateConfidence(rawKey){
@@ -347,7 +321,7 @@
            tabindex="0"
            onclick="selectChild('${childKey}','${opt.id}')"
            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); this.click();}">
-        ${ (opt.image || opt.image_url) ? `<img src="${opt.image || opt.image_url}" alt="${opt.display}">` : "" } <!-- FIX -->
+        ${ (opt.image || opt.image_url) ? `<img src="${opt.image || opt.image_url}" alt="${opt.display || opt.id}">` : "" }
         <div><strong>${opt.display || opt.id}</strong></div>
         ${opt.description ? `<div class="label-description">${opt.description}</div>` : ""}
       </div>
@@ -355,7 +329,10 @@
 
     host.innerHTML = `
       <div class="label-group-box" id="group_${safe(childKey)}">
-        <div class="label-title">${titleCase(childKey.split('/').slice(-1)[0])}</div>
+        <div class="label-title">
+          ${titleCase(childKey.split('/').slice(-1)[0])}
+          <button type="button" class="clear-btn" onclick="clearGroupUI('${childKey}')">Clear</button>
+        </div>
         <input type="hidden"
                name="selected_id_${childKey}"
                id="input_${safe(childKey)}"
@@ -380,18 +357,51 @@
     updateSaveButtonState();
   }
 
-  /* ---------------------------- parent/child clicks ------------------------ */
-  function selectLabel(groupKey, labelId, isChild){
+  /* ------------------------- clear/toggle helpers -------------------------- */
+  function clearGroupUI(groupKey) {
+    // remove selection styles
     qsa(`.label-card[data-group="${groupKey}"]`).forEach(c => c.classList.remove("selected"));
-    const card = qs(`#card_${safe(groupKey)}_${cssEscape(labelId)}`); // FIX
-    if (card) card.classList.add("selected");
-
+    // clear hidden value
     const hid = qs("#input_" + safe(groupKey));
+    if (hid) hid.value = "";
+    // reset confidence slider display (keep slider value as-is)
+    updateConfidence(groupKey);
+    // clear children + bios sections for this group
+    const cHost = qs("#children_for_" + safe(groupKey));
+    if (cHost) cHost.innerHTML = "";
+    const bHost = qs("#bios_for_" + safe(groupKey));
+    if (bHost) bHost.innerHTML = "";
+    updateSaveButtonState();
+  }
+
+  function selectLabel(groupKey, labelId, isChild){
+    const hid = qs("#input_" + safe(groupKey));
+    const current = (hid && hid.value) ? String(hid.value) : "";
+
+    // Toggle off if clicking the same card again
+    if (current === String(labelId)) {
+      clearGroupUI(groupKey);
+      return;
+    }
+
+    // Otherwise select this card
+    qsa(`.label-card[data-group="${groupKey}"]`).forEach(c => c.classList.remove("selected"));
+    const card = qs(`#card_${safe(groupKey)}_${cssEscape(labelId)}`);
+    if (card) card.classList.add("selected");
     if (hid) hid.value = labelId;
 
     updateSaveButtonState();
 
-    if (isChild) { fetchBiosFor(groupKey); return; }
+    if (isChild) {
+      fetchBiosFor(groupKey);
+      return;
+    }
+
+    // Parent: wipe previous children/bios before loading new ones
+    const cHost = qs("#children_for_" + safe(groupKey));
+    if (cHost) cHost.innerHTML = "";
+    const bHost = qs("#bios_for_" + safe(groupKey));
+    if (bHost) bHost.innerHTML = "";
 
     fetch("/api/labels/children", {
       method: "POST",
@@ -407,28 +417,31 @@
           const el = qs("#group_" + safe(json.child_key));
           if (el) el.scrollIntoView({behavior: "smooth", block: "start"});
         }, 30);
-      } else {
-        const cHost = qs("#children_for_" + safe(groupKey));
-        if (cHost) cHost.innerHTML = "";
-        const bHost = qs("#bios_for_" + safe(groupKey));
-        if (bHost) bHost.innerHTML = "";
       }
     })
     .catch(()=>{});
   }
 
   function selectChild(groupKey, labelId){
-    qsa(`.label-card[data-group="${groupKey}"]`).forEach(c => c.classList.remove("selected"));
-    const card = qs(`#card_${safe(groupKey)}_${cssEscape(labelId)}`); // FIX
-    if (card) card.classList.add("selected");
-
     const hid = qs("#input_" + safe(groupKey));
+    const current = (hid && hid.value) ? String(hid.value) : "";
+
+    // Toggle off on second click
+    if (current === String(labelId)) {
+      clearGroupUI(groupKey);
+      return;
+    }
+
+    qsa(`.label-card[data-group="${groupKey}"]`).forEach(c => c.classList.remove("selected"));
+    const card = qs(`#card_${safe(groupKey)}_${cssEscape(labelId)}`);
+    if (card) card.classList.add("selected");
     if (hid) hid.value = labelId;
 
     updateSaveButtonState();
     fetchBiosFor(groupKey);
   }
 
+  /* -------------------------- server interactions -------------------------- */
   function fetchBiosFor(groupKey){
     fetch("/api/labels/suggest_biographies", {
       method: "POST",
@@ -438,6 +451,29 @@
     .then(r => r.ok ? r.json() : Promise.reject())
     .then(json => { if (json && json.ok) renderBios(groupKey, json.bios || []); })
     .catch(()=>{});
+  }
+
+  /* ----------------------- read current hidden selections ------------------ */
+  function collectSelectionsMap() {
+    const map = {};
+    qsa("input.group-selection-tracker[id^='input_']").forEach(inp => {
+      const key  = uns(inp.id.replace(/^input_/, ""));
+      const val  = (inp.value || "").trim();
+      if (val) map[key] = val;
+    });
+    return map;
+  }
+  function collectCurrentSelectionsList() {
+    const arr = [];
+    qsa(".group-selection-tracker").forEach(input => {
+      const key = (input.name || "").replace(/^selected_id_/, "");
+      const id  = (input.value || "").trim();
+      if (!id) return;
+      const confEl = qs("#confidence_" + safe(key));
+      const conf = confEl ? parseInt(confEl.value || "100", 10) : 100;
+      arr.push({ label_type: key.split("/").pop(), id, confidence: conf });
+    });
+    return arr;
   }
 
   /* ------------------------ search & bio tile interactions ----------------- */
@@ -592,7 +628,7 @@
     const res = await fetch('/api/labels/resolve_option', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ type_name: CURRENT_TYPE, option_id: sug.id }) // FIX
+      body: JSON.stringify({ type_name: CURRENT_TYPE, option_id: sug.id })
     });
     if (!res.ok) return false;
     const data = await res.json();
@@ -601,7 +637,7 @@
     // If parent must be expanded first
     if (data.parent_id) {
       const rawGroup = data.group_key.split('/').slice(0, -1).join('/') || data.group_key;
-      const parentCard = document.querySelector(`#card_${safe(rawGroup)}_${cssEscape(data.parent_id)}`); // FIX
+      const parentCard = document.querySelector(`#card_${safe(rawGroup)}_${cssEscape(data.parent_id)}`);
       if (parentCard) parentCard.click();
 
       const targetKey  = data.child_key || data.group_key;
@@ -619,7 +655,7 @@
 
     // Direct group match
     if (data.group_key) {
-      const card = document.querySelector(`#card_${safe(data.group_key)}_${cssEscape(sug.id)}`); // FIX
+      const card = document.querySelector(`#card_${safe(data.group_key)}_${cssEscape(sug.id)}`);
       if (card) { card.click(); return true; }
     }
     return false;
@@ -645,6 +681,5 @@
 </script>
 
 </body>
-
-
 </html>
+

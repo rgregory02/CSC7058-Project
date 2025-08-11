@@ -13,28 +13,67 @@
       <strong>Type:</strong> {{ type_name|replace('_', ' ')|title }}
     </div>
 
-    <form method="POST" action="{{ url_for('time_step', type_name=type_name, bio_id=bio_id) }}">
+    <form method="POST" action="{{ url_for('general_step_time', type_name=type_name, bio_id=bio_id) }}">
       <label for="label_type">Time Type:</label>
       <select name="label_type" id="label_type" onchange="this.form.submit()">
         <option value="">-- Choose --</option>
-        {% for label, desc in label_files %}
-          <option value="{{ label }}" {% if label == selected_label_type %}selected{% endif %}>
-            {{ label.replace('_', ' ')|title }} – {{ desc }}
+        {% for item in label_files %}
+          <option value="{{ item.key }}" {% if item.key == selected_label_type %}selected{% endif %}>
+            {{ item.key.replace('_', ' ')|title }}{% if item.desc %} – {{ item.desc }}{% endif %}
           </option>
         {% endfor %}
       </select>
       <br><br>
 
       {% if selected_label_type == "date" %}
-        <label for="date_value">📅 Select Date:</label>
-        <input type="date" name="date_value" id="date_value" value="{{ selected_date }}"><br><br>
+        <label for="date_value">📅 Select Date (YYYY or YYYY-MM or YYYY-MM-DD):</label>
+        <input type="date" name="date_value" id="date_value" value="{{ selected_date }}">
+        <div class="hint" style="margin-top:6px;color:#666;font-size:0.9em;">
+          Displayed as UK: <span id="date_value_preview">
+            {% if selected_date %}{{ selected_date|uk_date }}{% else %}—{% endif %}
+          </span>
+        </div>
+        <br><br>
+
+      {% elif selected_label_type == "range" %}
+        <div>
+          <label for="start_date">📐 Start (DD/MM/YYYY, MM/YYYY, or YYYY):</label>
+          <input
+            type="text"
+            name="start_date"
+            id="start_date"
+            placeholder="e.g. 12/06/1990 or 06/1990 or 1990"
+            value="{{ selected_range_start }}"
+          >
+          <div class="hint" style="margin-top:6px;color:#666;font-size:0.9em;">
+            UK preview: <span id="start_date_preview">—</span>
+          </div>
+        </div>
+        <div style="margin-top:10px;">
+          <label for="end_date">📐 End (optional — DD/MM/YYYY, MM/YYYY, or YYYY):</label>
+          <input
+            type="text"
+            name="end_date"
+            id="end_date"
+            placeholder="e.g. 31/12/1999 or 12/1999 or 1999"
+            value="{{ selected_range_end }}"
+          >
+          <div class="hint" style="margin-top:6px;color:#666;font-size:0.9em;">
+            UK preview: <span id="end_date_preview">—</span>
+          </div>
+        </div>
+        <p style="color:#666;margin-top:8px;font-size:0.9em;">
+          You can type UK-style dates (DD/MM/YYYY), months (MM/YYYY), or just a year. We’ll normalise them to exact bounds on save.
+        </p>
+        <br>
+
       {% elif selected_label_type %}
         <label for="subvalue">🏷️ Choose {{ selected_label_type.replace('_', ' ')|title }}:</label>
         <select name="subvalue" id="subvalue">
           <option value="">-- Choose --</option>
           {% for sub in subfolder_labels %}
             <option value="{{ sub.name }}" {% if sub.name == selected_subvalue %}selected{% endif %}>
-              {{ sub.name.replace('_', ' ')|title }} – {{ sub.description }}
+              {{ sub.name.replace('_', ' ')|title }}{% if sub.description %} – {{ sub.description }}{% endif %}
             </option>
           {% endfor %}
         </select><br><br>
@@ -42,8 +81,11 @@
 
       {% if selected_label_type %}
         <label for="confidence">🔍 Confidence:</label><br>
-        <input type="range" id="confidence" name="confidence" min="0" max="100"
-               value="{{ selected_confidence or 100 }}" oninput="updateConfidenceDisplay(this.value)">
+        <input
+          type="range" id="confidence" name="confidence" min="0" max="100"
+          value="{{ selected_confidence or 100 }}"
+          oninput="updateConfidenceDisplay(this.value)"
+        >
         <span id="confidence_display">{{ selected_confidence or 100 }}%</span>
         <br><br>
       {% endif %}
@@ -62,8 +104,9 @@
       <hr>
       <h3>🗂️ Existing Entries</h3>
       <ul>
+        {# existing_entries is (label, confidence); label may already be preformatted #}
         {% for label, confidence in existing_entries %}
-          <li>{{ label }} ({{ confidence }}%)</li>
+          <li>{{ label|safe }} ({{ confidence }}%)</li>
         {% endfor %}
       </ul>
     {% endif %}
@@ -71,8 +114,79 @@
 
   <script>
     function updateConfidenceDisplay(value) {
-      document.getElementById("confidence_display").textContent = value + "%";
+      const el = document.getElementById("confidence_display");
+      if (el) el.textContent = value + "%";
     }
-  </script>
-</body>
-</html>
+
+    // --- UK previews (client-side only; server still normalises on save) ---
+    function isoToUk(iso) {
+      if (!iso) return "";
+      // 'YYYY' or 'YYYY-MM' or 'YYYY-MM-DD'
+      if (/^\d{4}$/.test(iso)) return iso;
+      if (/^\d{4}-\d{2}$/.test(iso)) {
+        const [y, m] = iso.split("-");
+        return `${parseInt(m,10)}/${y}`;
+      }
+      if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+        const [y, m, d] = iso.split("-");
+        return `${d}/${m}/${y}`;
+      }
+      return iso; // fallback
+    }
+
+    function ukGuessToIso(s) {
+      if (!s) return "";
+      s = s.trim();
+      // DD/MM/YYYY
+      let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (m) {
+        const d = String(parseInt(m[1],10)).padStart(2,'0');
+        const mo = String(parseInt(m[2],10)).padStart(2,'0');
+        return `${m[3]}-${mo}-${d}`;
+      }
+      // MM/YYYY
+      m = s.match(/^(\d{1,2})\/(\d{4})$/);
+      if (m) {
+        const mo = String(parseInt(m[1],10)).padStart(2,'0');
+        return `${m[2]}-${mo}`;
+      }
+      // YYYY
+      if (/^\d{4}$/.test(s)) return s;
+      // Assume already ISO-ish
+      return s;
+    }
+
+    // Date (single) preview
+    (function(){
+      const inp = document.getElementById('date_value');
+      const prev = document.getElementById('date_value_preview');
+      if (inp && prev) {
+        const update = () => {
+          prev.textContent = isoToUk(inp.value || "");
+        };
+        inp.addEventListener('input', update);
+        update();
+      }
+    })();
+
+    // Range previews
+    (function(){
+      const s = document.getElementById('start_date');
+      const e = document.getElementById('end_date');
+      const sp = document.getElementById('start_date_preview');
+      const ep = document.getElementById('end_date_preview');
+
+      function updateOne(inp, outp) {
+        if (!inp || !outp) return;
+        const iso = ukGuessToIso(inp.value || "");
+        outp.textContent = iso ? isoToUk(iso) : "—";
+      }
+
+      if (s && sp) {
+        s.addEventListener('input', () => updateOne(s, sp));
+        // initialise on load
+        updateOne(s, sp);
+      }
+      if (e && ep) {
+        e
+
