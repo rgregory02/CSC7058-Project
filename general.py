@@ -4,6 +4,7 @@ import shutil  # For moving files and folders
 import time  # For unique timestamps
 import re
 import math
+import uuid
 
 from collections import defaultdict
 
@@ -175,10 +176,10 @@ def wizard_begin():
     bio_id = request.form.get("bio_id", "").strip()
     if not type_name:
         flash("Please choose a type.", "warning")
-        return redirect(url_for("wizard_start"))
+        return redirect(url_for("general_step_start"))
     if not bio_id:
         # Push them into your existing search/create UI, then return here:
-        return redirect(url_for("search_or_add_biography", type_name=type_name, return_url=url_for("wizard_start")))
+        return redirect(url_for("search_or_add_biography", type_name=type_name, return_url=url_for("general_step_start")))
     # If you want time first, redirect to your time step (generalised), else go to label_step step 0
     return redirect(url_for("label_step", type_name=type_name, bio_id=bio_id, step=0))
 
@@ -1237,108 +1238,88 @@ def type_labels_api(type_name):
 
 
 
-# ---------- 1) Entry screen to pick a type & biography ----------
-@app.route("/wizard_start", methods=["GET", "POST"])
-def wizard_start():
-    # allow preselecting a type via /wizard_start?type=person
+@app.route("/general_iframe_wizard", methods=["GET", "POST"])
+def general_iframe_wizard():
+    """
+    Unified entry to the wizard.
+    - GET step=start  -> render start form (general_step_start.html)
+    - POST step=start -> create/select bio, then redirect to step=time
+    - GET other steps -> render the iframe container (general_iframe_wizard.html)
+    """
+    step = (request.args.get("step") or "start").strip()
     preselected_type = (request.args.get("type") or "").strip()
+    bio_id = (request.args.get("bio_id") or "").strip()
 
-    if request.method == "POST":
-        type_name = (request.form.get("type_name") or preselected_type or "").strip()
-        bio_id    = (request.form.get("bio_id") or "").strip()
-        new_name  = (request.form.get("new_bio_name") or "").strip()
+    # --- Start screen (form lives on this same route) ---
+    if step == "start":
+        if request.method == "POST":
+            type_name = (request.form.get("type_name") or preselected_type or "").strip()
+            chosen_bio = (request.form.get("bio_id") or "").strip()
+            new_name   = (request.form.get("new_bio_name") or "").strip()
 
-        # Must choose a type first
-        if not type_name:
-            flash("Pick a type.", "error")
-            return redirect(url_for("wizard_start"))
+            if not type_name:
+                flash("Pick a type.", "error")
+                return redirect(url_for("general_iframe_wizard", step="start"))
 
-        # If an existing bio was chosen AND a new name was typed, prefer the existing bio
-        if bio_id and new_name:
-            new_name = ""
+            # Prefer existing bio if both provided
+            if chosen_bio and new_name:
+                new_name = ""
 
-        # If an existing bio was chosen, verify it belongs to the type
-        if bio_id:
-            bio_path = os.path.join("types", type_name, "biographies", f"{bio_id}.json")
-            if not os.path.exists(bio_path):
-                flash("That biography doesn’t belong to the selected type. Pick a matching bio or create a new one.", "error")
-                return redirect(url_for("wizard_start", type=type_name))
+            # Validate existing bio belongs to the type
+            if chosen_bio:
+                path = os.path.join("types", type_name, "biographies", f"{chosen_bio}.json")
+                if not os.path.exists(path):
+                    flash("That biography doesn’t belong to the selected type.", "error")
+                    return redirect(url_for("general_iframe_wizard", step="start", type=type_name))
+                bio_id = chosen_bio
+            else:
+                # Create new biography
+                slug_base = re.sub(r"[^a-zA-Z0-9_]+", "_", new_name).strip("_").lower() or "untitled"
+                bio_dir   = os.path.join("types", type_name, "biographies")
+                os.makedirs(bio_dir, exist_ok=True)
 
-        # Creating a new biography?
-        if new_name and not bio_id:
-            slug_base = re.sub(r"[^a-zA-Z0-9_]+", "_", new_name).strip("_").lower() or "untitled"
-            bio_dir   = os.path.join("types", type_name, "biographies")
-            os.makedirs(bio_dir, exist_ok=True)
+                slug = slug_base
+                i = 2
+                while os.path.exists(os.path.join(bio_dir, f"{slug}.json")):
+                    slug = f"{slug_base}_{i}"
+                    i += 1
 
-            # Ensure slug is unique (append _2, _3, ... if needed)
-            slug = slug_base
-            i = 2
-            while os.path.exists(os.path.join(bio_dir, f"{slug}.json")):
-                slug = f"{slug_base}_{i}"
-                i += 1
+                data = {
+                    "id": slug,
+                    "uid": uuid.uuid4().hex,
+                    "name": new_name or slug.replace("_", " ").title(),
+                    "type": type_name,
+                    "created": now_iso_utc(),
+                    "updated": now_iso_utc(),
+                    "entries": []
+                }
+                save_dict_as_json(os.path.join(bio_dir, f"{slug}.json"), data)
+                bio_id = slug
 
-            bio_file = os.path.join(bio_dir, f"{slug}.json")
-            save_dict_as_json(bio_file, {
-                "id": slug,
-                "name": new_name,
-                "type": type_name,
-                "created": now_iso_utc(),   # ✅ created in UTC
-                "updated": now_iso_utc(),   # ✅ updated set on create
-                "entries": []
-            })
-            bio_id = slug
+            # Straight into the wizard at the Time step
+            return redirect(url_for("general_iframe_wizard", type=type_name, bio_id=bio_id, step="time"))
 
-        # Still nothing? Nudge the user.
-        if not bio_id:
-            flash("Select an existing biography or enter a new one.", "error")
-            return redirect(url_for("wizard_start", type=type_name or preselected_type))
+        # GET start: render the picker/creator form
+        types = list_types()
+        per_type_bios = {t: list_biographies(t) for t in types}
+        return render_template(
+            "general_step_start.html",
+            types=types,
+            per_type_bios=per_type_bios,
+            preselected_type=preselected_type
+        )
 
-        # Hand over to the iframe wizard
-        return redirect(url_for("general_iframe_wizard", type=type_name, bio_id=bio_id, step="start"))
-
-    # GET
-    types = list_types()
-    per_type_bios = {t: list_biographies(t) for t in types}
+    # --- For time/labels/review: keep your existing iframe container ---
     return render_template(
-        "wizard_start.html",
-        types=types,
-        per_type_bios=per_type_bios,
-        preselected_type=preselected_type
+        "general_iframe_wizard.html",
+        type_name=preselected_type,   # populated when you linked here
+        bio_id=bio_id,
+        step=step
     )
 
 
-# ---------- 2) The iframe container ----------
-@app.route("/general_iframe_wizard")
-def general_iframe_wizard():
-    type_name = request.args.get("type", "")
-    bio_id = request.args.get("bio_id", "")
-    step = request.args.get("step", "start")  # start | time | labels | review
-    return render_template("general_iframe_wizard.html",
-                           type_name=type_name, bio_id=bio_id, step=step)
 
 
-# ---------- 3) Step: Start (read-only confirm, optional rename) ----------
-@app.route("/general_step/start/<type_name>/<bio_id>", methods=["GET", "POST"])
-def general_step_start(type_name, bio_id):
-    bio_path = os.path.join("types", type_name, "biographies", f"{bio_id}.json")
-    if not os.path.exists(bio_path):
-        return f"Biography {bio_id} not found for type {type_name}.", 404
-    data = load_json_as_dict(bio_path)
-
-    if request.method == "POST":
-        new_name = (request.form.get("new_name") or "").strip()
-        if new_name:
-            data["name"] = new_name
-            data["updated"] = now_iso_utc()
-            save_dict_as_json(bio_path, data)
-        return redirect(url_for("general_iframe_wizard", type=type_name, bio_id=bio_id, step="time"))
-
-
-    return render_template("general_step_start.html",
-                           type_name=type_name, bio_id=bio_id, bio=data)
-
-
-# ---------- 4) Step: Time  ----------
 @app.route("/general_step/time/<type_name>/<bio_id>", methods=["GET","POST"])
 def general_step_time(type_name, bio_id):
     labels_folder = "./types/time/labels"

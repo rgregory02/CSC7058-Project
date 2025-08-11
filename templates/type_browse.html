@@ -36,7 +36,7 @@
     <div class="toolbar">
       <a class="btn ghost" href="{{ url_for('dashboard') }}">⬅️ Back to Dashboard</a>
       <!-- New Biography now launches the General Wizard, pre-selecting this type -->
-      <a class="btn" href="{{ url_for('wizard_start', type=type_name) }}">➕ New Biography</a>
+      <a class="btn" href="{{ url_for('general_iframe_wizard', step='start') }}">➕ New Biography</a>
       <a class="btn secondary" href="{{ url_for('create_subfolder', type_name=type_name, return_url=request.url) }}">🏷️ Add Label Group</a>
     </div>
 

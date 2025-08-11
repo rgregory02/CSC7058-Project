@@ -28,9 +28,11 @@
       <h1>📚 Biography Studio</h1>
       <div class="toolbar">
         <!-- General, type-agnostic creation flow -->
-        <a class="btn" href="{{ url_for('wizard_start') }}">🧩 Start Biography Wizard</a>
+        <a class="btn" href="{{ url_for('general_iframe_wizard', step='start') }}">
+  🧩 Start Biography Wizard
+</a>
+
         <!-- Optional: quick link to people browse page (your old index view) -->
-        <a class="btn ghost" href="{{ url_for('index_page') }}">👤 Browse Life Wizard</a>
       </div>
       <div class="toolbar">
         <!-- Optional: create a new Type right from here -->
@@ -53,13 +55,16 @@
             <a class="btn secondary" href="{{ url_for('type_browse', type_name=t) }}">📂 Browse Biographies</a>
 
             <!-- Create a new biography for this type -->
-            <a class="btn" href="{{ url_for('search_or_add_biography', type_name=t, return_url=url_for('type_browse', type_name=t)) }}">
-              ➕ New {{ t|replace('_',' ')|title }} Biography
-            </a>
+<!-- Create a new biography for this type -->
+<a class="btn"
+   href="{{ url_for('general_iframe_wizard', step='start', type=t, return_url=url_for('type_browse', type_name=t)) }}">
+  ➕ New {{ t|replace('_',' ')|title }} Biography
+</a>
+
 
             <a class="btn secondary" href="{{ url_for('type_properties', type_name=t) }}">⚙️ Manage Properties</a>
 
-<a class="btn secondary" href="{{ url_for('type_labels', type_name=t) }}">🏷️ View Labels</a>
+<a class="btn secondary" href="{{ url_for('type_labels', type_name=t) }}">🏷️ Manage Labels</a>
 
 
             <!-- NEW: archive this type -->

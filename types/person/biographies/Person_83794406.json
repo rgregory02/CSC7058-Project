@@ -1,63 +1,84 @@
 {
-  "id": "Person_83794406",
-  "name": "Emma Watson",
-  "dob": "1983-01-01",
-  "entries": [
-    {
-      "time": {
-        "subvalue": "teenage_years",
-        "confidence": 79
-      },
-      "created": "2025-08-08T03:07:46.597174",
-      "status": "active",
-      "relationship": [
+    "id": "Person_83794406",
+    "name": "Emma Watson",
+    "dob": "1983-01-01",
+    "entries": [
         {
-          "label_type": "relationship",
-          "id": "spouse",
-          "display": "Spouse",
-          "confidence": 100
-        }
-      ],
-      "vehicle/car": [
+            "time": {
+                "label": "2025-08-08",
+                "confidence": 100,
+                "label_type": "date",
+                "date_value": "2025-08-08",
+                "subvalue": ""
+            },
+            "created": "2025-08-11T01:44:13.869801",
+            "status": "active",
+            "relationship": [
+                {
+                    "label_type": "relationship",
+                    "id": "spouse",
+                    "display": "Spouse",
+                    "confidence": 100
+                }
+            ],
+            "vehicle/car": [
+                {
+                    "label_type": "vehicle/car",
+                    "id": "red_ford",
+                    "display": "Red Ford",
+                    "confidence": 70
+                }
+            ],
+            "person": [
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 100,
+                    "id": "1"
+                },
+                {
+                    "label_type": "relationship",
+                    "confidence": 100,
+                    "id": "child"
+                },
+                {
+                    "label_type": "work_place",
+                    "confidence": 100,
+                    "id": "office"
+                }
+            ]
+        },
         {
-          "label_type": "vehicle/car",
-          "id": "red_ford",
-          "display": "Red Ford",
-          "confidence": 70
+            "time": {
+                "subvalue": "present",
+                "confidence": 93
+            },
+            "created": "2025-08-08T03:07:46.597198",
+            "status": "active",
+            "vehicle/car": [
+                {
+                    "label_type": "vehicle/car",
+                    "id": "red_ford",
+                    "display": "Red Ford",
+                    "confidence": 70
+                }
+            ],
+            "onet_occupation": [
+                {
+                    "label_type": "onet_occupation",
+                    "id": "doctor",
+                    "display": "Doctor",
+                    "confidence": 95
+                }
+            ],
+            "relationship": [
+                {
+                    "label_type": "relationship",
+                    "id": "spouse",
+                    "display": "Spouse",
+                    "confidence": 100
+                }
+            ]
         }
-      ]
-    },
-    {
-      "time": {
-        "subvalue": "present",
-        "confidence": 93
-      },
-      "created": "2025-08-08T03:07:46.597198",
-      "status": "active",
-      "vehicle/car": [
-        {
-          "label_type": "vehicle/car",
-          "id": "red_ford",
-          "display": "Red Ford",
-          "confidence": 70
-        }
-      ],
-      "onet_occupation": [
-        {
-          "label_type": "onet_occupation",
-          "id": "doctor",
-          "display": "Doctor",
-          "confidence": 95
-        }
-      ],
-      "relationship": [
-        {
-          "label_type": "relationship",
-          "id": "spouse",
-          "display": "Spouse",
-          "confidence": 100
-        }
-      ]
-    }
-  ]
+    ],
+    "updated": "2025-08-11T00:44:25.380742+00:00"
 }

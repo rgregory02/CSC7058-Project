@@ -1,0 +1,32 @@
+{
+    "id": "teddy_17",
+    "uid": "caa19416ba394884af6092753f1c0aed",
+    "name": "Teddy",
+    "type": "person",
+    "created": "2025-08-11T20:02:36.436582+00:00",
+    "updated": "2025-08-11T20:02:55.893627+00:00",
+    "entries": [
+        {
+            "time": {
+                "label": "childhood",
+                "confidence": 100,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "childhood"
+            },
+            "created": "2025-08-11T21:02:46.281629",
+            "person": [
+                {
+                    "label_type": "hair_colour",
+                    "confidence": 100,
+                    "id": "brown_hair"
+                },
+                {
+                    "label_type": "work_place",
+                    "confidence": 100,
+                    "id": "hospital"
+                }
+            ]
+        }
+    ]
+}
