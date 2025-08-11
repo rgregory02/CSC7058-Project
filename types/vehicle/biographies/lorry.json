@@ -1,0 +1,20 @@
+{
+    "id": "lorry",
+    "name": "Lorry",
+    "type": "vehicle",
+    "created": "2025-08-10T22:34:53.364148+00:00",
+    "updated": "2025-08-10T22:35:02.411513+00:00",
+    "entries": [
+        {
+            "time": {
+                "label": "preteen",
+                "confidence": 100,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "preteen"
+            },
+            "created": "2025-08-10T23:35:00.008192",
+            "vehicle": []
+        }
+    ]
+}

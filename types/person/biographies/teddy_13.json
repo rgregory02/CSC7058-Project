@@ -1,0 +1,20 @@
+{
+    "id": "teddy_13",
+    "name": "Teddy",
+    "type": "person",
+    "created": "2025-08-10T22:57:13.646243+00:00",
+    "updated": "2025-08-10T23:11:52.948106+00:00",
+    "entries": [
+        {
+            "time": {
+                "label": "teens",
+                "confidence": 100,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "teens"
+            },
+            "created": "2025-08-11T00:10:24.451249",
+            "person": []
+        }
+    ]
+}

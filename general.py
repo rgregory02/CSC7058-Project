@@ -3,7 +3,9 @@ import json
 import shutil  # For moving files and folders
 import time  # For unique timestamps
 import re
+import math
 
+from collections import defaultdict
 
 from flask import Flask, Response, jsonify, request, url_for, redirect, render_template, flash, get_flashed_messages, send_from_directory, render_template_string, session
 from markupsafe import Markup, escape
@@ -12,9 +14,10 @@ from datetime import datetime, timezone, timedelta
 from openai import OpenAI
 from dotenv import load_dotenv
 from requests import get
+from typing import Optional
 
 load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+oai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def safe_date(x):
     try:
@@ -64,7 +67,11 @@ from utils import (
     _ensure_property_self_labels,
     _import_labels_from_api,
     _import_labels_from_sqlite,
-    _write_label_json
+    _write_label_json,
+    now_iso_utc,
+    _score_label,
+    _collect_all_labels,
+    build_label_catalog_for_type
 )
 
 app = Flask(__name__)
@@ -264,6 +271,341 @@ def api_search_person_bios():
                 continue
 
     return jsonify(matches[:10])  # Return only first 10 matches for speed
+
+def _read_json_safe(p):
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _tokenize(text: str):
+    text = (text or "").lower()
+    text = re.sub(r"[^a-z0-9_ ]+", " ", text)
+    parts = [w for w in text.split() if w]
+    return parts
+
+def _kw_score(prompt_terms, haystack_terms):
+    # simple IR scoring: sum of sqrt(freq) for terms that overlap
+    if not prompt_terms or not haystack_terms:
+        return 0.0
+    freq = defaultdict(int)
+    for t in haystack_terms:
+        freq[t] += 1
+    s = 0.0
+    for t in prompt_terms:
+        if t in freq:
+            s += math.sqrt(freq[t])
+    return s
+
+def _iter_all_label_files():
+    """Yield (type_name, group_key, label_id, path, meta). 
+       group_key is the folder path under labels (e.g. 'work_building')."""
+    root = "types"
+    if not os.path.isdir(root):
+        return
+    for type_name in os.listdir(root):
+        tdir = os.path.join(root, type_name)
+        if not os.path.isdir(tdir):
+            continue
+        labels_dir = os.path.join(tdir, "labels")
+        if not os.path.isdir(labels_dir):
+            continue
+        # walk labels dir
+        for dirpath, _, files in os.walk(labels_dir):
+            rel_dir = os.path.relpath(dirpath, labels_dir).replace("\\", "/")
+            for f in files:
+                if not f.endswith(".json"):
+                    continue
+                if f == "_group.json":
+                    continue
+                # treat top-level property jsons as groups, but they aren’t options themselves
+                if rel_dir == "." and "/" not in f and f.endswith(".json") and os.path.isfile(os.path.join(dirpath, f)):
+                    # property json; skip as an option
+                    continue
+                label_id = os.path.splitext(f)[0]
+                path = os.path.join(dirpath, f)
+                meta = _read_json_safe(path)
+                group_key = "" if rel_dir == "." else rel_dir
+                yield type_name, group_key, label_id, path, meta
+
+def _build_candidate_pool(user_text: str, current_type: str, max_pool: int = 120):
+    """
+    Build a pool of candidate labels from:
+      - this type's labels/*
+      - any other type's labels/*  (so cross-type 'hospital' appears)
+    Rank by a quick keyword score using label id + name + description.
+    """
+    prompt_terms = _tokenize(user_text)
+    scored = []
+
+    for tname, group_key, lid, p, meta in _iter_all_label_files():
+        # features to match against
+        name = (meta.get("properties", {}) or {}).get("name") or meta.get("name") or lid
+        desc = meta.get("description") or (meta.get("properties", {}) or {}).get("description", "")
+        hay = _tokenize(f"{lid} {name} {desc} {group_key} {tname}")
+        score = _kw_score(prompt_terms, hay)
+
+        # small boost if this is the same type
+        if tname == current_type:
+            score *= 1.15
+
+        if score > 0:
+            # label_type = last segment of group_key if present, else group_key itself, else use tname
+            label_type = (group_key.split("/")[-1] if group_key else tname)
+            scored.append({
+                "type_name": tname,
+                "group_key": group_key,    # e.g. 'work_building'
+                "id": lid,
+                "display": name,
+                "description": desc,
+                "label_type": label_type,
+                "score": score
+            })
+
+    # keep a diverse, high-quality subset
+    scored.sort(key=lambda x: (-x["score"], x["type_name"], x["group_key"], x["id"]))
+    return scored[:max_pool]
+
+def _gpt_pick_labels(prompt_text: str, candidates: list, max_return: int = 8):
+    """
+    Ask GPT to select the most relevant candidate label ids.
+    We pass candidates (already filtered & ranked) to keep GPT on the rails.
+    """
+    if not candidates:
+        return []
+
+    # compact candidate list for the model
+    cand_summary = [
+        {
+            "id": c["id"],
+            "label_type": c["label_type"],
+            "group_key": c["group_key"],
+            "type": c["type_name"],
+            "display": c["display"],
+        } for c in candidates
+    ]
+
+    system = (
+        "You help map a short description to label IDs from a fixed catalog. "
+        "Only choose from the provided candidates. Prefer the few best matches. "
+        f"Return at most {max_return} items as a JSON list of objects with keys: "
+        "id, label_type, (optional) confidence (0-100)."
+    )
+    user = (
+        f"User description: {prompt_text}\n\n"
+        "Candidate labels (id, label_type, group_key, type, display):\n"
+        f"{json.dumps(cand_summary, ensure_ascii=False)}\n\n"
+        "Pick the most relevant few."
+    )
+
+    try:
+        resp = oai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user}
+            ],
+            temperature=0.2,
+            max_tokens=600,
+        )
+        content = resp.choices[0].message.content.strip()
+        # Try to parse a JSON array out of the content
+        # Be permissive: allow the model to wrap in text
+        m = re.search(r"\[.*\]", content, re.S)
+        raw = m.group(0) if m else content
+        data = json.loads(raw)
+        out = []
+        for x in data:
+            if not isinstance(x, dict):
+                continue
+            if "id" not in x:
+                continue
+            # Find the candidate to copy display/desc/type info
+            ref = next((c for c in candidates if c["id"] == x["id"]), None)
+            if not ref:
+                continue
+            out.append({
+                "id": x["id"],
+                "label_type": x.get("label_type") or ref["label_type"],
+                "display": ref["display"],
+                "description": ref["description"],
+                "confidence": int(x.get("confidence", 100)),
+                "group_key": ref["group_key"],
+                "type": ref["type_name"],
+            })
+        return out[:max_return]
+    except Exception as e:
+        print("[gpt_pick_labels] error:", e)
+        return []
+
+@app.post("/api/suggest_labels")
+def api_suggest_labels():
+    """
+    Body: { "type": "<current_type>", "prompt": "<free text>", "context": { selections: [...] } }
+    Returns: { "labels": [ {id, label_type, display, description, confidence} ... ] }
+    """
+    try:
+        payload = request.get_json(force=True) or {}
+        current_type = (payload.get("type") or "").strip()
+        user_text    = (payload.get("prompt") or "").strip()
+        if not current_type or not user_text:
+            return jsonify({"labels": []})
+
+        # 1) Build a strong candidate pool across all types (with a small bias to current_type)
+        pool = _build_candidate_pool(user_text, current_type, max_pool=120)
+
+        # 2) Hand the short list to GPT to pick ~5–8
+        picked = _gpt_pick_labels(user_text, pool, max_return=8)
+
+        # 3) Final sanity check: only return ids that exist in the pool
+        pool_ids = {c["id"] for c in pool}
+        result = [p for p in picked if p["id"] in pool_ids]
+
+        return jsonify({"labels": result})
+    except Exception as e:
+        print("[/api/suggest_labels] fatal:", e)
+        return jsonify({"labels": []}), 500
+
+# --- in your Flask app (routes) ---
+@app.post("/api/labels/resolve_option")
+def api_resolve_option():
+    """
+    Resolve a suggested option id (e.g. "hospital") to the UI group that can select it.
+
+    Returns JSON:
+      {
+        "ok": true/false,
+        # If option is directly in a top-level group:
+        "group_key": "<group_key>"
+        # If option is a child under a parent option:
+        "group_key": "<parent group key>/<parent_id>",
+        "parent_id": "<parent_id>",
+        "child_key": "<parent group key>/<parent_id>",
+        "child_id": "<option_id>"
+      }
+    """
+    data = request.get_json(force=True) or {}
+    type_name = (data.get("type_name") or "").strip()
+    option_id = (data.get("option_id") or "").strip()
+    if not type_name or not option_id:
+        return jsonify(ok=False, error="Missing type_name/option_id")
+
+    # Build current groups (property-first, with refer_to hints)
+    label_base = os.path.join("types", type_name, "labels")
+    groups = collect_label_groups(label_base_path=label_base, current_type=type_name)
+
+    oid = option_id.strip()
+    oid_l = oid.lower()
+
+    # Helper: list json basenames in a folder (lowercased)
+    def json_names_lower(folder):
+        try:
+            return {os.path.splitext(f)[0].lower() for f in os.listdir(folder) if f.endswith(".json")}
+        except Exception:
+            return set()
+
+    # ---------- 1) Direct match inside any top-level group ----------
+    for g in groups:
+        for opt in g.get("options", []):
+            if (opt.get("id") or "").lower() == oid_l:
+                return jsonify(ok=True, group_key=g["key"])
+
+    # ---------- 2) Search for child under SAME-TYPE label tree ----------
+    # e.g. types/<current>/labels/<g.key>/<parent_id>/<oid>.json
+    for g in groups:
+        base_path = g.get("key", "").strip("/")
+        if not base_path:
+            continue
+        for parent in g.get("options", []):
+            parent_id = (parent.get("id") or "").strip()
+            if not parent_id:
+                continue
+            child_dir = os.path.join(label_base, *base_path.split("/"), parent_id)
+            if os.path.isdir(child_dir) and oid_l in json_names_lower(child_dir):
+                child_key = f"{g['key']}/{parent_id}"
+                return jsonify(
+                    ok=True,
+                    group_key=child_key,
+                    parent_id=parent_id,
+                    child_key=child_key,
+                    child_id=oid
+                )
+
+    # ---------- 3) Cross-type children via refer_to: {source:'labels', type, path} ----------
+    for g in groups:
+        src = g.get("refer_to") or {}
+        if (src.get("source") or "") != "labels":
+            continue
+
+        search_type = (src.get("type") or type_name).strip()
+        base_path   = (src.get("path") or g["key"]).strip("/")
+
+        # Root where the parent options live
+        cross_root = os.path.join("types", search_type, "labels", *base_path.split("/"))
+
+        for parent in g.get("options", []):
+            parent_id = (parent.get("id") or "").strip()
+            if not parent_id:
+                continue
+            child_dir = os.path.join(cross_root, parent_id)
+            if os.path.isdir(child_dir) and oid_l in json_names_lower(child_dir):
+                # Present to the UI as a child under this parent group
+                child_key = f"{g['key']}/{parent_id}"
+                return jsonify(
+                    ok=True,
+                    group_key=child_key,
+                    parent_id=parent_id,
+                    child_key=child_key,
+                    child_id=oid
+                )
+
+    # ---------- 4) Fallback: scan all types to find a folder that contains <oid>.json,
+    # then try to map it back to a current group with a matching refer_to root ----------
+    try:
+        types_root = "types"
+        for tname in os.listdir(types_root):
+            tdir = os.path.join(types_root, tname)
+            if not os.path.isdir(tdir):
+                continue
+            labels_root = os.path.join(tdir, "labels")
+            if not os.path.isdir(labels_root):
+                continue
+
+            for dirpath, _, files in os.walk(labels_root):
+                basenames = {os.path.splitext(f)[0].lower() for f in files if f.endswith(".json")}
+                if oid_l not in basenames:
+                    continue
+
+                # dirpath looks like: types/<tname>/labels/<some/base>/<maybe parent>
+                rel_from_labels = os.path.relpath(dirpath, labels_root).replace("\\", "/")
+                parts = rel_from_labels.split("/") if rel_from_labels != "." else []
+                # if there is a parent folder, parts[-1] is parent_id and parts[:-1] is base_path
+                if parts:
+                    parent_id = parts[-1]
+                    base_path = "/".join(parts[:-1])
+
+                    # Find a group in current type whose refer_to matches (tname, base_path)
+                    for g in groups:
+                        src = g.get("refer_to") or {}
+                        if (src.get("source") == "labels" and
+                            (src.get("type") or type_name) == tname and
+                            (src.get("path") or g["key"]).strip("/") == base_path):
+                            child_key = f"{g['key']}/{parent_id}"
+                            return jsonify(
+                                ok=True,
+                                group_key=child_key,
+                                parent_id=parent_id,
+                                child_key=child_key,
+                                child_id=oid
+                            )
+    except Exception as e:
+        print("[resolve_option fallback] error:", e)
+
+    return jsonify(ok=False)
+
+
+
 
 # ---------- AJAX: get child options for a parent selection ----------
 @app.route("/api/labels/children", methods=["POST"])
@@ -898,8 +1240,11 @@ def type_labels_api(type_name):
 # ---------- 1) Entry screen to pick a type & biography ----------
 @app.route("/wizard_start", methods=["GET", "POST"])
 def wizard_start():
+    # allow preselecting a type via /wizard_start?type=person
+    preselected_type = (request.args.get("type") or "").strip()
+
     if request.method == "POST":
-        type_name = (request.form.get("type_name") or "").strip()
+        type_name = (request.form.get("type_name") or preselected_type or "").strip()
         bio_id    = (request.form.get("bio_id") or "").strip()
         new_name  = (request.form.get("new_bio_name") or "").strip()
 
@@ -908,16 +1253,16 @@ def wizard_start():
             flash("Pick a type.", "error")
             return redirect(url_for("wizard_start"))
 
-        # If the user chose an existing bio AND typed a new name, prefer the existing bio
+        # If an existing bio was chosen AND a new name was typed, prefer the existing bio
         if bio_id and new_name:
             new_name = ""
 
-        # If an existing bio was chosen, verify it actually belongs to the chosen type
+        # If an existing bio was chosen, verify it belongs to the type
         if bio_id:
             bio_path = os.path.join("types", type_name, "biographies", f"{bio_id}.json")
             if not os.path.exists(bio_path):
                 flash("That biography doesn’t belong to the selected type. Pick a matching bio or create a new one.", "error")
-                return redirect(url_for("wizard_start"))
+                return redirect(url_for("wizard_start", type=type_name))
 
         # Creating a new biography?
         if new_name and not bio_id:
@@ -934,9 +1279,11 @@ def wizard_start():
 
             bio_file = os.path.join(bio_dir, f"{slug}.json")
             save_dict_as_json(bio_file, {
+                "id": slug,
                 "name": new_name,
                 "type": type_name,
-                "created": datetime.now().isoformat(),
+                "created": now_iso_utc(),   # ✅ created in UTC
+                "updated": now_iso_utc(),   # ✅ updated set on create
                 "entries": []
             })
             bio_id = slug
@@ -944,7 +1291,7 @@ def wizard_start():
         # Still nothing? Nudge the user.
         if not bio_id:
             flash("Select an existing biography or enter a new one.", "error")
-            return redirect(url_for("wizard_start"))
+            return redirect(url_for("wizard_start", type=type_name or preselected_type))
 
         # Hand over to the iframe wizard
         return redirect(url_for("general_iframe_wizard", type=type_name, bio_id=bio_id, step="start"))
@@ -952,7 +1299,12 @@ def wizard_start():
     # GET
     types = list_types()
     per_type_bios = {t: list_biographies(t) for t in types}
-    return render_template("wizard_start.html", types=types, per_type_bios=per_type_bios)
+    return render_template(
+        "wizard_start.html",
+        types=types,
+        per_type_bios=per_type_bios,
+        preselected_type=preselected_type
+    )
 
 
 # ---------- 2) The iframe container ----------
@@ -977,15 +1329,16 @@ def general_step_start(type_name, bio_id):
         new_name = (request.form.get("new_name") or "").strip()
         if new_name:
             data["name"] = new_name
+            data["updated"] = now_iso_utc()
             save_dict_as_json(bio_path, data)
-        # go to time
         return redirect(url_for("general_iframe_wizard", type=type_name, bio_id=bio_id, step="time"))
+
 
     return render_template("general_step_start.html",
                            type_name=type_name, bio_id=bio_id, bio=data)
 
 
-# ---------- 4) Step: Time (generalised from your person time step) ----------
+# ---------- 4) Step: Time  ----------
 @app.route("/general_step/time/<type_name>/<bio_id>", methods=["GET","POST"])
 def general_step_time(type_name, bio_id):
     labels_folder = "./types/time/labels"
@@ -995,7 +1348,7 @@ def general_step_time(type_name, bio_id):
     if not os.path.exists(bio_file):
         return f"Biography {bio_id} not found.", 404
 
-    bio_data = load_json_as_dict(bio_file)
+    bio_data = load_json_as_dict(bio_file) or {}
     bio_data.setdefault("entries", [])
 
     selected_label_type = ""
@@ -1004,10 +1357,10 @@ def general_step_time(type_name, bio_id):
     selected_confidence = ""
 
     if request.method == "POST":
-        selected_label_type = request.form.get("label_type") or ""
-        selected_subvalue = request.form.get("subvalue") or ""
-        selected_date = request.form.get("date_value") or ""
-        selected_confidence = request.form.get("confidence") or "100"
+        selected_label_type   = (request.form.get("label_type") or "").strip()
+        selected_subvalue     = (request.form.get("subvalue") or "").strip()
+        selected_date         = (request.form.get("date_value") or "").strip()
+        selected_confidence   = (request.form.get("confidence") or "100").strip()
 
         try:
             confidence_value = int(selected_confidence)
@@ -1020,15 +1373,16 @@ def general_step_time(type_name, bio_id):
         )
 
         if valid:
-            time_entry = {
+            # Build the normalized time payload we keep in session + entry["time"]
+            time_payload = {
                 "label_type": selected_label_type,
                 "confidence": confidence_value
             }
             if selected_label_type == "date":
-                time_entry["date_value"] = selected_date
+                time_payload["date_value"] = selected_date
                 label_value = selected_date
             else:
-                time_entry["subvalue"] = selected_subvalue
+                time_payload["subvalue"] = selected_subvalue
                 label_value = selected_subvalue
 
             session["time_selection"] = {
@@ -1039,37 +1393,48 @@ def general_step_time(type_name, bio_id):
                 "subvalue": selected_subvalue if selected_label_type != "date" else ""
             }
 
-            # create/append current entry if none active
+            # Ensure a current entry exists; otherwise create one
             entry_index = session.get("entry_index")
-            if entry_index is None:
+            now = now_iso_utc()
+
+            if entry_index is None or not (0 <= int(entry_index) < len(bio_data["entries"])):
                 entry = {
-                    "time": session["time_selection"],
-                    "created": datetime.now().isoformat()
+                    "time": time_payload,
+                    "created": now,
+                    "updated": now
                 }
                 bio_data["entries"].append(entry)
                 entry_index = len(bio_data["entries"]) - 1
                 session["entry_index"] = entry_index
             else:
-                # overwrite time in existing entry
-                if 0 <= entry_index < len(bio_data["entries"]):
-                    bio_data["entries"][entry_index]["time"] = session["time_selection"]
-                    bio_data["entries"][entry_index]["created"] = datetime.now().isoformat()
+                # Overwrite time in existing entry; keep created, bump updated
+                e = bio_data["entries"][entry_index]
+                if not isinstance(e, dict):
+                    e = {}
+                    bio_data["entries"][entry_index] = e
+                e["time"] = time_payload
+                if "created" not in e:
+                    e["created"] = now
+                e["updated"] = now
+
+            # Update the biography-level updated timestamp as well
+            bio_data["updated"] = now
 
             save_dict_as_json(bio_file, bio_data)
 
-            # next: labels
-            return redirect(url_for("label_step", type_name=type_name, bio_id=bio_id, step=0))
+            # Next: go to the *general* labels step in the iframe wizard
+            return redirect(url_for("general_iframe_wizard", type=type_name, bio_id=bio_id, step="labels"))
 
-    # load label types under /types/time/labels (top-level + subfolder descriptions)
+    # --- GET: build time label options ---
     label_files = []
     if os.path.exists(labels_folder):
         for f in os.listdir(labels_folder):
             full = os.path.join(labels_folder, f)
             if f.endswith(".json") and os.path.isfile(full):
                 try:
-                    data = load_json_as_dict(full)
+                    data = load_json_as_dict(full) or {}
                     label = os.path.splitext(f)[0]
-                    desc = data.get("description", "")
+                    desc  = data.get("description", "")
                     label_files.append((label, desc))
                 except Exception:
                     pass
@@ -1082,7 +1447,7 @@ def general_step_time(type_name, bio_id):
             for f in os.listdir(subfolder_path):
                 if f.endswith(".json"):
                     try:
-                        data = load_json_as_dict(os.path.join(subfolder_path, f))
+                        data = load_json_as_dict(os.path.join(subfolder_path, f)) or {}
                         subfolder_labels.append({
                             "name": os.path.splitext(f)[0],
                             "description": data.get("description", ""),
@@ -1092,23 +1457,25 @@ def general_step_time(type_name, bio_id):
                         pass
             subfolder_labels.sort(key=lambda x: (x.get("order", 999), x["name"]))
 
-    # for display
+    # for display list on the page
     display_list = []
     for entry in bio_data.get("entries", []):
-        time_info = entry.get("time", {})
+        time_info = entry.get("time", {}) or {}
         tag = time_info.get("subvalue") or time_info.get("date_value") or "[unspecified]"
         conf = time_info.get("confidence", "unknown")
         display_list.append((tag, conf))
 
-    return render_template("time_step.html",
-                           type_name=type_name, bio_id=bio_id,
-                           label_files=label_files,
-                           selected_label_type=selected_label_type,
-                           selected_subvalue=selected_subvalue,
-                           selected_date=selected_date,
-                           selected_confidence=selected_confidence,
-                           subfolder_labels=subfolder_labels,
-                           existing_entries=display_list)
+    return render_template(
+        "time_step.html",
+        type_name=type_name, bio_id=bio_id,
+        label_files=label_files,
+        selected_label_type=selected_label_type,
+        selected_subvalue=selected_subvalue,
+        selected_date=selected_date,
+        selected_confidence=selected_confidence,
+        subfolder_labels=subfolder_labels,
+        existing_entries=display_list
+    )
 
 
 # ---------- 5) Step: Labels (re-use your label_step; one big page) ----------
@@ -1116,16 +1483,13 @@ def general_step_time(type_name, bio_id):
 @app.route("/general_step/labels/<type_name>/<bio_id>", methods=["GET", "POST"])
 def general_step_labels(type_name, bio_id):
     """
-    General labels step (type-agnostic, data-driven).
-
-    - Builds groups from property JSON (with legacy subfolder fallback)
-    - Expands child groups (when a selected parent implies a child folder)
-    - 'preview_key'/'preview_val' query params let a click show children without saving
-    - Saves either:
-        * local label IDs (from this type's labels), or
-        * cross-type biography links (when property refers to another type)
+    Type-agnostic labels step with:
+      - property-first groups
+      - nested child expansion (saved + preview)
+      - biography suggestions
+      - GPT label ingestion (works even if GPT returns only an {id})
     """
-    # --- paths / load bio ---
+    # -------- paths / load bio --------
     label_base_path = os.path.join("types", type_name, "labels")
     bio_file_path   = os.path.join("types", type_name, "biographies", f"{bio_id}.json")
     os.makedirs(label_base_path, exist_ok=True)
@@ -1135,10 +1499,10 @@ def general_step_labels(type_name, bio_id):
     bio_data = load_json_as_dict(bio_file_path)
     bio_data.setdefault("entries", [])
 
-    # --- ensure we have a current entry (usually created at time step) ---
+    # Current entry (create if needed, bring across time selection)
     entry_index = session.get("entry_index")
     if entry_index is None or not (0 <= entry_index < len(bio_data["entries"])):
-        new_entry = {"created": datetime.now().isoformat()}
+        new_entry = {"created": datetime.now(timezone.utc).isoformat()}
         if session.get("time_selection"):
             new_entry["time"] = session["time_selection"]
         bio_data["entries"].append(new_entry)
@@ -1146,49 +1510,37 @@ def general_step_labels(type_name, bio_id):
         session["entry_index"] = entry_index
         save_dict_as_json(bio_file_path, bio_data)
 
-    # --- build base groups (property-first) ---
+    # -------- build base groups --------
     base_groups = collect_label_groups(label_base_path, type_name)
 
-    # --- load saved selections for this entry/type (for preselects) ---
-    # We index by *property key* (group.key) where possible; for backward compatibility
-    # we fall back to label_type (last path segment) which is what gets saved.
-    existing_labels = {}   # key -> {label,id?,biography?,confidence,source}
+    # -------- map saved selections -> existing_labels (for preselects) --------
+    # We try to attach to real property keys; fall back to label_type if needed.
+    existing_labels: dict[str, dict] = {}
     saved_items = bio_data["entries"][entry_index].get(type_name, [])
-
-    for lab in saved_items:
-        lt  = (lab.get("label_type") or "").strip()       # e.g. "work_place"
-        lid = lab.get("id")
-        payload = {
-            "confidence": lab.get("confidence", 100),
-            "source":     lab.get("source", "")
-        }
+    for it in saved_items:
+        lt  = (it.get("label_type") or "").strip()
+        lid = it.get("id")
+        payload = {"confidence": it.get("confidence", 100), "source": it.get("source", "")}
         if lid:
             payload["label"] = lid
             payload["id"]    = lid
-        if lab.get("biography"):
-            payload["biography"] = lab["biography"]
 
-        # Try to map to a real property key; otherwise keep under lt (best effort).
-        # (Most top-level property keys equal the saved label_type.)
-        key_for_map = lt
-        if any(g.get("key") == lt for g in base_groups):
-            key_for_map = lt
-        existing_labels[key_for_map] = payload
+        # Prefer an exact property-key match; else use the last path segment
+        key = lt
+        if not any(g.get("key") == lt for g in base_groups):
+            key = lt  # best-effort; many schemas save label_type == property key
+        existing_labels[key] = payload
 
-    # --- preview: overlay a clicked parent without saving (so child groups render) ---
+    # -------- preview overlay (so a click can reveal children without saving) --------
     preview_key = (request.args.get("preview_key") or "").strip()
     preview_val = (request.args.get("preview_val") or "").strip()
     display_labels = dict(existing_labels)
     if preview_key and preview_val:
         display_labels[preview_key] = {
-            "label": preview_val,
-            "id": preview_val,
-            "confidence": 100,
-            "source": "preview"
+            "label": preview_val, "id": preview_val, "confidence": 100, "source": "preview"
         }
 
-    # --- expand child groups based on currently displayed selections (saved + preview) ---
-    # We pass a simplified map of selections: key -> selected option id
+    # -------- expand nested groups based on current display selections --------
     selected_map = {}
     for k, v in display_labels.items():
         if isinstance(v, dict):
@@ -1201,60 +1553,74 @@ def general_step_labels(type_name, bio_id):
             base_groups=base_groups,
             current_type=type_name,
             label_base_path=label_base_path,
-            existing_labels=selected_map
+            existing_labels=selected_map,
         )
     except Exception as e:
         print(f"[WARN] expand_child_groups failed: {e}")
         expanded_groups = base_groups
 
-    # --- POST: save selections ---
-    if request.method == "POST":
-        new_entries = []
+    # -------- helper: find a group for a raw option id (used by GPT ingestion) --------
+    def find_group_key_for_id(opt_id: str) -> Optional[str]:
+        for g in expanded_groups:
+            for o in g.get("options", []):
+                if o.get("id") == opt_id:
+                    return g.get("key")
+        return None
 
-        # (1) Optional GPT suggestions payload
-        gpt_raw = request.form.get("gpt_selected_labels_json", "")
+    # ======================= POST (save) =======================
+    if request.method == "POST":
+        new_entries: list[dict] = []
+
+        # ---- (A) GPT suggestions ----
+        # Accepts a list of objects, minimal shape:
+        #   {"id": "<option_id>"}                   -> we'll resolve its label_type
+        # Optional fields we respect:
+        #   label_type, confidence, source
+        gpt_raw = request.form.get("gpt_selected_labels_json", "").strip()
         if gpt_raw:
             try:
-                gpt_labels = json.loads(gpt_raw)
-                if isinstance(gpt_labels, list):
-                    for item in gpt_labels:
-                        if isinstance(item, dict) and ("id" in item or "biography" in item):
-                            new_entries.append({
-                                "label_type": item.get("label_type", ""),   # your UI can set this
-                                "id":         item.get("id"),
-                                "biography":  item.get("biography"),
-                                "confidence": int(item.get("confidence", 100)),
-                                "source":     "gpt"
-                            })
+                gpt_items = json.loads(gpt_raw)
+                if isinstance(gpt_items, list):
+                    for lab in gpt_items:
+                        if not isinstance(lab, dict):
+                            continue
+                        lid = (lab.get("id") or "").strip()
+                        if not lid:
+                            continue
+                        lt  = (lab.get("label_type") or "").strip()
+                        if not lt:
+                            # resolve by searching expanded groups for this id
+                            maybe = find_group_key_for_id(lid)
+                            if maybe:
+                                lt = maybe.split("/")[-1]     # store last segment for compat
+                            else:
+                                lt = type_name                # limp fallback
+
+                        conf = int(lab.get("confidence", 100))
+                        new_entries.append({
+                            "id": lid,
+                            "label_type": lt.split("/")[-1],  # always last segment in stored data
+                            "confidence": conf,
+                            "source": lab.get("source", "gpt"),
+                        })
+                else:
+                    print("[GPT] Expected list, got:", type(gpt_items))
             except Exception as e:
-                print("[GPT Parse Error]", e)
+                print("[GPT] parse error:", e)
 
-        # (2) Manual selections from each expanded group
-        for group in expanded_groups:
-            key = group["key"]  # e.g. "work_place" or "work_building/hospital"
-            # confidence sliders
+        # ---- (B) Manual selections from each group (including children) ----
+        for g in expanded_groups:
+            key = g["key"]                           # e.g. "work_place" or "work_place/hospital"
             conf_raw = (request.form.get(f"confidence_{key}") or "").strip()
-            conf     = int(conf_raw) if conf_raw.isdigit() else 100
+            conf = int(conf_raw) if conf_raw.isdigit() else 100
 
-            # local label id
             sel_id   = (request.form.get(f"selected_id_{key}") or "").strip()
-
-            # cross-type biography selection (when group.refer_to or suggestions present)
             sel_bio  = (request.form.get(f"selected_id_{key}_bio") or "").strip()
             bio_conf_raw = (request.form.get(f"confidence_{key}_bio") or "").strip()
             bio_conf = int(bio_conf_raw) if bio_conf_raw.isdigit() else 100
 
-            # optional clear checkbox (add to template if you want explicit clearing)
-            if request.form.get(f"clear_{key}") == "on":
-                # Skip adding anything for this key; overwrite below removes previous
-                continue
-
             if sel_id or sel_bio:
-                entry = {
-                    # We store the last path segment for backward compatibility with your existing data
-                    "label_type": key.split("/")[-1],
-                    "confidence": conf
-                }
+                entry = {"label_type": key.split("/")[-1], "confidence": conf}
                 if sel_id:
                     entry["id"] = sel_id
                 if sel_bio:
@@ -1262,26 +1628,26 @@ def general_step_labels(type_name, bio_id):
                     entry["biography_confidence"] = bio_conf
                 new_entries.append(entry)
 
-        # Overwrite this entry's labels for the current type
+        # Overwrite this entry’s labels for the current type and bump updated timestamp
         bio_data["entries"][entry_index][type_name] = new_entries
+        bio_data["updated"] = datetime.now(timezone.utc).isoformat()
         save_dict_as_json(bio_file_path, bio_data)
 
-        # Back to the iframe wizard → review
         return redirect(url_for("general_iframe_wizard", type=type_name, bio_id=bio_id, step="review"))
 
-    # --- GET: compute suggestions for biography-linking groups ---
+    # ======================= GET (suggest bios + render) =======================
     try:
         suggested_biographies = build_suggested_biographies(
             current_type=type_name,
             label_groups_list=expanded_groups,
             label_base_path=label_base_path,
-            existing_labels=display_labels  # so helper can be smarter if needed
+            existing_labels=display_labels,
         )
     except Exception as e:
         print(f"[WARN] build_suggested_biographies failed: {e}")
         suggested_biographies = {}
 
-    # --- existing biography selections map (for template preselect of _bio widgets) ---
+    # Map existing biography picks so the template can preselect them
     try:
         existing_bio_selections = map_existing_bio_selections(
             expanded_groups,
@@ -1290,22 +1656,22 @@ def general_step_labels(type_name, bio_id):
     except Exception:
         existing_bio_selections = {}
 
-    # --- render ---
     return render_template(
         "label_step.html",
         current_type=type_name,
         label_groups_list=expanded_groups,
-        existing_labels=display_labels,            # includes preview overlay
+        existing_labels=display_labels,             # saved + preview
         existing_bio_selections=existing_bio_selections,
         suggested_biographies=suggested_biographies,
         step=0,
-        next_step=1,                                # not used by iframe, but harmless
+        next_step=1,
         prev_step=None,
         bio_id=bio_id,
         time_selection=session.get("time_selection"),
         bio_name=bio_data.get("name", bio_id),
         skip_allowed=(len(expanded_groups) == 0)
     )
+
 
 
 

@@ -6,13 +6,13 @@
     "entries": [
         {
             "time": {
-                "label": "infant",
+                "label": "2025-08-06",
                 "confidence": 100,
-                "label_type": "life_stage",
-                "date_value": "",
-                "subvalue": "infant"
+                "label_type": "date",
+                "date_value": "2025-08-06",
+                "subvalue": ""
             },
-            "created": "2025-08-08T14:11:19.471620",
+            "created": "2025-08-10T23:32:03.163996",
             "buildings": [
                 {
                     "id": "flat",
@@ -36,5 +36,6 @@
             ]
         }
     ],
-    "finalised": true
+    "finalised": true,
+    "updated": "2025-08-10T22:31:54.907493+00:00"
 }

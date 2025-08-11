@@ -1,0 +1,19 @@
+{
+    "id": "tall_building_2",
+    "name": "Tall building",
+    "type": "buildings",
+    "created": "2025-08-10T22:44:53.842277+00:00",
+    "updated": "2025-08-10T22:44:54.957698+00:00",
+    "entries": [
+        {
+            "time": {
+                "label": "preteen",
+                "confidence": 48,
+                "label_type": "life_stage",
+                "date_value": "",
+                "subvalue": "preteen"
+            },
+            "created": "2025-08-10T23:44:59.958082"
+        }
+    ]
+}

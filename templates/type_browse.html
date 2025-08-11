@@ -1,4 +1,3 @@
-<!-- templates/type_browse.html -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -36,8 +35,9 @@
 
     <div class="toolbar">
       <a class="btn ghost" href="{{ url_for('dashboard') }}">⬅️ Back to Dashboard</a>
-      <a class="btn" href="{{ url_for('search_or_add_biography', type_name=type_name, return_url=request.url) }}">➕ New Biography</a>
-      <a class="btn secondary" href="{{ url_for('create_subfolder', type_name=type_name) }}">🏷️ Add Label Group</a>
+      <!-- New Biography now launches the General Wizard, pre-selecting this type -->
+      <a class="btn" href="{{ url_for('wizard_start', type=type_name) }}">➕ New Biography</a>
+      <a class="btn secondary" href="{{ url_for('create_subfolder', type_name=type_name, return_url=request.url) }}">🏷️ Add Label Group</a>
     </div>
 
     <div class="controls">
@@ -53,32 +53,40 @@
 
     {% if bios and bios|length > 0 %}
       <div id="cards" class="grid">
-        {# Support dict-like or tuple-like items #}
         {% for b in bios %}
-          {% set _id   = (b.id if b is mapping else (b[0] if b is sequence else '')) %}
-          {% set _name = (b.name if b is mapping else (b[1] if b is sequence and b|length>1 else _id.replace('_',' ')|title)) %}
-          {% set _desc = (b.description if b is mapping else (b[2] if b is sequence and b|length>2 else '')) %}
-          {% set _updated = (
-                b.updated if b is mapping and b.updated is defined
-                else (b.created if b is mapping and b.created is defined
-                else (b[3] if b is sequence and b|length>3 else ''))
-          ) %}
+{% set _id     = b.get('id') %}
+{% set _name   = b.get('name') or _id.replace('_',' ')|title %}
+{% set _desc   = b.get('description') %}
+{# use updated if present, otherwise created #}
+{% set _stamp  = b.get('updated') or b.get('created') %}
 
+
+          <!-- Full-card click goes to the type-agnostic view page -->
           <a class="bio-card"
              href="{{ url_for('biography_view', type_name=type_name, bio_id=_id) }}"
              data-name="{{ _name|lower }}"
              data-updated="{{ _updated }}">
-            <div class="card" role="button" aria-label="View {{ _name }}">
-              <h3>{{ _name }}</h3>
-              {% if _desc %}<div class="desc">{{ _desc }}</div>{% endif %}
-              <div class="muted">
-                {% if _updated %}Last updated: {{ _updated }}{% else %}No timestamp{% endif %}
-              </div>
-              <div class="quick" style="margin-top:10px">
-                <span class="btn">🔎 View/Edit This Biography</span>
-              </div>
-            </div>
-          </a>
+            <a class="bio-card"
+   href="{{ url_for('biography_view', type_name=type_name, bio_id=_id) }}"
+   data-name="{{ _name|lower }}"
+   data-updated="{{ _updated }}">
+  <div class="card" role="button" aria-label="View {{ _name }}">
+    <h3>{{ _name }}</h3>
+    {% if _desc %}<div class="desc">{{ _desc }}</div>{% endif %}
+<div class="muted">
+  {% if _stamp %}
+    <span class="updated" data-iso="{{ _stamp }}">{{ _stamp }}</span>
+  {% else %}
+    No timestamp
+  {% endif %}
+</div>
+
+    <div class="quick" style="margin-top:10px">
+      <span class="btn">🔎 View/Edit This Biography</span>
+    </div>
+  </div>
+</a>
+
         {% endfor %}
       </div>
     {% else %}
@@ -123,11 +131,30 @@
       cards.forEach(c => grid.appendChild(c));
     }
 
+    // Format timestamps to UK time (Europe/London) once the DOM is ready
+    function formatUKTimes() {
+      const nodes = document.querySelectorAll('.updated[data-iso]');
+      nodes.forEach(n => {
+        const iso = n.getAttribute('data-iso') || '';
+        const d = new Date(iso);
+        if (!isNaN(d)) {
+          const uk = d.toLocaleString('en-GB', {
+            timeZone: 'Europe/London',
+            dateStyle: 'medium',
+            timeStyle: 'short'
+          });
+          n.textContent = `Last updated: ${uk}`;
+        }
+      });
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
       sortCards();
+      formatUKTimes();
     });
   </script>
 </body>
 </html>
+
 
 

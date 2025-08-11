@@ -1,8 +1,7 @@
-import os
-import json
-from datetime import datetime
+import re, math, os, json
+from datetime import datetime, timezone
+from difflib import SequenceMatcher
 from openai import OpenAI
-import re
 import glob
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -68,6 +67,9 @@ def get_readable_time(timestamp):
         return datetime.fromtimestamp(int(timestamp)).strftime('%Y-%m-%d %H:%M:%S')
     except (ValueError, TypeError):
         return "Invalid Timestamp"
+    
+def now_iso_utc():
+    return datetime.now(timezone.utc).isoformat()
 
 
 def printButton(button_label,url):
@@ -303,27 +305,106 @@ def load_labels_from_folder(folder_path):
                 print(f"[ERROR] Loading label {filename}: {e}")
     return labels
 
+import os, json, uuid
+from datetime import datetime, timezone
+
 def list_biographies(type_name):
     """
     Return a list of biography metadata for the given type.
+
+    - Ensures every biography JSON has a stable unique 'uid' (UUIDv4, persisted).
+    - Returns both 'created' and 'updated' (falls back to file mtime / latest entry).
+    - Keeps the existing 'id' (the file slug) for routing compatibility.
     """
     bios_dir = os.path.join("types", type_name, "biographies")
     bios = []
-    if os.path.exists(bios_dir):
-        for f in os.listdir(bios_dir):
-            if f.endswith(".json"):
-                bio_path = os.path.join(bios_dir, f)
+    if not os.path.isdir(bios_dir):
+        return bios
+
+    def iso_utc(ts: float) -> str:
+        return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+
+    for filename in sorted(os.listdir(bios_dir)):
+        if not filename.endswith(".json"):
+            continue
+
+        bio_id = os.path.splitext(filename)[0]
+        bio_path = os.path.join(bios_dir, filename)
+
+        try:
+            data = load_json_as_dict(bio_path) or {}
+        except Exception as e:
+            print(f"[list_biographies] Error reading {bio_path}: {e}")
+            continue
+
+        # Ensure a stable unique identifier, persisted in the file
+        uid = data.get("uid")
+        if not uid:
+            uid = uuid.uuid4().hex
+            data["uid"] = uid
+
+        # Timestamps
+        created = data.get("created")
+        updated = data.get("updated")
+
+        # If no updated, use newest entry.updated/created, else file mtime, else created
+        if not updated:
+            latest = None
+            try:
+                entries = data.get("entries") or []
+                if entries:
+                    # prefer entry.updated, then entry.created
+                    latest = max(
+                        (e.get("updated") or e.get("created") for e in entries if isinstance(e, dict)),
+                        default=None
+                    )
+            except Exception:
+                latest = None
+
+            if latest:
+                updated = latest
+            else:
                 try:
-                    bio_data = load_json_as_dict(bio_path)
-                    bios.append({
-                        "id": os.path.splitext(f)[0],
-                        "name": bio_data.get("name", "[Unnamed]"),
-                        "created": bio_data.get("created", ""),
-                        "entries": bio_data.get("entries", [])
-                    })
-                except Exception as e:
-                    print(f"Error reading {bio_path}: {e}")
+                    updated = iso_utc(os.path.getmtime(bio_path))
+                except Exception:
+                    updated = created or ""
+
+        # If no created, fall back to file ctime/mtime
+        if not created:
+            try:
+                created = iso_utc(os.path.getctime(bio_path))
+            except Exception:
+                try:
+                    created = iso_utc(os.path.getmtime(bio_path))
+                except Exception:
+                    created = ""
+
+        # Persist any fixes (uid / timestamps) back to disk
+        changed = False
+        if data.get("uid") != uid:
+            data["uid"] = uid; changed = True
+        if not data.get("created") and created:
+            data["created"] = created; changed = True
+        if not data.get("updated") and updated:
+            data["updated"] = updated; changed = True
+        if changed:
+            try:
+                save_dict_as_json(bio_path, data)
+            except Exception as e:
+                print(f"[list_biographies] Could not persist fixes to {bio_path}: {e}")
+
+        bios.append({
+            "id": bio_id,  # slug for routing
+            "uid": uid,    # globally unique identifier
+            "name": data.get("name", bio_id.replace("_", " ").title()),
+            "description": data.get("description", ""),
+            "created": created,
+            "updated": updated,
+            "entries": data.get("entries", []),
+        })
+
     return bios
+
 
 def build_suggested_biographies(*args, **kwargs):
     """
@@ -525,6 +606,121 @@ def build_label_groups_by_type():
         out[t] = list_label_groups_for_type(t)
     return out
 
+def build_label_catalog_for_type(current_type: str, max_per_group: int = 200):
+    """
+    Return a list of candidate labels the LLM can choose from:
+    [{id, display, group_key, type}, ...]
+    Uses your property-first groups (collect_label_groups) so it also covers cross-type sources.
+    """
+    base_path = os.path.join("types", current_type, "labels")
+    groups = collect_label_groups(base_path, current_type)
+    catalog = []
+
+    for g in groups:
+        key = g.get("key", "")
+        for o in (g.get("options") or [])[:max_per_group]:
+            if not isinstance(o, dict):
+                continue
+            iid = o.get("id")
+            if not iid:
+                continue
+            catalog.append({
+                "id": iid,
+                "display": o.get("display", iid),
+                "group_key": key,              # e.g. "work_place"
+                "type": current_type           # keep for completeness
+            })
+    return catalog
+
+
+def _tokens(s: str):
+    return [t for t in re.split(r"[^a-z0-9]+", (s or "").lower()) if t]
+
+def _fuzzy(a: str, b: str) -> float:
+    # 0..1
+    try:
+        return SequenceMatcher(None, (a or "").lower(), (b or "").lower()).ratio()
+    except Exception:
+        return 0.0
+
+def _collect_all_labels(type_name: str):
+    """
+    Walk types/<type>/labels recursively and return a list of:
+      { id, display, description, label_type (group key), path }
+    Where label_type is the group key (folder->path without the filename).
+    """
+    base = os.path.join("types", type_name, "labels")
+    out = []
+    if not os.path.isdir(base):
+        return out
+
+    for root, _, files in os.walk(base):
+        # group key is the path under labels/, excluding the file
+        rel_dir = os.path.relpath(root, base).replace("\\", "/").strip(".")
+        # skip hidden dirs
+        if any(seg.startswith(".") for seg in rel_dir.split("/")):
+            continue
+
+        # try read _group.json for a nicer group name (optional)
+        group_meta = {}
+        gmeta_path = os.path.join(root, "_group.json")
+        if os.path.exists(gmeta_path):
+            gm = load_json_safe(gmeta_path)
+            if isinstance(gm, dict):
+                group_meta = gm
+
+        for f in files:
+            if not f.endswith(".json") or f == "_group.json":
+                continue
+            lid = os.path.splitext(f)[0]
+            jp = os.path.join(root, f)
+            data = load_json_safe(jp)
+            if not isinstance(data, dict):
+                data = {}
+
+            name = (
+                (data.get("properties", {}) or {}).get("name")
+                or data.get("name")
+                or lid.replace("_", " ").title()
+            )
+            desc = (
+                data.get("description")
+                or (data.get("properties", {}) or {}).get("description", "")
+            )
+
+            # accept optional aliases to help matching
+            aliases = []
+            for key in ("aliases", "alt_names", "synonyms"):
+                v = data.get(key) or (data.get("properties", {}) or {}).get(key)
+                if isinstance(v, list):
+                    aliases.extend([str(x) for x in v if isinstance(x, (str, int, float))])
+
+            label_type = rel_dir if rel_dir != "." else ""   # top-level group file
+            # if the file sits directly in labels/, label_type is just "" -> use the filename as group
+            if not label_type:
+                label_type = os.path.splitext(f)[0]
+
+            out.append({
+                "id": lid,
+                "display": name,
+                "description": desc,
+                "aliases": aliases,
+                "label_type": label_type,          # e.g. "hair_colour" or "work_place/hospital"
+                "path": jp
+            })
+    return out
+
+def _score_label(prompt: str, item: dict) -> float:
+    """Simple hybrid score: token overlap + fuzzy on display + a small bonus if id appears."""
+    ptoks = set(_tokens(prompt))
+    text = " ".join([item.get("display",""), item.get("description","")] + item.get("aliases", []))
+    ttoks = set(_tokens(text))
+    overlap = len(ptoks & ttoks)
+    jacc = overlap / (len(ptoks | ttoks) or 1)
+    fuzz = _fuzzy(prompt, item.get("display",""))
+    id_bonus = 0.15 if item.get("id","").lower() in prompt.lower() else 0.0
+    # weight overlap higher than fuzzy
+    return (0.65 * jacc) + (0.35 * fuzz) + id_bonus
 
 import os, re, shutil, json
 from datetime import datetime

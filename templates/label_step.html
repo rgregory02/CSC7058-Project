@@ -28,6 +28,11 @@
     .back-link { margin:0 10px; text-decoration:none; border:1px solid #007bff; padding:6px 12px; border-radius:6px; color:#007bff; background:#fff; }
     .bio-suggestions { margin-top:14px; background:#f9f9ff; border:1px dashed #ccd; border-radius:10px; padding:14px; }
     .muted { color:#666; font-size:.9em; }
+.sugg-card{
+  border:1px solid #e7e9f2; border-radius:8px; padding:10px; margin:8px 0; background:#fff; cursor:pointer;
+}
+.sugg-card.selected{ background:#eaffee; border-color:#46b36a; }
+
   </style>
 </head>
 <body>
@@ -182,16 +187,37 @@
     </div>
   {% endfor %}
 
-  <!-- GPT assist (stub) -->
-  <div class="label-group-box">
-    <h3>🤖 Need help choosing labels?</h3>
-    <p class="muted">Describe this {{ current_type.replace('_',' ') }} and we’ll suggest labels. You can adjust confidence before saving.</p>
-    <textarea id="labelPromptInput" rows="3" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:8px;" placeholder="e.g. Works in a large city hospital, pediatric focus, senior role"></textarea>
-    <div style="margin-top:10px;">
-      <button type="button" class="primary-button" onclick="alert('Hook this up to your suggestion endpoint');">🔍 Suggest Labels</button>
-    </div>
-    <input type="hidden" name="gpt_selected_labels_json" id="gpt_selected_labels_json" value="[]">
+<!-- GPT assist -->
+<div class="label-group-box">
+  <h3>🤖 Need help choosing labels?</h3>
+  <p class="muted">
+    Describe this {{ current_type.replace('_',' ') }} and we’ll suggest labels.
+    You can tweak or deselect before saving.
+  </p>
+
+  <textarea id="labelPromptInput" rows="3"
+            style="width:100%; padding:10px; border:1px solid #ccc; border-radius:8px;"
+            placeholder="e.g. I am a nurse who loves working with children"></textarea>
+
+  <div style="margin-top:10px; display:flex; gap:8px; align-items:center;">
+    <button id="gptSuggestBtn"
+        type="button"
+        class="primary-button"
+        onclick='suggestLabels("{{ current_type }}", {{ label_groups_list|map(attribute="key")|list|tojson }})'>
+  🔍 Suggest Labels
+</button>
+
+    <span id="gptHint" class="muted" style="display:none;">Generating…</span>
   </div>
+
+  <!-- Suggestions render here -->
+  <div id="gptSuggestions" class="label-options" style="margin-top:12px;"></div>
+
+  <!-- This is what gets POSTed back and saved -->
+  <input type="hidden" name="gpt_selected_labels_json"
+         id="gpt_selected_labels_json" value="[]">
+</div>
+
 
   <div class="bottom-card">
     <div style="margin-bottom:12px;">
@@ -206,240 +232,257 @@
 </div>
 
 <script>
-  function makeSafeKey(key){ return key.replaceAll('/','__'); }
+  /* ----------------------------- small helpers ----------------------------- */
+  const CURRENT_TYPE = "{{ current_type }}";
+  const qs  = sel => document.querySelector(sel);
+  const qsa = sel => Array.from(document.querySelectorAll(sel));
+  const safe = k => (k || "").replaceAll("/", "__");
+  const uns  = k => (k || "").replaceAll("__", "/");
+  const cssEscape = (s) => (window.CSS && CSS.escape ? CSS.escape(s) : String(s).replace(/[^a-zA-Z0-9_-]/g,'\\$&')); // FIX
 
-  // Collect all current selections into a map { groupKey: selectedId }
-  function collectSelections() {
+  function titleCase(s){ return (s||"").replace(/_/g," ").replace(/\b\w/g,m=>m.toUpperCase()); }
+
+  /* ----------------------- read current hidden selections ------------------ */
+  function collectSelectionsMap() {
     const map = {};
-    document.querySelectorAll("input.group-selection-tracker[id^='input_']").forEach(inp => {
-      const safe = inp.id.replace(/^input_/, '');
-      const key  = safe.replaceAll('__','/');
-      const val  = (inp.value || '').trim();
+    qsa("input.group-selection-tracker[id^='input_']").forEach(inp => {
+      const key  = uns(inp.id.replace(/^input_/, ""));
+      const val  = (inp.value || "").trim();
       if (val) map[key] = val;
     });
     return map;
   }
-
-  // Render a child group block into its container
-  function renderChildGroup(parentKey, childKey, options) {
-    const parentSafe = makeSafeKey(parentKey);
-    const childSafe  = makeSafeKey(childKey);
-    const host = document.getElementById(`children_for_${parentSafe}`);
-    if (!host) return;
-
-    // Build HTML for the child group (mini version of your group markup)
-    const cards = options.map(opt => {
-      return `
-        <div class="label-card"
-             id="card_${childSafe}_${opt.id}"
-             data-group="${childKey}"
-             data-value="${opt.id}"
-             onclick="selectChild('${childKey}','${opt.id}')">
-          ${opt.image ? `<img src="${opt.image}" alt="${opt.display}">` : ''}
-          <div><strong>${(opt.display||opt.id)}</strong></div>
-          ${opt.description ? `<div class="label-description">${opt.description}</div>` : ''}
-        </div>`;
-    }).join("");
-
-    // Hidden field so Save will keep child selection
-    const hidden = `<input type="hidden" name="selected_id_${childKey}" id="input_${childSafe}" class="group-selection-tracker" value="">`;
-
-    host.innerHTML = `
-      <div class="label-group-box" id="group_${childSafe}">
-        <div class="label-title">${childKey.split('/').slice(-1)[0].replaceAll('_',' ').replace(/\b\w/g, c=>c.toUpperCase())}</div>
-        ${hidden}
-        <div class="label-options">${cards}</div>
-        <div class="confidence-slider">
-          <label for="confidence_${childSafe}">🎯 Confidence:</label><br>
-          <input type="range" name="confidence_${childKey}" id="confidence_${childSafe}" min="0" max="100" value="100" oninput="updateConfidence('${childKey}')">
-          <div class="confidence-display">
-            <span id="confidence_display_${childSafe}">100%</span>
-            <span id="confidence_level_${childSafe}"></span>
-          </div>
-        </div>
-        <div id="bios_for_${childSafe}"></div>
-      </div>
-    `;
-    updateConfidence(childKey);
-    updateSaveButtonState();
+  function collectCurrentSelectionsList() {
+    const arr = [];
+    qsa(".group-selection-tracker").forEach(input => {
+      const key = (input.name || "").replace(/^selected_id_/, "");
+      const id  = (input.value || "").trim();
+      if (!id) return;
+      const confEl = qs("#confidence_" + safe(key));
+      const conf = confEl ? parseInt(confEl.value || "100", 10) : 100;
+      arr.push({ label_type: key.split("/").pop(), id, confidence: conf });
+    });
+    return arr;
   }
 
-  // Render biography picker list into the group's bio container
-  function renderBios(groupKey, bios) {
-    const safe = makeSafeKey(groupKey);
-    const host = document.getElementById(`bios_for_${safe}`);
-    if (!host) return;
+  /* --------------------------- confidence display -------------------------- */
+  function updateConfidence(rawKey){
+    const sk = safe(rawKey);
+    const slider  = qs("#confidence_" + sk);
+    const display = qs("#confidence_display_" + sk);
+    const level   = qs("#confidence_level_" + sk);
+    if(!slider || !display || !level) return;
+    const v = parseInt(slider.value || 0, 10);
+    display.textContent = v + "%";
+    if(v===100){ level.textContent='(Exact)'; level.style.color='green'; }
+    else if(v>=67){ level.textContent='(High)'; level.style.color='green'; }
+    else if(v>=34){ level.textContent='(Medium)'; level.style.color='orange'; }
+    else { level.textContent='(Low)'; level.style.color='red'; }
+  }
+  function initConfidenceFor(key){
+    updateConfidence(key);
+    const sk = safe(key);
+    const el = qs("#confidence_" + sk);
+    if (el) el.addEventListener("input", () => updateConfidence(key));
+  }
 
-    if (!bios || bios.length === 0) {
-      host.innerHTML = '';
-      return;
-    }
+  /* ------------------------------ bios widget ------------------------------ */
+  function renderBios(groupKey, bios) {
+    const host = qs("#bios_for_" + safe(groupKey));
+    if (!host) return;
+    if (!bios || !bios.length) { host.innerHTML = ""; return; }
 
     const cards = bios.map(b => `
       <div class="label-card"
-           data-group="${safe}_bio"
+           tabindex="0"
+           data-group="${safe(groupKey)}_bio"
            data-value="${b.id}"
-           onclick="toggleBioSelection(this, 'input_${safe}_bio')">
+           onclick="toggleBioSelection(this, 'input_${safe(groupKey)}_bio')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); this.click();}">
         <div><strong>${b.display || b.id}</strong></div>
-        ${b.description ? `<div class="label-description">${b.description}</div>` : ''}
+        ${b.description ? `<div class="label-description">${b.description}</div>` : ""}
       </div>
     `).join("");
 
     host.innerHTML = `
       <div class="bio-suggestions">
         <div class="label-title">📖 Linked Biographies</div>
-        <input type="hidden" id="input_${safe}_bio" name="selected_id_${groupKey}_bio" class="group-selection-tracker" value="">
-        <input type="text" class="label-search" placeholder="Search biographies…" oninput="filterLabels(this, '${safe}_bio')" data-group="${safe}_bio">
+        <input type="hidden"
+               id="input_${safe(groupKey)}_bio"
+               name="selected_id_${groupKey}_bio"
+               class="group-selection-tracker"
+               value="">
+        <input type="text" class="label-search"
+               placeholder="Search biographies…"
+               oninput="filterLabels(this, '${safe(groupKey)}_bio')"
+               data-group="${safe(groupKey)}_bio">
         <div class="label-options">${cards}</div>
         <div class="confidence-slider" style="margin-top:10px;">
-          <label for="confidence_${safe}_bio">🎯 Biography Match Confidence:</label><br>
-          <input type="range" name="confidence_${groupKey}_bio" id="confidence_${safe}_bio" min="0" max="100" value="100" oninput="updateConfidence('${groupKey}_bio')">
+          <label for="confidence_${safe(groupKey)}_bio">🎯 Biography Match Confidence:</label><br>
+          <input type="range"
+                 name="confidence_${groupKey}_bio"
+                 id="confidence_${safe(groupKey)}_bio"
+                 min="0" max="100" value="100">
           <div class="confidence-display">
-            <span id="confidence_display_${safe}_bio">100%</span>
-            <span id="confidence_level_${safe}_bio"></span>
+            <span id="confidence_display_${safe(groupKey)}_bio">100%</span>
+            <span id="confidence_level_${safe(groupKey)}_bio"></span>
           </div>
         </div>
       </div>
     `;
-    updateConfidence(groupKey + "_bio");
+    initConfidenceFor(groupKey + "_bio");
     updateSaveButtonState();
   }
 
-  // Parent click → select + fetch child options (no full reload)
+  /* ---------------------------- child group render ------------------------- */
+  function renderChildGroup(parentKey, childKey, options) {
+    const host = qs("#children_for_" + safe(parentKey));
+    if (!host) return;
+
+    const cards = options.map(opt => `
+      <div class="label-card"
+           id="card_${safe(childKey)}_${opt.id}"
+           data-group="${childKey}"
+           data-value="${opt.id}"
+           tabindex="0"
+           onclick="selectChild('${childKey}','${opt.id}')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); this.click();}">
+        ${ (opt.image || opt.image_url) ? `<img src="${opt.image || opt.image_url}" alt="${opt.display}">` : "" } <!-- FIX -->
+        <div><strong>${opt.display || opt.id}</strong></div>
+        ${opt.description ? `<div class="label-description">${opt.description}</div>` : ""}
+      </div>
+    `).join("");
+
+    host.innerHTML = `
+      <div class="label-group-box" id="group_${safe(childKey)}">
+        <div class="label-title">${titleCase(childKey.split('/').slice(-1)[0])}</div>
+        <input type="hidden"
+               name="selected_id_${childKey}"
+               id="input_${safe(childKey)}"
+               class="group-selection-tracker"
+               value="">
+        <div class="label-options">${cards}</div>
+        <div class="confidence-slider">
+          <label for="confidence_${safe(childKey)}">🎯 Confidence:</label><br>
+          <input type="range"
+                 name="confidence_${childKey}"
+                 id="confidence_${safe(childKey)}"
+                 min="0" max="100" value="100">
+          <div class="confidence-display">
+            <span id="confidence_display_${safe(childKey)}">100%</span>
+            <span id="confidence_level_${safe(childKey)}"></span>
+          </div>
+        </div>
+        <div id="bios_for_${safe(childKey)}"></div>
+      </div>
+    `;
+    initConfidenceFor(childKey);
+    updateSaveButtonState();
+  }
+
+  /* ---------------------------- parent/child clicks ------------------------ */
   function selectLabel(groupKey, labelId, isChild){
-    const safe = makeSafeKey(groupKey);
+    qsa(`.label-card[data-group="${groupKey}"]`).forEach(c => c.classList.remove("selected"));
+    const card = qs(`#card_${safe(groupKey)}_${cssEscape(labelId)}`); // FIX
+    if (card) card.classList.add("selected");
 
-    // Visual toggle for this group
-    document.querySelectorAll(`.label-card[data-group="${groupKey}"]`).forEach(c => c.classList.remove('selected'));
-    const card = document.getElementById(`card_${safe}_${labelId}`);
-    if (card) card.classList.add('selected');
-
-    // Set hidden selection
-    const hidden = document.getElementById(`input_${safe}`);
-    if (hidden) hidden.value = labelId;
+    const hid = qs("#input_" + safe(groupKey));
+    if (hid) hid.value = labelId;
 
     updateSaveButtonState();
 
-    if (isChild) {
-      // A child group shouldn’t fetch more children here; it will fetch its bios
-      fetchBiosFor(groupKey);
-      return;
-    }
+    if (isChild) { fetchBiosFor(groupKey); return; }
 
-    // Parent: fetch child group
     fetch("/api/labels/children", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
-        type_name: "{{ current_type }}",
-        group_key: groupKey,
-        selected_id: labelId
-      })
-    }).then(r => r.json()).then(json => {
-      if (!json.ok) return;
-      if (json.child_key && Array.isArray(json.options)) {
+      body: JSON.stringify({ type_name: CURRENT_TYPE, group_key: groupKey, selected_id: labelId })
+    })
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(json => {
+      if (!json || !json.ok) return;
+      if (json.child_key && Array.isArray(json.options) && json.options.length) {
         renderChildGroup(groupKey, json.child_key, json.options);
-        // optional: scroll into view of new child
         setTimeout(() => {
-          const el = document.getElementById(`group_${makeSafeKey(json.child_key)}`);
+          const el = qs("#group_" + safe(json.child_key));
           if (el) el.scrollIntoView({behavior: "smooth", block: "start"});
-        }, 50);
+        }, 30);
       } else {
-        // no children → clear any previous injected child/bios blocks
-        const container = document.getElementById(`children_for_${safe}`);
-        if (container) container.innerHTML = '';
-        const biosC = document.getElementById(`bios_for_${safe}`);
-        if (biosC) biosC.innerHTML = '';
+        const cHost = qs("#children_for_" + safe(groupKey));
+        if (cHost) cHost.innerHTML = "";
+        const bHost = qs("#bios_for_" + safe(groupKey));
+        if (bHost) bHost.innerHTML = "";
       }
-    }).catch(()=>{});
+    })
+    .catch(()=>{});
   }
 
-  // Child click → select + fetch bios for this child (no reload)
   function selectChild(groupKey, labelId){
-    const safe = makeSafeKey(groupKey);
+    qsa(`.label-card[data-group="${groupKey}"]`).forEach(c => c.classList.remove("selected"));
+    const card = qs(`#card_${safe(groupKey)}_${cssEscape(labelId)}`); // FIX
+    if (card) card.classList.add("selected");
 
-    // Visual toggle
-    document.querySelectorAll(`.label-card[data-group="${groupKey}"]`).forEach(c => c.classList.remove('selected'));
-    const card = document.getElementById(`card_${safe}_${labelId}`);
-    if (card) card.classList.add('selected');
-
-    // Set hidden input
-    const hidden = document.getElementById(`input_${safe}`);
-    if (hidden) hidden.value = labelId;
+    const hid = qs("#input_" + safe(groupKey));
+    if (hid) hid.value = labelId;
 
     updateSaveButtonState();
-
-    // Now fetch bios for this child group
     fetchBiosFor(groupKey);
   }
 
   function fetchBiosFor(groupKey){
-    const selections = collectSelections();
-
     fetch("/api/labels/suggest_biographies", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
-        type_name: "{{ current_type }}",
-        group_key: groupKey,
-        selections: selections
-      })
-    }).then(r => r.json()).then(json => {
-      if (!json.ok) return;
-      renderBios(groupKey, json.bios || []);
-    }).catch(()=>{});
+      body: JSON.stringify({ type_name: CURRENT_TYPE, group_key: groupKey, selections: collectSelectionsMap() })
+    })
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(json => { if (json && json.ok) renderBios(groupKey, json.bios || []); })
+    .catch(()=>{});
   }
 
-  // ----- existing helpers (unchanged) -----
-  function updateConfidence(rawKey){
-    const safe = makeSafeKey(rawKey);
-    const slider  = document.getElementById('confidence_'+safe);
-    const display = document.getElementById('confidence_display_'+safe);
-    const level   = document.getElementById('confidence_level_'+safe);
-    if(!slider||!display||!level) return;
-    const v = parseInt(slider.value||0,10);
-    display.textContent = v+'%';
-    if(v===100){ level.textContent='(Exact)'; level.style.color='green'; }
-    else if(v>=67){ level.textContent='(High)'; level.style.color='green'; }
-    else if(v>=34){ level.textContent='(Medium)'; level.style.color='orange'; }
-    else { level.textContent='(Low)'; level.style.color='red'; }
+  /* ------------------------ search & bio tile interactions ----------------- */
+  function filterLabels(input, groupKey){
+    const q = (input.value||"").toLowerCase();
+    let shown = 0;
+    qsa(`.label-card[data-group="${groupKey}"]`).forEach(card=>{
+      const t = card.innerText.toLowerCase();
+      const match = t.includes(q);
+      if (match && shown < 12){ card.style.display='flex'; shown++; }
+      else { card.style.display='none'; }
+    });
   }
 
   function toggleBioSelection(card, hiddenId){
-    const hidden = document.getElementById(hiddenId);
+    const hidden = qs("#" + hiddenId);
     if(!hidden) return;
-    const val = card.getAttribute('data-value');
-    const group = card.getAttribute('data-group');
-    const cards = document.querySelectorAll(`.label-card[data-group="${group}"]`);
+    const val   = card.getAttribute("data-value");
+    const group = card.getAttribute("data-group");
+    const cards = qsa(`.label-card[data-group="${group}"]`);
+
     if(hidden.value === val){
-      hidden.value = '';
-      card.classList.remove('selected');
+      hidden.value = "";
+      card.classList.remove("selected");
     } else {
-      cards.forEach(c=>c.classList.remove('selected'));
+      cards.forEach(c=>c.classList.remove("selected"));
       hidden.value = val;
-      card.classList.add('selected');
+      card.classList.add("selected");
     }
     updateSaveButtonState();
   }
 
-  function filterLabels(input, groupKey){
-    const q = (input.value||'').toLowerCase();
-    const cards = document.querySelectorAll(`.label-card[data-group="${groupKey}"]`);
-    let shown = 0;
-    cards.forEach(card=>{
-      const t = card.innerText.toLowerCase();
-      const match = t.includes(q);
-      if(match && shown < 12){ card.style.display='flex'; shown++; } else { card.style.display='none'; }
-    });
-  }
-
+  /* ------------------------------ save button UX --------------------------- */
   function updateSaveButtonState(){
     const trackers = document.querySelectorAll('.group-selection-tracker');
-    const gpt = document.getElementById('gpt_selected_labels_json');
+    const gptEl = document.getElementById('gpt_selected_labels_json');
     const btn = document.getElementById('saveButton');
+
     const hasManual = Array.from(trackers).some(i => (i.value||'').trim() !== '');
     let hasGPT = false;
-    try { hasGPT = Array.isArray(JSON.parse(gpt?.value || '[]')) && JSON.parse(gpt.value).length>0; } catch(_) {}
+    try {
+      const arr = JSON.parse(gptEl?.value || '[]');
+      hasGPT = Array.isArray(arr) && arr.length > 0;
+    } catch(_) {}
+
     if(!btn) return;
     if(hasManual || hasGPT){
       btn.textContent = '✅ Save All Selections';
@@ -450,14 +493,156 @@
     }
   }
 
-  // Init confidence displays
-  document.querySelectorAll("[id^='confidence_']").forEach(el=>{
-    const id = el.id.replace('confidence_','');
-    updateConfidence(id.replaceAll('__','/'));
-  });
-  updateSaveButtonState();
-</script>
+  /* ---------------------------- GPT suggestions UI ------------------------- */
+  function renderGptSuggestions(items) {
+    const wrap = document.getElementById('gptSuggestions');
+    if (!wrap) return;
 
+    wrap.innerHTML = '';
+    const chosen = new Map();
+
+    function syncHidden() {
+      const arr = Array.from(chosen.values());
+      document.getElementById('gpt_selected_labels_json').value = JSON.stringify(arr);
+      updateSaveButtonState?.();
+    }
+
+    (items || []).forEach(s => {
+      const sug = {
+        id: s.id,
+        label_type: s.label_type || s.group_key || s.type || '',
+        confidence: Number.isFinite(s.confidence) ? s.confidence : 100,
+        display: s.display || s.id,
+        description: s.description || ''
+      };
+
+      const card = document.createElement('div');
+      card.className = 'sugg-card';
+      card.setAttribute('role', 'button');
+      card.innerHTML = `
+        <div><strong>${sug.display}</strong></div>
+        ${sug.description ? `<div class="label-description">${sug.description}</div>` : ''}
+      `;
+
+      card.onclick = async () => {
+        const key = `${sug.label_type||''}::${sug.id}`;
+        const wasSelected = chosen.has(key);
+        if (wasSelected) {
+          chosen.delete(key);
+          card.classList.remove('selected');
+        } else {
+          chosen.set(key, sug);
+          card.classList.add('selected');
+          await applySuggestionToGroups(sug); // try to click the real option
+        }
+        syncHidden();
+      };
+
+      wrap.appendChild(card);
+    });
+
+    document.getElementById('gpt_selected_labels_json').value = '[]';
+    updateSaveButtonState?.();
+  }
+
+  async function suggestLabels(currentType, groupPrefixes = []) {
+    const btn  = qs("#gptSuggestBtn");
+    const hint = qs("#gptHint");
+    const promptEl = qs("#labelPromptInput");
+    const prompt = (promptEl?.value || "").trim();
+
+    if (!prompt) { alert("Tell me a bit about this " + currentType.replaceAll("_"," ") + " first."); return; }
+
+    try {
+      if (btn) btn.disabled = true;
+      if (hint) hint.style.display = "inline";
+
+      const res = await fetch("/api/suggest_labels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: currentType,
+          prompt,
+          context: { selections: collectCurrentSelectionsList() },
+          group_prefixes: groupPrefixes
+        })
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      renderGptSuggestions(Array.isArray(data.labels) ? data.labels : []);
+    } catch(e){
+      console.error(e);
+      alert("Sorry — could not get suggestions.");
+    } finally {
+      if (btn) btn.disabled = false;
+      if (hint) hint.style.display = "none";
+    }
+  }
+  window.suggestLabels = suggestLabels;
+
+  /* ------------------------- apply suggestion to UI ------------------------ */
+  async function applySuggestionToGroups(sug) {
+    if (!sug || !sug.id) return false;
+
+    // 1) Try any visible card first
+    let direct = document.querySelector(`.label-card[data-value="${cssEscape(sug.id)}"]`);
+    if (direct) { direct.click(); return true; }
+
+    // 2) Ask the server where this id lives (works cross-type + nested)
+    const res = await fetch('/api/labels/resolve_option', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ type_name: CURRENT_TYPE, option_id: sug.id }) // FIX
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    if (!data.ok) return false;
+
+    // If parent must be expanded first
+    if (data.parent_id) {
+      const rawGroup = data.group_key.split('/').slice(0, -1).join('/') || data.group_key;
+      const parentCard = document.querySelector(`#card_${safe(rawGroup)}_${cssEscape(data.parent_id)}`); // FIX
+      if (parentCard) parentCard.click();
+
+      const targetKey  = data.child_key || data.group_key;
+      const targetSafe = safe(targetKey);
+      const targetId   = data.child_id || sug.id;
+
+      let tries = 0;
+      const t = setInterval(() => {
+        const c = document.querySelector(`#card_${targetSafe}_${cssEscape(targetId)}`);
+        if (c) { c.click(); clearInterval(t); }
+        if (++tries > 20) clearInterval(t);
+      }, 100);
+      return true;
+    }
+
+    // Direct group match
+    if (data.group_key) {
+      const card = document.querySelector(`#card_${safe(data.group_key)}_${cssEscape(sug.id)}`); // FIX
+      if (card) { card.click(); return true; }
+    }
+    return false;
+  }
+
+  /* ------------------------------- bootstrapping --------------------------- */
+  document.addEventListener("DOMContentLoaded", () => {
+    qsa("[id^='confidence_']").forEach(el=>{
+      const id = el.id.replace("confidence_","");
+      updateConfidence(uns(id));
+    });
+    updateSaveButtonState();
+
+    qsa(".label-card[data-group]").forEach(el=>{
+      el.setAttribute("tabindex","0");
+      if(!el.getAttribute("onkeydown")){
+        el.addEventListener("keydown", e=>{
+          if(e.key==="Enter"||e.key===" "){ e.preventDefault(); el.click(); }
+        });
+      }
+    });
+  });
+</script>
 
 </body>
 
