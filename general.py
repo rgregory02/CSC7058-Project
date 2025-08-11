@@ -479,7 +479,126 @@ def api_suggest_labels():
         print("[/api/suggest_labels] fatal:", e)
         return jsonify({"labels": []}), 500
 
-# --- in your Flask app (routes) ---
+# ---------- Bootstrap for UI dropdowns ----------
+@app.get("/api/labels/admin/bootstrap")
+def api_labels_admin_bootstrap():
+    type_name = (request.args.get("type") or "").strip()
+    if not type_name:
+        return {"ok": False, "error": "missing_type"}, 400
+
+    base = os.path.join("types", type_name, "labels")
+    os.makedirs(base, exist_ok=True)
+
+    # Collect groups using your existing helper
+    try:
+        groups = collect_label_groups(base, type_name) or []
+    except Exception:
+        groups = []
+
+    # Flatten all group keys; top-level keys for "parent" dropdown
+    all_group_keys = [g.get("key") for g in groups if g.get("key")]
+    top_level = sorted({k.split("/")[0] for k in all_group_keys})
+
+    # Try to read property templates from a schema (optional)
+    props = []
+    schema_path = os.path.join("types", type_name, "type.json")
+    try:
+        schema = load_json_as_dict(schema_path) or {}
+        # support either {"properties": {...}} or {"properties": [{"key":...}]}
+        raw = schema.get("properties") or {}
+        if isinstance(raw, dict):
+            props = sorted(list(raw.keys()))
+        elif isinstance(raw, list):
+            props = sorted([p.get("key") for p in raw if isinstance(p, dict) and p.get("key")])
+    except Exception:
+        props = []
+
+    # List all type folders for cross-type refer_to
+    try:
+        type_folders = [d for d in os.listdir("types") if os.path.isdir(os.path.join("types", d))]
+    except Exception:
+        type_folders = []
+
+    return {
+        "ok": True,
+        "type": type_name,
+        "types": sorted(type_folders),
+        "groups": all_group_keys,
+        "top_level_groups": top_level,
+        "property_templates": props,
+    }
+
+# ---------- Create a NEW property (group) with optional refer_to ----------
+@app.post("/api/labels/admin/create_group")
+def api_labels_admin_create_group():
+    p = request.get_json(silent=True) or {}
+    type_name = _slugify(p.get("type_name"))
+    key       = _slugify(p.get("key"))                 # e.g. "hair_color"
+    label     = (p.get("label") or "").strip()
+    desc      = (p.get("description") or "").strip()
+    refer_to  = p.get("refer_to")                      # e.g. {"source": "biographies", "type": "person"}
+    try:
+        order = int(p.get("order", 999))
+    except Exception:
+        order = 999
+
+    if not type_name or not key:
+        return {"ok": False, "error": "missing_fields"}, 400
+
+    base_desc = os.path.join("types", type_name, "labels", key + ".json")
+    if os.path.exists(base_desc):
+        return {"ok": False, "error": "group_exists"}, 409
+
+    data = {"label": label or key.replace("_"," ").title(), "description": desc, "order": order}
+    # allow linking a property to other biographies
+    if isinstance(refer_to, dict):
+        src = (refer_to.get("source") or "").strip().lower()
+        rtype = _slugify(refer_to.get("type") or "")
+        if src == "biographies" and rtype:
+            data["refer_to"] = {"source": "biographies", "type": rtype}
+
+    _safe_json_write(base_desc, data)
+    os.makedirs(os.path.join("types", type_name, "labels", key), exist_ok=True)
+    return {"ok": True, "group_key": key}
+
+# ---------- Create a CHILD group under existing parent (supports refer_to) ----------
+@app.post("/api/labels/admin/create_child_group")
+def api_labels_admin_create_child_group():
+    p = request.get_json(silent=True) or {}
+    type_name  = _slugify(p.get("type_name"))
+    parent_key = _slugify(p.get("parent_key"))
+    child_key  = _slugify(p.get("child_key"))
+    label      = (p.get("label") or "").strip()
+    desc       = (p.get("description") or "").strip()
+    refer_to   = p.get("refer_to")
+    try:
+        order = int(p.get("order", 999))
+    except Exception:
+        order = 999
+
+    if not type_name or not parent_key or not child_key:
+        return {"ok": False, "error": "missing_fields"}, 400
+
+    parent_folder = os.path.join("types", type_name, "labels", parent_key)
+    if not os.path.isdir(parent_folder):
+        return {"ok": False, "error": "parent_missing"}, 404
+
+    child_desc = os.path.join(parent_folder, f"{child_key}.json")
+    if os.path.exists(child_desc):
+        return {"ok": False, "error": "child_exists"}, 409
+
+    data = {"label": label or child_key.replace("_"," ").title(), "description": desc, "order": order}
+    if isinstance(refer_to, dict):
+        src = (refer_to.get("source") or "").strip().lower()
+        rtype = _slugify(refer_to.get("type") or "")
+        if src == "biographies" and rtype:
+            data["refer_to"] = {"source": "biographies", "type": rtype}
+
+    _safe_json_write(child_desc, data)
+    os.makedirs(os.path.join(parent_folder, child_key), exist_ok=True)
+    return {"ok": True, "child_key": f"{parent_key}/{child_key}"}
+
+
 @app.post("/api/labels/resolve_option")
 def api_resolve_option():
     """
@@ -617,9 +736,6 @@ def api_resolve_option():
     return jsonify(ok=False)
 
 
-
-
-# ---------- AJAX: get child options for a parent selection ----------
 @app.route("/api/labels/children", methods=["POST"])
 def api_labels_children():
     """
@@ -704,7 +820,6 @@ def api_labels_children():
         return jsonify({"ok": False, "reason": "Server error"}), 500
 
 
-# ---------- AJAX: suggest biographies for a (child) selection ----------
 @app.route("/api/labels/suggest_biographies", methods=["POST"])
 def api_suggest_biographies():
     """
@@ -1246,8 +1361,41 @@ def type_labels_api(type_name):
     groups = collect_label_groups(base, type_name)
     return jsonify({"type": type_name, "groups": groups})
 
+@app.post("/api/labels/admin/create_option")
+def api_labels_admin_create_option():
+    p = request.get_json(silent=True) or {}
+    type_name = _slugify(p.get("type_name"))
+    group_key = _slugify(p.get("group_key"))             # e.g. "hair_color"
+    opt_id    = _slugify(p.get("id"))                    # e.g. "brown_hair"
+    display   = (p.get("display") or "").strip()
+    desc      = (p.get("description") or "").strip()
+    image     = (p.get("image") or p.get("image_url") or "").strip()
+    try:
+        order = int(p.get("order", 999))
+    except Exception:
+        order = 999
 
+    if not type_name or not group_key or not opt_id:
+        return {"ok": False, "error": "missing_fields"}, 400
 
+    folder = os.path.join("types", type_name, "labels", group_key)
+    if not os.path.isdir(folder):
+        return {"ok": False, "error": "group_missing"}, 404
+
+    path = os.path.join(folder, f"{opt_id}.json")
+    if os.path.exists(path):
+        return {"ok": False, "error": "option_exists"}, 409
+
+    data = {
+        "id": opt_id,
+        "display": display or opt_id.replace("_"," "),
+        "description": desc,
+        "order": order
+    }
+    if image:
+        data["image_url"] = image
+    _safe_json_write(path, data)
+    return {"ok": True, "id": opt_id}
 
 @app.route("/general_iframe_wizard", methods=["GET", "POST"])
 def general_iframe_wizard():
@@ -1816,9 +1964,23 @@ def biography_view(type_name, bio_id):
     )
 
 
-def slugify_key(s: str) -> str:
-    import re
-    return re.sub(r"[^a-z0-9_]+", "_", (s or "").lower()).strip("_")
+def _slugify(s: str) -> str:
+    s = (s or "").strip().lower()
+    s = re.sub(r"[^a-z0-9/_-]+", "_", s)  # allow _, -, /
+    s = re.sub(r"_+", "_", s).strip("_")
+    return s
+
+def _slugify_key(s: str) -> str:
+    s = (s or "").strip().lower()
+    s = re.sub(r"[^a-z0-9/_-]+", "_", s)  # allow _, -, /
+    s = re.sub(r"_+", "_", s).strip("_")
+    return s
+
+
+def _safe_json_write(path: str, data: dict):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
 # ---------- Properties: list ----------
 @app.route("/type/<type_name>/properties")
@@ -1856,7 +2018,7 @@ def new_property(type_name):
         # Name -> key (auto if key blank)
         name = (request.form.get("name") or "").strip()
         raw_key = (request.form.get("key") or "").strip().lower()
-        key = slugify_key(raw_key or name)
+        key = _slugify_key(raw_key or name)
         if not key:
             flash("Please provide a Name (the key will be auto‑generated) or a valid Key.", "error")
             return redirect(request.url)
@@ -1932,7 +2094,7 @@ def edit_property(type_name, prop_key):
         # Allow rename of key (auto‑slug if blank)
         name = (request.form.get("name") or "").strip() or prop.get("name") or prop_key.replace("_", " ").title()
         raw_new_key = (request.form.get("key") or prop_key).strip().lower()
-        new_key = slugify_key(raw_new_key or name) or prop_key
+        new_key = _slugify_key(raw_new_key or name) or prop_key
 
         # Start from existing to avoid losing unknown future fields
         payload = dict(prop)
@@ -3097,8 +3259,8 @@ def add_label(type_name, subfolder_name):
 
     def _slug(s: str) -> str:
         try:
-            from utils import slugify_key  # if you already have it
-            return slugify_key(s)
+            from utils import _slugify_key  # if you already have it
+            return _slugify_key(s)
         except Exception:
             import re
             return re.sub(r'[^a-z0-9_]+', '_', (s or '').lower()).strip('_')
@@ -3223,7 +3385,7 @@ def create_subfolder(type_name):
         group_desc    = (request.form.get("subfolder_desc") or "").strip()
         internal_name = (request.form.get("subfolder_name") or "").strip()
         if not internal_name and display_label:
-            internal_name = slugify_key(display_label)
+            internal_name = _slugify_key(display_label)
 
         if not display_label:
             flash("Display label is required.", "error")
@@ -3316,13 +3478,13 @@ def create_subfolder(type_name):
 
                     # optional stub bio
                     if request.form.get("make_stub_bio") == "on":
-                        child_bio_dir = os.path.join(bios_base_path, slugify_key(raw_label_name))
+                        child_bio_dir = os.path.join(bios_base_path, _slugify_key(raw_label_name))
                         os.makedirs(child_bio_dir, exist_ok=True)
-                        stub = os.path.join(child_bio_dir, f"{slugify_key(raw_label_name)}.json")
+                        stub = os.path.join(child_bio_dir, f"{_slugify_key(raw_label_name)}.json")
                         if not os.path.exists(stub):
                             with open(stub, "w") as f:
                                 json.dump({
-                                    "id": slugify_key(raw_label_name),
+                                    "id": _slugify_key(raw_label_name),
                                     "name": item["display"],
                                     "description": f"Auto-generated biography stub for label: {item['display']}",
                                     "source": "auto",

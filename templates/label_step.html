@@ -189,6 +189,124 @@
       </div>
     {% endfor %}
 
+<div class="label-group-box" style="border-style:dashed">
+  <h3>🛠️ Add Labels Inline</h3>
+  <p class="muted">
+    Writes to <code>types/{{ current_type }}/labels/...</code> and appears immediately after a short reload.
+  </p>
+
+  <details style="margin:8px 0" open>
+    <summary><strong>➕ New Property (group)</strong></summary>
+    <div style="margin-top:10px; display:grid; gap:8px;">
+      <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr;">
+        <div>
+          <label class="muted">From template</label>
+          <select id="tmpl_group_key" style="width:100%"></select>
+        </div>
+        <div>
+          <label class="muted">…or custom key</label>
+          <input id="new_group_key" placeholder="key (e.g. hair_color)" />
+        </div>
+      </div>
+      <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr;">
+        <input id="new_group_label" placeholder="Label (e.g. Hair color)">
+        <input id="new_group_desc" placeholder="Description">
+      </div>
+
+      <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr 1fr;">
+        <div>
+          <label class="muted">Source</label>
+          <select id="new_group_source" style="width:100%">
+            <option value="options" selected>Options in folder</option>
+            <option value="biographies">Link to biographies</option>
+          </select>
+        </div>
+        <div>
+          <label class="muted">Biography type</label>
+          <select id="new_group_refer_type" style="width:100%" disabled></select>
+          <small class="muted">“Self” will select {{ current_type }}</small>
+        </div>
+        <div>
+          <label class="muted">Order</label>
+          <input id="new_group_order" type="number" value="999" placeholder="Order">
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; align-items:center;">
+        <button type="button" class="primary-button" onclick="adminCreateGroupSmart()">Create Group</button>
+        <button type="button" onclick="adminUseSelfType()" class="clear-btn">Use self type</button>
+      </div>
+      <div id="adminStatus_group" class="muted"></div>
+    </div>
+  </details>
+
+  <details style="margin:8px 0">
+    <summary><strong>➕ New Option in Existing Group</strong></summary>
+    <div style="margin-top:10px; display:grid; gap:8px;">
+      <div>
+        <label class="muted">Group</label>
+        <select id="opt_group_key" style="width:100%"></select>
+      </div>
+      <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr;">
+        <input id="opt_id" placeholder="option id (e.g. brown_hair)">
+        <input id="opt_display" placeholder="Display (Brown hair)">
+      </div>
+      <input id="opt_desc" placeholder="Description">
+      <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr;">
+        <input id="opt_image" placeholder="Image URL (optional)">
+        <input id="opt_order" type="number" value="999" placeholder="Order">
+      </div>
+      <button type="button" class="primary-button" onclick="adminCreateOption()">Create Option</button>
+      <div id="adminStatus_option" class="muted"></div>
+    </div>
+  </details>
+
+  <details style="margin:8px 0">
+    <summary><strong>🪜 New Child Group under Parent</strong></summary>
+    <div style="margin-top:10px; display:grid; gap:8px;">
+      <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr;">
+        <div>
+          <label class="muted">Parent (top-level)</label>
+          <select id="child_parent_key" style="width:100%"></select>
+        </div>
+        <div>
+          <label class="muted">Child key</label>
+          <input id="child_key" placeholder="child key (e.g. hospital)">
+        </div>
+      </div>
+      <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr;">
+        <input id="child_label" placeholder="Child Label">
+        <input id="child_desc" placeholder="Description">
+      </div>
+
+      <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr 1fr;">
+        <div>
+          <label class="muted">Source</label>
+          <select id="child_source" style="width:100%">
+            <option value="options" selected>Options in folder</option>
+            <option value="biographies">Link to biographies</option>
+          </select>
+        </div>
+        <div>
+          <label class="muted">Biography type</label>
+          <select id="child_refer_type" style="width:100%" disabled></select>
+        </div>
+        <div>
+          <label class="muted">Order</label>
+          <input id="child_order" type="number" value="999" placeholder="Order">
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; align-items:center;">
+        <button type="button" class="primary-button" onclick="adminCreateChildSmart()">Create Child Group</button>
+        <button type="button" onclick="adminUseSelfTypeChild()" class="clear-btn">Use self type</button>
+      </div>
+      <div id="adminStatus_child" class="muted"></div>
+    </div>
+  </details>
+</div>
+
+
     <!-- GPT assist -->
     <div class="label-group-box">
       <h3>🤖 Need help choosing labels?</h3>
@@ -211,10 +329,7 @@
         <span id="gptHint" class="muted" style="display:none;">Generating…</span>
       </div>
 
-      <!-- Suggestions render here -->
       <div id="gptSuggestions" class="label-options" style="margin-top:12px;"></div>
-
-      <!-- This is what gets POSTed back and saved -->
       <input type="hidden" name="gpt_selected_labels_json" id="gpt_selected_labels_json" value="[]">
     </div>
 
@@ -259,6 +374,165 @@
     const el = qs("#confidence_" + sk);
     if (el) el.addEventListener("input", () => updateConfidence(key));
   }
+
+let BOOT = { types: [], groups: [], top_level_groups: [], property_templates: [] };
+
+  async function loadAdminBootstrap(){
+    try{
+      const res = await fetch(`/api/labels/admin/bootstrap?type={{ current_type }}`);
+      const data = await res.json();
+      if(!data.ok) throw new Error(data.error || 'bootstrap failed');
+      BOOT = data;
+
+      // property templates
+      const tmplSel = document.getElementById('tmpl_group_key');
+      tmplSel.innerHTML = `<option value="">(choose a template)</option>` +
+        (data.property_templates || []).map(k => `<option value="${k}">${k}</option>`).join('');
+
+      // existing groups (all) for options
+      const optGroupSel = document.getElementById('opt_group_key');
+      optGroupSel.innerHTML = (data.groups || []).map(k => `<option value="${k}">${k}</option>`).join('');
+
+      // top-level parents for child creation
+      const parentSel = document.getElementById('child_parent_key');
+      parentSel.innerHTML = (data.top_level_groups || []).map(k => `<option value="${k}">${k}</option>`).join('');
+
+      // all types into refer_to <select>
+      const referTypeSel = document.getElementById('new_group_refer_type');
+      referTypeSel.innerHTML = data.types.map(t => `<option value="${t}">${t}</option>`).join('');
+      const referTypeChildSel = document.getElementById('child_refer_type');
+      referTypeChildSel.innerHTML = data.types.map(t => `<option value="${t}">${t}</option>`).join('');
+    }catch(e){
+      console.error(e);
+    }
+  }
+
+  // Toggle enable for refer_to type when biographies is chosen
+  function wireSourceToggles(){
+    const srcSel = document.getElementById('new_group_source');
+    const rSel  = document.getElementById('new_group_refer_type');
+    const srcChildSel = document.getElementById('child_source');
+    const rChildSel   = document.getElementById('child_refer_type');
+
+    function refresh() {
+      rSel.disabled = (srcSel.value !== 'biographies');
+      rChildSel.disabled = (srcChildSel.value !== 'biographies');
+    }
+    srcSel.addEventListener('change', refresh);
+    srcChildSel.addEventListener('change', refresh);
+    refresh();
+  }
+
+  // Convenience: set refer_to type to self
+  function adminUseSelfType(){
+    const rSel  = document.getElementById('new_group_refer_type');
+    const srcSel = document.getElementById('new_group_source');
+    srcSel.value = 'biographies';
+    rSel.disabled = false;
+    rSel.value = "{{ current_type }}";
+  }
+  function adminUseSelfTypeChild(){
+    const rSel  = document.getElementById('child_refer_type');
+    const srcSel = document.getElementById('child_source');
+    srcSel.value = 'biographies';
+    rSel.disabled = false;
+    rSel.value = "{{ current_type }}";
+  }
+
+  // Status helpers
+  function _msgAt(id, s, ok=true){
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.textContent = s;
+    el.style.color = ok ? "green" : "crimson";
+  }
+
+  // Create group using template/custom + optional refer_to
+  async function adminCreateGroupSmart(){
+    const key = (document.getElementById('new_group_key').value || '').trim() ||
+                (document.getElementById('tmpl_group_key').value || '').trim();
+    const label = (document.getElementById('new_group_label').value || '').trim();
+    const desc  = (document.getElementById('new_group_desc').value || '').trim();
+    const order = parseInt(document.getElementById('new_group_order').value || '999', 10);
+    const src   = document.getElementById('new_group_source').value;
+    const rtype = document.getElementById('new_group_refer_type').value;
+
+    if(!key){ _msgAt('adminStatus_group', 'Please choose a template or enter a key.', false); return; }
+
+    const payload = { type_name: "{{ current_type }}", key, label, description: desc, order };
+    if (src === 'biographies' && rtype) payload.refer_to = { source: 'biographies', type: rtype };
+
+    try{
+      const res = await fetch('/api/labels/admin/create_group', {
+        method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if(!res.ok || !data.ok) throw new Error(data.error || res.statusText);
+      _msgAt('adminStatus_group', 'Group created. Reloading…', true);
+      setTimeout(()=>location.reload(), 600);
+    }catch(e){
+      _msgAt('adminStatus_group', 'Create group failed: ' + e.message, false);
+    }
+  }
+
+  // Create option (unchanged except group is a dropdown)
+  async function adminCreateOption(){
+    const group_key = document.getElementById('opt_group_key').value;
+    const id        = document.getElementById('opt_id').value.trim();
+    const display   = document.getElementById('opt_display').value.trim();
+    const desc      = document.getElementById('opt_desc').value.trim();
+    const order     = parseInt(document.getElementById('opt_order').value || '999', 10);
+    const image     = document.getElementById('opt_image').value.trim();
+
+    if(!group_key || !id){ _msgAt('adminStatus_option','Group and id are required.', false); return; }
+
+    try{
+      const res = await fetch('/api/labels/admin/create_option', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ type_name: "{{ current_type }}", group_key, id, display, description: desc, order, image })
+      });
+      const data = await res.json();
+      if(!res.ok || !data.ok) throw new Error(data.error || res.statusText);
+      _msgAt('adminStatus_option','Option created. Reloading…', true);
+      setTimeout(()=>location.reload(), 600);
+    }catch(e){
+      _msgAt('adminStatus_option','Create option failed: ' + e.message, false);
+    }
+  }
+
+  // Create child group with parent dropdown + optional refer_to
+  async function adminCreateChildSmart(){
+    const parent_key = document.getElementById('child_parent_key').value;
+    const child_key  = document.getElementById('child_key').value.trim();
+    const label      = document.getElementById('child_label').value.trim();
+    const desc       = document.getElementById('child_desc').value.trim();
+    const order      = parseInt(document.getElementById('child_order').value || '999', 10);
+    const src        = document.getElementById('child_source').value;
+    const rtype      = document.getElementById('child_refer_type').value;
+
+    if(!parent_key || !child_key){ _msgAt('adminStatus_child','Parent and child key required.', false); return; }
+
+    const payload = { type_name: "{{ current_type }}", parent_key, child_key, label, description: desc, order };
+    if (src === 'biographies' && rtype) payload.refer_to = { source: 'biographies', type: rtype };
+
+    try{
+      const res = await fetch('/api/labels/admin/create_child_group', {
+        method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if(!res.ok || !data.ok) throw new Error(data.error || res.statusText);
+      _msgAt('adminStatus_child','Child group created. Reloading…', true);
+      setTimeout(()=>location.reload(), 600);
+    }catch(e){
+      _msgAt('adminStatus_child','Create child failed: ' + e.message, false);
+    }
+  }
+
+  // Kick off the bootstrap on load
+  document.addEventListener("DOMContentLoaded", () => {
+    loadAdminBootstrap();
+    wireSourceToggles();
+  });
 
   /* ------------------------------ bios widget ------------------------------ */
   function renderBios(groupKey, bios) {
@@ -359,14 +633,10 @@
 
   /* ------------------------- clear/toggle helpers -------------------------- */
   function clearGroupUI(groupKey) {
-    // remove selection styles
     qsa(`.label-card[data-group="${groupKey}"]`).forEach(c => c.classList.remove("selected"));
-    // clear hidden value
     const hid = qs("#input_" + safe(groupKey));
     if (hid) hid.value = "";
-    // reset confidence slider display (keep slider value as-is)
     updateConfidence(groupKey);
-    // clear children + bios sections for this group
     const cHost = qs("#children_for_" + safe(groupKey));
     if (cHost) cHost.innerHTML = "";
     const bHost = qs("#bios_for_" + safe(groupKey));
@@ -378,13 +648,8 @@
     const hid = qs("#input_" + safe(groupKey));
     const current = (hid && hid.value) ? String(hid.value) : "";
 
-    // Toggle off if clicking the same card again
-    if (current === String(labelId)) {
-      clearGroupUI(groupKey);
-      return;
-    }
+    if (current === String(labelId)) { clearGroupUI(groupKey); return; }
 
-    // Otherwise select this card
     qsa(`.label-card[data-group="${groupKey}"]`).forEach(c => c.classList.remove("selected"));
     const card = qs(`#card_${safe(groupKey)}_${cssEscape(labelId)}`);
     if (card) card.classList.add("selected");
@@ -392,12 +657,8 @@
 
     updateSaveButtonState();
 
-    if (isChild) {
-      fetchBiosFor(groupKey);
-      return;
-    }
+    if (isChild) { fetchBiosFor(groupKey); return; }
 
-    // Parent: wipe previous children/bios before loading new ones
     const cHost = qs("#children_for_" + safe(groupKey));
     if (cHost) cHost.innerHTML = "";
     const bHost = qs("#bios_for_" + safe(groupKey));
@@ -425,12 +686,7 @@
   function selectChild(groupKey, labelId){
     const hid = qs("#input_" + safe(groupKey));
     const current = (hid && hid.value) ? String(hid.value) : "";
-
-    // Toggle off on second click
-    if (current === String(labelId)) {
-      clearGroupUI(groupKey);
-      return;
-    }
+    if (current === String(labelId)) { clearGroupUI(groupKey); return; }
 
     qsa(`.label-card[data-group="${groupKey}"]`).forEach(c => c.classList.remove("selected"));
     const card = qs(`#card_${safe(groupKey)}_${cssEscape(labelId)}`);
@@ -620,11 +876,9 @@
   async function applySuggestionToGroups(sug) {
     if (!sug || !sug.id) return false;
 
-    // 1) Try any visible card first
     let direct = document.querySelector(`.label-card[data-value="${cssEscape(sug.id)}"]`);
     if (direct) { direct.click(); return true; }
 
-    // 2) Ask the server where this id lives (works cross-type + nested)
     const res = await fetch('/api/labels/resolve_option', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -634,7 +888,6 @@
     const data = await res.json();
     if (!data.ok) return false;
 
-    // If parent must be expanded first
     if (data.parent_id) {
       const rawGroup = data.group_key.split('/').slice(0, -1).join('/') || data.group_key;
       const parentCard = document.querySelector(`#card_${safe(rawGroup)}_${cssEscape(data.parent_id)}`);
@@ -653,12 +906,72 @@
       return true;
     }
 
-    // Direct group match
     if (data.group_key) {
       const card = document.querySelector(`#card_${safe(data.group_key)}_${cssEscape(sug.id)}`);
       if (card) { card.click(); return true; }
     }
     return false;
+  }
+
+  /* ------------------------------- admin API JS ---------------------------- */
+  async function _postJSON(url, body){
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify(body)
+    });
+    let data = {};
+    try { data = await res.json(); } catch(_){}
+    if(!res.ok || !data.ok){ throw new Error(data.error || res.statusText); }
+    return data;
+  }
+  function _msg(s, ok=true){
+    const el = document.getElementById("adminStatus");
+    if(!el) return;
+    el.textContent = s;
+    el.style.color = ok ? "green" : "crimson";
+  }
+  async function adminCreateGroup(){
+    const key   = document.getElementById("new_group_key").value.trim();
+    const label = document.getElementById("new_group_label").value.trim();
+    const desc  = document.getElementById("new_group_desc").value.trim();
+    const order = parseInt(document.getElementById("new_group_order").value || "999", 10);
+    try{
+      await _postJSON("/api/labels/admin/create_group", {
+        type_name: "{{ current_type }}", key, label, description: desc, order
+      });
+      _msg("Group created. Reloading…", true);
+      setTimeout(()=>location.reload(), 600);
+    }catch(e){ _msg("Create group failed: " + e.message, false); }
+  }
+  async function adminCreateOption(){
+    const group_key = document.getElementById("opt_group_key").value.trim();
+    const id        = document.getElementById("opt_id").value.trim();
+    const display   = document.getElementById("opt_display").value.trim();
+    const desc      = document.getElementById("opt_desc").value.trim();
+    const order     = parseInt(document.getElementById("opt_order").value || "999", 10);
+    const image     = document.getElementById("opt_image").value.trim();
+    try{
+      await _postJSON("/api/labels/admin/create_option", {
+        type_name: "{{ current_type }}", group_key, id, display, description: desc, order, image
+      });
+      _msg("Option created. Reloading…", true);
+      setTimeout(()=>location.reload(), 600);
+    }catch(e){ _msg("Create option failed: " + e.message, false); }
+  }
+  async function adminCreateChild(){
+    const parent_key = document.getElementById("child_parent_key").value.trim();
+    const child_key  = document.getElementById("child_key").value.trim();
+    const label      = document.getElementById("child_label").value.trim();
+    const desc       = document.getElementById("child_desc").value.trim();
+    const order      = parseInt(document.getElementById("child_order").value || "999", 10);
+    try{
+      await _postJSON("/api/labels/admin/create_child_group", {
+        type_name: "{{ current_type }}", parent_key, child_key, label, description: desc, order
+      });
+      _msg("Child group created. Reloading…", true);
+      setTimeout(()=>location.reload(), 600);
+    }catch(e){ _msg("Create child failed: " + e.message, false); }
   }
 
   /* ------------------------------- bootstrapping --------------------------- */
@@ -682,4 +995,5 @@
 
 </body>
 </html>
+
 

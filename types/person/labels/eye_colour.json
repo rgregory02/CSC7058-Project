@@ -1,0 +1,9 @@
+{
+  "label": "Eye Colour",
+  "description": "",
+  "order": 999,
+  "refer_to": {
+    "source": "biographies",
+    "type": "person"
+  }
+}

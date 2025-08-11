@@ -1,0 +1,36 @@
+{
+    "id": "teddy_20",
+    "uid": "1ad4009a2366453886bf68525b1422f7",
+    "name": "Teddy",
+    "type": "person",
+    "created": "2025-08-11T21:47:54.656531+00:00",
+    "updated": "2025-08-11T22:05:02.996441+00:00",
+    "entries": [
+        {
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 85,
+                "subvalue": "infant"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 0.5,
+                "notes": "Life stage 'infant' (no reference date — absolute bounds unknown)"
+            },
+            "created": "2025-08-11T21:48:00.853205+00:00",
+            "updated": "2025-08-11T22:05:02.996441+00:00",
+            "person": [
+                {
+                    "label_type": "eye_colour",
+                    "confidence": 51,
+                    "id": "blue"
+                }
+            ]
+        }
+    ]
+}
