@@ -99,6 +99,21 @@ def serve_type_images(filename):
     return send_from_directory('types', filename)
 
 
+def _copytree_safe(src: str, dst: str):
+    """Copy a directory tree into an existing (or new) destination, without blowing up if files exist."""
+    os.makedirs(dst, exist_ok=True)
+    for root, dirs, files in os.walk(src):
+        rel = os.path.relpath(root, src)
+        tgt = os.path.join(dst, rel) if rel != "." else dst
+        os.makedirs(tgt, exist_ok=True)
+        for d in dirs:
+            os.makedirs(os.path.join(tgt, d), exist_ok=True)
+        for f in files:
+            s = os.path.join(root, f)
+            t = os.path.join(tgt, f)
+            if not os.path.exists(t):
+                shutil.copy2(s, t)
+
 @app.template_filter("uk_date")
 def uk_date(value):
     from datetime import datetime
@@ -193,6 +208,76 @@ def wizard_begin():
         return redirect(url_for("search_or_add_biography", type_name=type_name, return_url=url_for("general_step_start")))
     # If you want time first, redirect to your time step (generalised), else go to label_step step 0
     return redirect(url_for("label_step", type_name=type_name, bio_id=bio_id, step=0))
+
+@app.route("/add_type_prompt", methods=["GET", "POST"])
+def add_type_prompt():
+    def _slugify(s: str) -> str:
+        return re.sub(r"[^a-z0-9_]+", "_", (s or "").lower()).strip("_") or "untitled"
+
+    if request.method == "POST":
+        new_type_name = (request.form.get("new_type_name") or "").strip()
+        base_type     = (request.form.get("base_type") or "").strip()
+        mk_labels     = bool(request.form.get("mk_labels"))
+        mk_time       = bool(request.form.get("mk_time_labels"))
+        mk_bios       = bool(request.form.get("mk_biographies"))
+
+        if not new_type_name:
+            flash("Please enter a type name.", "error")
+            return redirect(url_for("add_type_prompt"))
+
+        slug = _slugify(new_type_name)
+        type_root = os.path.join("types", slug)
+        labels_dir = os.path.join(type_root, "labels")
+        bios_dir   = os.path.join(type_root, "biographies")
+        time_labels_dir = os.path.join(type_root, "time", "labels")
+
+        try:
+            os.makedirs(type_root, exist_ok=True)
+            if mk_labels:
+                os.makedirs(labels_dir, exist_ok=True)
+            if mk_time:
+                os.makedirs(time_labels_dir, exist_ok=True)
+            if mk_bios:
+                os.makedirs(bios_dir, exist_ok=True)
+
+            # If basing off an existing type, copy label folders
+            if base_type:
+                base_root = os.path.join("types", base_type)
+                # copy labels/
+                if mk_labels and os.path.isdir(os.path.join(base_root, "labels")):
+                    _copytree_safe(os.path.join(base_root, "labels"), labels_dir)
+                # copy time/labels/
+                if mk_time and os.path.isdir(os.path.join(base_root, "time", "labels")):
+                    _copytree_safe(os.path.join(base_root, "time", "labels"), time_labels_dir)
+
+            # Write a minimal type_info.json
+            info_path = os.path.join(type_root, "type_info.json")
+            if not os.path.exists(info_path):
+                info = {
+                    "type": slug,
+                    "name": new_type_name,
+                    "created": now_iso_utc(),
+                    "updated": now_iso_utc(),
+                    "schema_version": 1
+                }
+                save_dict_as_json(info_path, info)
+
+            flash(f"Type '{new_type_name}' created.", "success")
+            return redirect(url_for("dashboard"))
+
+        except Exception as e:
+            print("[add_type_prompt] error:", e)
+            flash("Failed to create type. Check server logs.", "error")
+            return redirect(url_for("add_type_prompt"))
+
+    # GET
+    try:
+        existing_types = list_types()
+    except Exception:
+        existing_types = []
+    return render_template("add_type_prompt.html", existing_types=existing_types)
+
+
 
 @app.route("/type/<type_name>/browse")
 def type_browse(type_name):
@@ -866,138 +951,6 @@ def api_suggest_biographies():
         print("[/api/labels/suggest_biographies] ERROR:", e)
         return jsonify({"ok": False, "reason": "Server error"}), 500
 
-
-@app.route('/person_iframe_wizard')
-def person_iframe_wizard():
-    step = request.args.get("step", "0")
-    person_id = request.args.get("person_id") or session.get("person_id")
-
-    # Restore person_id from query/session and preload data
-    if person_id:
-        session["person_id"] = person_id
-        file_path = f"./types/person/biographies/{person_id}.json"
-        if os.path.exists(file_path):
-            existing_data = load_json_as_dict(file_path)
-            session["person_name"] = existing_data.get("name", "")
-        else:
-            return f"Person ID {person_id} not found", 404
-
-    print(f"[Wizard Step] {step} – Person ID: {session.get('person_id')}")
-
-    if step == "0":
-        # New name entry — reset time in progress
-        session.pop("time_step_in_progress", None)
-        return render_template(
-            "person_step_name.html",
-            person_id=person_id,
-            display_dob_uk=display_dob_uk  # ✅ Inject display_dob_uk for Jinja
-        )
-
-    elif step == "1":
-        # Create draft file if not already saved
-        if not person_id and 'person_name' in session:
-            session['person_id'] = f"Person_{int(time.time())}"
-            person_id = session['person_id']
-            now_uk = datetime.now(ZoneInfo("Europe/London")).isoformat()
-            file_path = f"./types/person/biographies/{person_id}.json"
-            save_dict_as_json(file_path, {
-                "person_id": person_id,
-                "name": session['person_name'],
-                "dob": session.get('dob', ""),  # ✅ Store DOB if available
-                "created": now_uk,
-                "entries": []
-            })
-        if not person_id:
-            return redirect(url_for('person_iframe_wizard', step="0"))
-
-        return redirect(url_for('person_step_time', person_id=person_id))
-
-    elif step == "final":
-        if not person_id:
-            return redirect(url_for('person_iframe_wizard', step="0"))
-        return redirect(url_for('person_step_finalise', person_id=person_id))
-
-    else:
-        try:
-            dynamic_types = sorted([
-                t for t in os.listdir("./types")
-                if os.path.isdir(f"./types/{t}") and t not in ["person", "time"]
-            ])
-            step_index = int(step) - 2
-
-            if not session.get("time_selection"):
-                print("[WARN] Cannot continue — missing time_selection")
-                return redirect(url_for('person_iframe_wizard', step="1"))
-
-            if 0 <= step_index < len(dynamic_types):
-                return redirect(url_for('person_step_dynamic', step=step_index))
-        except Exception as e:
-            print(f"[Wizard Error] {e}")
-
-        return redirect(url_for('person_iframe_wizard', step="0"))
-
-
-@app.route("/person_edit_start/<person_id>/<int:entry_index>")
-def person_edit_start(person_id, entry_index):
-    """
-    Resumes the person biography wizard for editing a specific timepoint.
-    """
-    file_path = f"./types/person/biographies/{person_id}.json"
-    if not os.path.exists(file_path):
-        return f"<h1>Person Biography '{person_id}' Not Found</h1>", 404
-
-    person_data = load_json_as_dict(file_path)
-    session['person_id'] = person_id
-    session['person_name'] = person_data.get("name", "[Unknown]")
-
-    # Store the index of the entry being edited
-    session['edit_entry_index'] = entry_index
-
-    # Optionally preload the data into session["current_entry"]
-    try:
-        entry = person_data["entries"][entry_index]
-        session['current_entry'] = entry  # You may need to format this for step-by-step reuse
-    except IndexError:
-        return f"<h1>Entry index {entry_index} is out of bounds</h1>", 400
-
-    return redirect(url_for('person_iframe_wizard', step="1"))
-
-
-@app.route('/start_person_naming', methods=['GET', 'POST'])
-def start_person_naming():
-    if request.method == 'POST':
-        name = request.form.get("person_name", "").strip()
-        dob_raw = request.form.get("dob", "").strip()  # HTML5 date input gives YYYY-MM-DD
-
-        # ✅ Validate name
-        if not name:
-            flash("❌ Please enter a name.", "error")
-            return render_template(
-                "start_person_naming.html",
-                return_url=request.form.get("return_url", url_for("index"))
-            )
-
-        # ✅ Validate DOB
-        try:
-            dob_parsed = datetime.strptime(dob_raw, "%Y-%m-%d")
-            dob_formatted = dob_parsed.strftime("%Y-%m-%d")  # keep consistent format for storage
-        except ValueError:
-            flash("❌ Please enter a valid date of birth.", "error")
-            return render_template(
-                "start_person_naming.html",
-                return_url=request.form.get("return_url", url_for("index"))
-            )
-
-        # 🧹 Clear old session info and store name and DOB
-        session.pop('person_id', None)
-        session['person_name'] = name
-        session['dob'] = dob_formatted
-
-        return redirect("/person_iframe_wizard?step=0")
-
-    # 🖼️ GET request
-    return_url = request.args.get("return_url") or request.referrer or url_for("index")
-    return render_template("start_person_naming.html", return_url=return_url)
 
 @app.route("/<type_name>_step/time/<bio_id>", methods=["GET", "POST"])
 def time_step(type_name, bio_id):
@@ -2336,586 +2289,6 @@ def delete_property(type_name, prop_key):
     return redirect(url_for("type_properties", type_name=type_name))
 
 
-# @app.route("/person_step/time/<person_id>", methods=["GET", "POST"])
-# def person_step_time(person_id):
-#     labels_folder = "./types/time/labels"
-#     person_folder = "./types/person/biographies"
-#     os.makedirs(labels_folder, exist_ok=True)
-#     os.makedirs(person_folder, exist_ok=True)
-
-#     person_file = os.path.join(person_folder, f"{person_id}.json")
-#     if not os.path.exists(person_file):
-#         return f"Person biography {person_id} not found.", 404
-
-#     person_data = load_json_as_dict(person_file)
-#     name = person_data.get("name", "[Unknown]")
-
-#     selected_label_type = ""
-#     selected_subvalue = ""
-#     selected_date = ""
-#     selected_confidence = ""
-
-#     edit_index = request.args.get("edit_entry_index")
-#     if request.method == "GET" and edit_index is not None:
-#         try:
-#             edit_index = int(edit_index)
-#             session["edit_entry_index"] = edit_index
-#             entries = person_data.get("entries", [])
-#             if 0 <= edit_index < len(entries):
-#                 time_data = entries[edit_index].get("time", {})
-#                 selected_label_type = time_data.get("label_type", "")
-#                 selected_subvalue = time_data.get("subvalue", "")
-#                 selected_date = time_data.get("date_value", "")
-#                 selected_confidence = time_data.get("confidence", "")
-#         except Exception:
-#             session.pop("edit_entry_index", None)
-
-#     if request.method == "POST":
-#         selected_label_type = request.form.get("label_type") or selected_label_type
-#         selected_subvalue = request.form.get("subvalue") or selected_subvalue
-#         selected_date = request.form.get("date_value") or selected_date
-#         selected_confidence = request.form.get("confidence") or selected_confidence
-
-#     if (
-#         request.method == "GET"
-#         and not selected_label_type
-#         and "edit_entry_index" not in session
-#         and person_data.get("entries")
-#     ):
-#         latest_entry = person_data["entries"][-1]
-#         time_data = latest_entry.get("time", {})
-#         selected_label_type = time_data.get("label_type", "")
-#         selected_subvalue = time_data.get("subvalue", "")
-#         selected_date = time_data.get("date_value", "")
-#         selected_confidence = time_data.get("confidence", "")
-
-#     if request.method == "POST" and request.form.get("cancel_edit") == "true":
-#         session.pop("edit_entry_index", None)
-#         return redirect(url_for("person_view", person_id=person_id))
-
-#     if request.method == "POST":
-#         try:
-#             confidence_value = int(selected_confidence)
-#         except (TypeError, ValueError):
-#             confidence_value = None
-
-#         valid_entry = (
-#             confidence_value is not None and (
-#                 (selected_label_type == "date" and selected_date) or
-#                 (selected_label_type != "date" and selected_subvalue)
-#             )
-#         )
-
-#         if valid_entry:
-#             time_entry = {
-#                 "label_type": selected_label_type,
-#                 "confidence": confidence_value
-#             }
-#             if selected_label_type == "date":
-#                 time_entry["date_value"] = selected_date
-#                 label_value = selected_date
-#             else:
-#                 time_entry["subvalue"] = selected_subvalue
-#                 label_value = selected_subvalue
-
-#             session["time_selection"] = {
-#                 "label": label_value,
-#                 "confidence": confidence_value,
-#                 "label_type": selected_label_type,
-#                 "date_value": selected_date if selected_label_type == "date" else "",
-#                 "subvalue": selected_subvalue if selected_label_type != "date" else ""
-#             }
-#             session["person_id"] = person_id
-#             session["person_name"] = name
-#             session["time_step_in_progress"] = True
-
-#             edit_index = session.pop("edit_entry_index", None)
-#             if edit_index is None:
-#                 edit_index = session.get("entry_index")
-
-#             if edit_index is not None and 0 <= edit_index < len(person_data["entries"]):
-#                 person_data["entries"][edit_index]["time"] = session["time_selection"]
-#                 person_data["entries"][edit_index]["created"] = datetime.now().isoformat()
-#                 session["entry_index"] = edit_index
-#             else:
-#                 new_entry = {
-#                     "time": session["time_selection"],
-#                     "created": datetime.now().isoformat()
-#                 }
-#                 person_data["entries"].append(new_entry)
-#                 session["entry_index"] = len(person_data["entries"]) - 1
-
-#             save_dict_as_json(person_file, person_data)
-#             return redirect("/person_iframe_wizard?step=2")
-
-#     label_files = []
-#     if os.path.exists(labels_folder):
-#         for file in os.listdir(labels_folder):
-#             full_path = os.path.join(labels_folder, file)
-#             if file.endswith(".json") and os.path.isfile(full_path):
-#                 try:
-#                     with open(full_path) as f:
-#                         data = json.load(f)
-#                         label = os.path.splitext(file)[0]
-#                         desc = data.get("description", "")
-#                         label_files.append((label, desc))
-#                 except Exception as e:
-#                     print(f"[ERROR] Failed to load label {file}: {e}")
-
-#     subfolder_labels = []
-#     if selected_label_type and selected_label_type != "date":
-#         subfolder_path = os.path.join(labels_folder, selected_label_type)
-#         if os.path.isdir(subfolder_path):
-#             for f in os.listdir(subfolder_path):
-#                 if f.endswith(".json"):
-#                     try:
-#                         with open(os.path.join(subfolder_path, f)) as sf:
-#                             data = json.load(sf)
-#                             subfolder_labels.append({
-#                                 "name": os.path.splitext(f)[0],
-#                                 "description": data.get("description", ""),
-#                                 "order": data.get("order", 999)
-#                             })
-#                     except Exception as e:
-#                         print(f"[ERROR] Failed to load sublabel {f}: {e}")
-#             subfolder_labels.sort(key=lambda x: (x.get("order", 999), x["name"]))
-
-#     display_list = []
-#     for entry in person_data.get("entries", []):
-#         time_info = entry.get("time", {})
-#         tag = time_info.get("subvalue") or time_info.get("date_value") or "[unspecified]"
-#         conf = time_info.get("confidence", "unknown")
-#         display_list.append((tag, conf))
-
-#     return render_template(
-#         "person_step_time.html",
-#         person_id=person_id,
-#         name=name,
-#         label_files=label_files,
-#         selected_label_type=selected_label_type,
-#         selected_subvalue=selected_subvalue,
-#         selected_date=selected_date,
-#         selected_confidence=selected_confidence,
-#         subfolder_labels=subfolder_labels,
-#         existing_entries=display_list,
-#         edit_entry_index=session.get("edit_entry_index")
-#     )
-
-# @app.route("/person_step/dynamic/<int:step>", methods=["GET", "POST"])
-# def person_step_dynamic(step):
-#     person_id = session.get("person_id")
-#     if not person_id:
-#         return redirect(url_for("person_iframe_wizard", step="0"))
-
-#     person_file = f"./types/person/biographies/{person_id}.json"
-#     if not os.path.exists(person_file):
-#         return f"Person file {person_id} not found", 404
-
-#     person_data = load_json_as_dict(person_file)
-#     person_data.setdefault("entries", [])
-
-#     if step == 0 and session.get("time_step_in_progress") and session.get("time_selection") and "entry_index" not in session:
-#         new_entry = {
-#             "time": session["time_selection"],
-#             "created": datetime.now().isoformat()
-#         }
-#         person_data["entries"].append(new_entry)
-#         session["entry_index"] = len(person_data["entries"]) - 1
-#         save_dict_as_json(person_file, person_data)
-#         session["time_step_in_progress"] = False
-
-#     type_folders = sorted([
-#         t for t in os.listdir("./types")
-#         if os.path.isdir(f"./types/{t}") and t != "time"
-#     ])
-#     if step >= len(type_folders):
-#         return redirect(url_for("add_type_prompt"))
-
-#     if session.get("created_type_step") == step:
-#         session.pop("created_type_step", None)
-#         session["force_stop_after_this_step"] = True
-
-#     current_type = type_folders[step]
-#     label_base_path = f"./types/{current_type}/labels"
-#     bio_path = f"./types/{current_type}/biographies"
-
-#     grouped_biographies = load_grouped_biographies(bio_path)
-#     label_groups_list = collect_label_groups(label_base_path, current_type)
-
-#     # OPTIONAL: if you still build additional_nested_groups elsewhere,
-#     # guard against duplicates before extending:
-#     existing_keys = {g["key"] for g in label_groups_list}
-#     if 'additional_nested_groups' in locals():
-#         for g in additional_nested_groups:
-#             if g["key"] not in existing_keys:
-#                 label_groups_list.append(g)
-#                 existing_keys.add(g["key"])
-
-#     # Hard dedupe just in case:
-#     seen = set()
-#     deduped = []
-#     for g in label_groups_list:
-#         if g["key"] not in seen:
-#             deduped.append(g)
-#             seen.add(g["key"])
-#     label_groups_list = deduped
-
-#     if current_type == "person":
-#         label_groups_list = [group for group in label_groups_list if not group["key"].endswith("relationship")]
-
-#     # ✅ Dynamically add nested child groups based on selected labels
-#     existing_labels = {}
-#     selected_label_ids = set()
-#     entry_index = session.get("entry_index")
-#     if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
-#         labels_list = person_data["entries"][entry_index].get(current_type, [])
-#         for label in labels_list:
-#             print(f"[DEBUG] Checking label: {label}")
-#             if "label_type" not in label:
-#                 for group in label_groups_list:
-#                     if any(opt["id"] == label["id"] for opt in group["options"]):
-#                         label["label_type"] = group["key"]
-#                         break
-#             label_type = None
-
-#             # Match against all group keys to get the full path (e.g. "car/ford/red_ford")
-#             for group in label_groups_list:
-#                 if any(opt["id"] == label["id"] for opt in group["options"]):
-#                     label_type = group["key"]
-#                     break
-#             if label_type:
-#                 existing_labels[label_type] = {
-#                     "label": label.get("id"),
-#                     "id": label.get("id"),
-#                     "confidence": label.get("confidence", 100),
-#                     "source": label.get("source", "")
-#                 }
-#                 print(f"[DEBUG] → Set existing_labels[{label_type}]: {existing_labels[label_type]}")
-#                 selected_label_ids.add(label_type)
-#                 selected_label_ids.add(label_type.split("/")[-1])
-#                 selected_label_ids.add(label.get("id"))
-
-#     # Build a quick lookup of what was selected per raw label_type
-#     selected_by_type = {}
-#     selected_conf_by_type = {}
-#     if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
-#         for entry in person_data["entries"][entry_index].get(current_type, []):
-#             lt = entry.get("label_type")
-#             if lt:
-#                 selected_by_type[lt] = entry.get("id")
-#                 selected_conf_by_type[lt] = entry.get("confidence", 100)
-
-#     # Augment `existing_labels` for nested keys
-#     for group in list(label_groups_list):
-#         key = group["key"]  # e.g. "work_building/hospital"
-#         if "/" not in key:
-#             continue
-
-#         parent_type, child_type = key.split("/", 1)
-#         parent_selected_id = selected_by_type.get(parent_type)
-#         if parent_selected_id and parent_selected_id == child_type:
-#             child_selected_id = selected_by_type.get(child_type)
-#             if child_selected_id:
-#                 existing_labels[key] = {
-#                     "label": child_selected_id,
-#                     "id": child_selected_id,
-#                     "confidence": selected_conf_by_type.get(child_type, 100),
-#                     "source": "gpt"  # or "", if you don't have a way to confirm source
-#                 }
-#                 selected_label_ids.add(key)
-#                 selected_label_ids.add(child_selected_id)
-
-#     additional_nested_groups = []
-#     for group in label_groups_list:
-#         key = group["key"]
-#         selected_label = existing_labels.get(key, {}).get("label")
-#         if selected_label:
-#             nested_folder = os.path.join(label_base_path, key, selected_label)
-#             if os.path.exists(nested_folder):
-#                 nested_options = load_labels_from_folder(nested_folder)
-#                 if nested_options:
-#                     nested_group_key = f"{key}/{selected_label}"
-#                     additional_nested_groups.append({
-#                         "key": nested_group_key,
-#                         "options": nested_options
-#                     })
-#     label_groups_list.extend(additional_nested_groups)
-
-#     seen = set()
-#     deduped = []
-#     for g in label_groups_list:
-#         if g["key"] not in seen:
-#             deduped.append(g)
-#             seen.add(g["key"])
-#     label_groups_list = deduped
-
-#     suggested_biographies = {}
-
-#     for group in label_groups_list:
-#         key = group["key"]
-#         for item in group["options"]:
-#             label_id = item["id"]
-#             full_label_key = f"{key}/{label_id}"
-#             safe_key = full_label_key.replace("/", "__")
-
-#             label_json_path = os.path.join(label_base_path, *key.split("/"), f"{label_id}.json")
-#             if not os.path.exists(label_json_path):
-#                 continue
-
-#             try:
-#                 label_data = load_json_as_dict(label_json_path)
-#                 suggested_type = (
-#                     label_data.get("properties", {}).get("suggests_biographies_from")
-#                     or label_data.get("suggests_biographies_from")
-#                 )
-#                 bios = []
-
-#                 # ✅ Add direct same-folder biography
-#                 direct_bio_path = os.path.join("types", current_type, "biographies", *key.split("/"), f"{label_id}.json")
-#                 if os.path.exists(direct_bio_path):
-#                     try:
-#                         bio_data = load_json_as_dict(direct_bio_path)
-#                         bios.append({
-#                             "id": label_id,
-#                             "display": bio_data.get("name", label_id),
-#                             "description": bio_data.get("description", "")
-#                         })
-#                     except Exception:
-#                         pass
-
-#                 if suggested_type:
-#                     full_path = os.path.join("types", suggested_type)
-
-#                     fallback_paths = [
-#                         full_path,
-#                         os.path.dirname(full_path),
-#                         os.path.join("types", suggested_type.split("/")[0], "biographies")
-#                     ]
-
-#                     for path in fallback_paths:
-#                         # ✅ Make sure we are in a 'biographies' directory
-#                         if not path.startswith("types") or "biographies" not in path:
-#                             continue
-
-#                         if os.path.exists(path):
-#                             for root, _, files in os.walk(path):
-#                                 for f in files:
-#                                     if not f.endswith(".json"):
-#                                         continue
-
-#                                     file_path = os.path.join(root, f)
-
-#                                     # ✅ Skip if it's a label file (by checking against labels path)
-#                                     if "labels" in file_path:
-#                                         continue
-
-#                                     # ✅ Optional: match filename or folder to label_id (to reduce overmatching)
-#                                     if label_id not in root and os.path.splitext(f)[0] != label_id:
-#                                         continue
-
-#                                     try:
-#                                         bio_data = load_json_as_dict(file_path)
-#                                         bios.append({
-#                                             "id": os.path.splitext(f)[0],
-#                                             "display": bio_data.get("name", f),
-#                                             "description": bio_data.get("description", "")
-#                                         })
-#                                     except Exception:
-#                                         pass
-
-#                             if bios:
-#                                 suggested_biographies[safe_key] = bios
-#                                 break  # ✅ Stop after first match
-
-#             except Exception as e:
-#                 print(f"[Suggestion Error] Failed to process label '{label_id}': {e}")
-
-#     is_person_type = (current_type == "person")
-#     person_biography_options = []
-#     if is_person_type:
-#         for f in os.listdir("./types/person/biographies"):
-#             if f.endswith(".json"):
-#                 bio_id = os.path.splitext(f)[0]
-#                 if bio_id != person_id:
-#                     try:
-#                         bio_data = load_json_as_dict(os.path.join("./types/person/biographies", f))
-#                         person_biography_options.append({
-#                             "id": bio_id,
-#                             "display": bio_data.get("name", bio_id),
-#                             "description": bio_data.get("description", "")
-#                         })
-#                     except Exception:
-#                         pass
-
-#     if request.method == "POST":
-#         new_entries = []
-
-#     # ✅ Handle GPT-suggested labels (from hidden input)
-#     gpt_labels_raw = request.form.get("gpt_selected_labels_json", "")
-#     if gpt_labels_raw:
-#         try:
-#             gpt_labels = json.loads(gpt_labels_raw)
-#             if isinstance(gpt_labels, list):
-#                 for label in gpt_labels:
-#                     if isinstance(label, dict) and "id" in label:
-#                         entry = {
-#                             "id": label["id"],
-#                             "label_type": label.get("label_type", current_type),
-#                             "confidence": int(label.get("confidence", 100)),
-#                             "source": "gpt"
-#                         }
-#                         new_entries.append(entry)
-#             else:
-#                 print("[GPT Label Error] Expected a list of labels but got:", type(gpt_labels))
-#         except Exception as e:
-#             print(f"[GPT Label Error] Failed to parse suggestions: {e}")
-
-#         if not is_person_type:
-#             selected_bio_id = request.form.get("selected_id_biography")
-#             if selected_bio_id:
-#                 try:
-#                     bio_path = os.path.join("types", current_type, "biographies", f"{selected_bio_id}.json")
-#                     bio_data = load_json_as_dict(bio_path)
-#                     new_entries.append({
-#                         "id": selected_bio_id,
-#                         "confidence": 100,
-#                         "label_type": current_type,
-#                         "source": "biography",
-#                         "display": bio_data.get("name", selected_bio_id),
-#                         "description": bio_data.get("description", ""),
-#                         "image_url": bio_data.get("image", "")
-#                     })
-#                 except Exception:
-#                     pass
-
-#         for group in label_groups_list:
-#             key = group["key"]
-#             selected_id = request.form.get(f"selected_id_{key}", "").strip()
-#             confidence_raw = request.form.get(f"confidence_{key}", "").strip()
-#             bio_id = request.form.get(f"selected_id_{key}_bio", "").strip()
-#             bio_conf_raw = request.form.get(f"confidence_{key}_bio", "").strip()
-#             confidence = int(confidence_raw) if confidence_raw.isdigit() else 100
-#             bio_conf = int(bio_conf_raw) if bio_conf_raw.isdigit() else 100
-
-#             if selected_id or bio_id:
-#                 entry = {
-#                     "label_type": key.split("/")[-1],
-#                     "confidence": confidence
-#                 }
-#                 if selected_id:
-#                     entry["id"] = selected_id
-#                 if bio_id:
-#                     entry["biography"] = bio_id
-#                     entry["biography_confidence"] = bio_conf
-#                 new_entries.append(entry)
-
-#         if is_person_type:
-#             relationship = request.form.get("relationship_label", "").strip().title()
-#             bio_id = request.form.get("selected_id_linked_person_bio", "").strip()
-#             bio_conf_raw = request.form.get("confidence_linked_person", "").strip()
-#             bio_conf = int(bio_conf_raw) if bio_conf_raw.isdigit() else 100
-
-#             if bio_id:
-#                 try:
-#                     bio_path = os.path.join("types", "person", "biographies", f"{bio_id}.json")
-#                     bio_data = load_json_as_dict(bio_path)
-#                     combined_entry = {
-#                         "id": bio_id,
-#                         "label_type": "linked_person",
-#                         "confidence": bio_conf,
-#                         "source": "biography",
-#                         "display": bio_data.get("name", bio_id),
-#                         "description": bio_data.get("description", ""),
-#                         "image_url": bio_data.get("image", "")
-#                     }
-#                     if relationship:
-#                         combined_entry["relationship"] = relationship
-#                     new_entries.append(combined_entry)
-#                 except Exception as e:
-#                     print("⚠️ Error loading person biography:", e)
-#             elif relationship:
-#                 new_entries.append({
-#                     "label_type": "linked_person",
-#                     "relationship": relationship,
-#                     "confidence": bio_conf,
-#                     "id": None
-#                 })
-
-#         entry_index = session.get("entry_index")
-#         if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
-#             # ✅ Always overwrite the current step’s labels, even if empty
-#             person_data["entries"][entry_index][current_type] = new_entries
-#             save_dict_as_json(person_file, person_data)
-
-#         if session.pop("loopback_to_add_type", False) or session.pop("force_stop_after_this_step", False):
-#             session.pop("type_just_created", None)
-#             return redirect(url_for("add_type_prompt"))
-#         else:
-#             return redirect(url_for("person_step_dynamic", step=step + 1))
-
-#     relationship_labels = []
-#     if is_person_type:
-#         relationship_label_folder = os.path.join(label_base_path, "relationship")
-#         if os.path.exists(relationship_label_folder):
-#             for f in os.listdir(relationship_label_folder):
-#                 if f.endswith(".json"):
-#                     try:
-#                         label_data = load_json_as_dict(os.path.join(relationship_label_folder, f))
-#                         relationship_labels.append({
-#                             "id": os.path.splitext(f)[0],
-#                             "display": label_data.get("name", os.path.splitext(f)[0]),
-#                             "description": label_data.get("description", "")
-#                         })
-#                     except Exception:
-#                         pass
-
-#     existing_bio_selections = {}
-#     if entry_index is not None and 0 <= entry_index < len(person_data["entries"]):
-#         for entry in person_data["entries"][entry_index].get(current_type, []):
-#             label_id = entry.get("id")
-#             bio_id = entry.get("biography")
-#             label_type = entry.get("label_type")
-
-#             if label_type == "linked_person":
-#                 # fallback to entry["id"] if biography not present
-#                 bio_id = entry.get("biography") or entry.get("id")
-#                 if bio_id:
-#                     existing_bio_selections["linked_person_bio"] = bio_id
-
-#                 relationship = entry.get("relationship")
-#                 if relationship:
-#                     existing_bio_selections["relationship_label"] = relationship.lower()
-
-#             if bio_id and label_id:
-#                 for group in label_groups_list:
-#                     if any(opt["id"] == label_id for opt in group.get("options", [])):
-#                         full_key = f"{group['key']}_bio"
-#                         existing_bio_selections[full_key] = bio_id
-#                         break
-
-#             print("linked_person_bio in selections:", existing_bio_selections.get("linked_person_bio"))
-#             print("person_biography_options:", [o["id"] for o in person_biography_options])
-
-#     return render_template(
-#         "person_step_dynamic.html",
-#         current_type=current_type,
-#         grouped_biographies=grouped_biographies,
-#         label_groups_list=label_groups_list,
-#         suggested_biographies=suggested_biographies,
-#         existing_labels=existing_labels,
-#         selected_label_ids=selected_label_ids,
-#         person_id=person_id,
-#         skip_allowed=(len(label_groups_list) == 0 and len(grouped_biographies) == 0),
-#         person_name=person_data.get("name", person_id),
-#         time_selection=session.get("time_selection"),
-#         next_step=step + 1,
-#         prev_step=step - 1 if step > 0 else None,
-#         step=step,
-#         is_person_type=is_person_type,
-#         person_biography_options=person_biography_options,
-#         relationship_labels=relationship_labels,
-#         existing_bio_selections=existing_bio_selections
-#     )
 
 
 @app.route("/suggest_labels", methods=["POST"])
@@ -3113,310 +2486,7 @@ def search_or_add_biography(type_name):
                            results=matched,
                            return_url=return_url)
 
-@app.route("/person_step/add_type_prompt", methods=["GET", "POST"])
-def add_type_prompt():
-    person_id = session.get("person_id")
-    if not person_id:
-        return redirect(url_for("person_iframe_wizard", step="0"))
 
-    person_file = f"./types/person/biographies/{person_id}.json"
-    if not os.path.exists(person_file):
-        return f"Person file {person_id} not found", 404
-
-    person_data = load_json_as_dict(person_file)
-
-    if request.method == "POST":
-        new_type_name = request.form.get("new_type_name", "").strip().lower().replace(" ", "_")
-
-        if not new_type_name:
-            flash("Type name cannot be empty.", "error")
-            return redirect(request.url)
-
-        new_type_path = os.path.join("types", new_type_name)
-        labels_path = os.path.join(new_type_path, "labels")
-        biographies_path = os.path.join(new_type_path, "biographies")
-
-        if os.path.exists(new_type_path):
-            flash(f"Type '{new_type_name}' already exists.", "error")
-            return redirect(request.url)
-
-        try:
-            os.makedirs(labels_path)
-            os.makedirs(biographies_path)
-
-            # Create higher-level JSON metadata
-            type_json_path = os.path.join("types", f"{new_type_name}.json")
-            if not os.path.exists(type_json_path):
-                metadata = {
-                    "display_name": new_type_name.replace("_", " ").title(),
-                    "description": f"Entries for {new_type_name.replace('_', ' ')}.",
-                    "short_description": f"A category for {new_type_name.replace('_', ' ')}.",
-                    "enabled": True
-                }
-                with open(type_json_path, "w") as f:
-                    json.dump(metadata, f, indent=2)
-
-            flash(f"New type '{new_type_name}' created successfully.", "success")
-
-            # Determine wizard step index
-            all_types = sorted([
-                t for t in os.listdir("types")
-                if os.path.isdir(os.path.join("types", t)) and t != "time"
-            ])
-            step_index = all_types.index(new_type_name)
-
-            # 🧠 Store loopback logic
-            session["type_just_created"] = new_type_name
-            session["loopback_to_add_type"] = True
-            session["created_type_step"] = step_index
-
-            return redirect(url_for(
-                'create_subfolder',
-                type_name=new_type_name,
-                return_url=url_for('person_step_dynamic', step=step_index)
-            ))
-
-        except Exception as e:
-            flash(f"Error creating type: {e}", "error")
-            return redirect(request.url)
-
-    return render_template(
-        "add_type_prompt.html",
-        person_id=person_id,
-        person_name=person_data.get("name", person_id)
-    )
-
-# Updated version of create_type to support return_to_wizard flag
-@app.route('/create_type', methods=['GET', 'POST'])
-def create_type():
-    return_to_wizard = request.args.get("return_to_wizard")
-
-    if request.method == 'POST':
-        type_name = request.form.get('type_name', '').strip().lower().replace(" ", "_")
-        label_folder = f"./types/{type_name}/labels"
-        bio_folder = f"./types/{type_name}/biographies"
-
-        os.makedirs(label_folder, exist_ok=True)
-        os.makedirs(bio_folder, exist_ok=True)
-
-        # Create higher-level JSON metadata
-        type_json_path = f"./types/{type_name}.json"
-        if not os.path.exists(type_json_path):
-            metadata = {
-                "display_name": type_name.replace("_", " ").title(),
-                "description": f"Entries for {type_name.replace('_', ' ')}.",
-                "short_description": f"A category for {type_name.replace('_', ' ')}.",
-                "enabled": True
-            }
-            with open(type_json_path, "w") as f:
-                json.dump(metadata, f, indent=2)
-
-        flash(f"New type '{type_name}' created successfully!", "success")
-
-        if return_to_wizard:
-            type_folders = sorted([
-                t for t in os.listdir("./types")
-                if os.path.isdir(f"./types/{t}") and t != "time"
-            ])
-            session["type_folders"] = type_folders
-
-            new_step = type_folders.index(type_name) if type_name in type_folders else 0
-
-            # 🔁 Set session flags to loop back after this step
-            session["type_just_created"] = type_name
-            session["loopback_to_add_type"] = True
-            session["created_type_step"] = new_step
-
-            return redirect(url_for("person_step_dynamic", step=new_step))
-        else:
-            return redirect(url_for('index'))
-
-    return render_template('create_type.html', return_to_wizard=return_to_wizard)
-
-@app.route("/person_add_timepoint/<person_id>")
-def person_add_timepoint(person_id):
-    """
-    Resets session state so the next time period starts fresh.
-    """
-    session.pop("entry_index", None)            # Prevent overwrite of previous entry
-    session.pop("edit_entry_index", None)       # Ensure edit mode is cleared
-    session.pop("time_selection", None)         # Optional: clear time preview
-    session["time_step_in_progress"] = False    # Clear any in-progress flags
-    session["person_id"] = person_id            # Ensure person ID is retained
-    return redirect(url_for("person_step_time", person_id=person_id))
-
-@app.route("/person_delete_entry/<person_id>/<int:entry_index>")
-def person_delete_entry(person_id, entry_index):
-    file_path = f"./types/person/biographies/{person_id}.json"
-    person_data = load_json_as_dict(file_path)
-
-    entries = person_data.get("entries", [])
-
-    if 0 <= entry_index < len(entries):
-        # Add or update 'status' field
-        entries[entry_index]["status"] = "archived"
-        save_dict_as_json(file_path, person_data)
-
-    return redirect(url_for("person_view", person_id=person_id))
-
-@app.route("/person_unarchive_entry/<person_id>/<int:entry_index>")
-def person_unarchive_entry(person_id, entry_index):
-    file_path = f"./types/person/biographies/{person_id}.json"
-    person_data = load_json_as_dict(file_path)
-
-    entries = person_data.get("entries", [])
-    if 0 <= entry_index < len(entries):
-        entry = entries[entry_index]
-        if entry.get("status") == "archived":
-            entry.pop("status", None)  # Remove the 'archived' flag
-            save_dict_as_json(file_path, person_data)
-
-    return redirect(url_for("person_view", person_id=person_id))
-
-@app.route("/person_undo_archive/<person_id>/<int:entry_index>")
-def person_undo_archive(person_id, entry_index):
-    file_path = f"./types/person/biographies/{person_id}.json"
-    person_data = load_json_as_dict(file_path)
-
-    entries = person_data.get("entries", [])
-
-    if 0 <= entry_index < len(entries):
-        # Remove the 'status' field
-        if "status" in entries[entry_index]:
-            del entries[entry_index]["status"]
-            save_dict_as_json(file_path, person_data)
-
-    return redirect(url_for("person_view", person_id=person_id))
-
-# @app.route("/person_edit_timepoint/<person_id>/<int:entry_index>")
-# def person_edit_timepoint(person_id, entry_index):
-#     # Load the file and entry, then redirect to step 1 preloaded
-#     # Optional: Implement pre-population logic here
-#     return redirect(url_for("person_step_time", person_id=person_id))
-
-@app.route("/person_edit_timepoint/<person_id>/<int:entry_index>")
-def person_edit_timepoint(person_id, entry_index):
-    session["edit_entry_index"] = entry_index
-    return redirect(url_for("person_step_time", person_id=person_id))
-
-
-@app.route("/archived_people")
-def view_archived_people():
-    archived_folder = "./types/person/biographies/archived"
-    archived_people = []
-
-    if os.path.exists(archived_folder):
-        for file in os.listdir(archived_folder):
-            if file.endswith(".json"):
-                path = os.path.join(archived_folder, file)
-                try:
-                    with open(path) as f:
-                        data = json.load(f)
-                        person_id = os.path.splitext(file)[0]
-                        name = data.get("name", "[Unnamed]")
-                        created = data.get("created")
-                        archived_people.append((person_id, name, created))
-                except Exception as e:
-                    print(f"[ERROR] Couldn't load archived bio {file}: {e}")
-
-    # ✅ Make sure the HTML file is named `archived_biographies.html`
-    return render_template("archived_biographies.html", archived_people=archived_people)
-
-@app.route("/archive_person/<person_id>")
-def archive_person(person_id):
-    active_path = f"./types/person/biographies/{person_id}.json"
-    archive_path = f"./types/person/biographies/archived/{person_id}.json"
-
-    if not os.path.exists(active_path):
-        return "Biography not found.", 404
-
-    os.makedirs(os.path.dirname(archive_path), exist_ok=True)
-    os.rename(active_path, archive_path)
-
-    return redirect("/")
-
-@app.route("/person_view_archived/<person_id>")
-def view_archived_person(person_id):
-    archive_path = f"./types/person/biographies/archived/{person_id}.json"
-    if not os.path.exists(archive_path):
-        return "Archived biography not found.", 404
-
-    try:
-        with open(archive_path) as f:
-            data = json.load(f)
-    except Exception as e:
-        return f"Error loading archived biography: {e}", 500
-
-    entries = data.get("entries", [])
-    return render_template("person_view_archived.html", person_name=data.get("name", "Unnamed"), person_id=person_id, entries=entries)
-
-@app.route("/restore_person/<person_id>")
-def restore_archived_person(person_id):
-    archive_path = f"./types/person/biographies/archived/{person_id}.json"
-    active_path = f"./types/person/biographies/{person_id}.json"
-
-    if not os.path.exists(archive_path):
-        return "Archived biography not found.", 404
-
-    try:
-        os.rename(archive_path, active_path)
-    except Exception as e:
-        return f"Failed to restore biography: {e}", 500
-
-    return redirect("/")
-
-@app.route('/iframe_select_time')
-def iframe_select_time():
-    """
-    Iframe step for selecting a time period from the types/time/labels folder.
-    """
-    label_dir = "./types/time/labels"
-    time_options = []
-
-    if os.path.exists(label_dir):
-        for file in os.listdir(label_dir):
-            if file.endswith(".json"):
-                try:
-                    label_path = os.path.join(label_dir, file)
-                    data = load_json_as_dict(label_path)
-                    label_name = data.get("name") or os.path.splitext(file)[0]
-                    time_options.append(label_name)
-                except Exception as e:
-                    print(f"Error reading {file}: {e}")
-
-    html = """
-    <!DOCTYPE html>
-    <html>
-    <head><meta charset="UTF-8"><title>Select Time Period</title></head>
-    <body>
-      <h2>Step 1: Choose a Time Period</h2>
-      <form action="/save_time_choice" method="post">
-    """
-
-    if time_options:
-        for option in time_options:
-            html += f"""
-            <div>
-              <input type="radio" name="time_choice" value="{option}" required>
-              <label>{option}</label>
-            </div>
-            """
-        html += """
-            <br><button type="submit">Save & Continue</button>
-        </form>
-        """
-    else:
-        html += "<p><em>No time periods found in /types/time/labels</em></p>"
-
-    html += "</body></html>"
-    return html
-
-@app.route('/save_time_choice', methods=['POST'])
-def save_time_choice():
-    choice = request.form.get("time_choice")
-    if choice:
-        session['person_bio_time'] = choice
-    return redirect("/person_iframe_wizard?step=1")
 
 @app.route('/add_label/<type_name>/<path:subfolder_name>', methods=['GET', 'POST'])
 def add_label(type_name, subfolder_name):
