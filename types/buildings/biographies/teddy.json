@@ -4,7 +4,7 @@
     "name": "Teddy",
     "type": "buildings",
     "created": "2025-08-11T22:22:21.305033+00:00",
-    "updated": "2025-08-11T22:23:03.221280+00:00",
+    "updated": "2025-08-12T01:06:36.722313+00:00",
     "entries": [
         {
             "created": "2025-08-11T22:22:26.575814+00:00",
@@ -25,5 +25,6 @@
                 "notes": "Direct date entry"
             }
         }
-    ]
+    ],
+    "archived": false
 }

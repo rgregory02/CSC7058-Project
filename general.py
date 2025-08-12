@@ -149,21 +149,49 @@ def short_timestamp(value):
 def list_types(base="./types"):
     return sorted([d for d in os.listdir(base) if os.path.isdir(os.path.join(base, d))])
 
-def list_biographies(type_name, base="./types"):
+def list_biographies(type_name, base="./types", include_archived=False):
     bios_dir = os.path.join(base, type_name, "biographies")
     if not os.path.isdir(bios_dir):
         return []
+
     out = []
     for f in os.listdir(bios_dir):
-        if f.endswith(".json"):
-            bio_id = os.path.splitext(f)[0]
-            try:
-                with open(os.path.join(bios_dir, f), "r", encoding="utf-8") as fp:
-                    data = json.load(fp)
-                out.append({"id": bio_id, "name": data.get("name", bio_id), "description": data.get("description", "")})
-            except Exception:
-                out.append({"id": bio_id, "name": bio_id, "description": ""})
-    return sorted(out, key=lambda x: x["name"].lower())
+        if not f.endswith(".json"):
+            continue
+        bio_id = os.path.splitext(f)[0]
+        try:
+            with open(os.path.join(bios_dir, f), "r", encoding="utf-8") as fp:
+                data = json.load(fp)
+
+            # Skip archived unless explicitly included
+            if not include_archived and data.get("archived", False):
+                continue
+
+            out.append({
+                "id": bio_id,
+                "name": data.get("name", bio_id),
+                "description": data.get("description", ""),
+                "archived": bool(data.get("archived", False)),
+                "archived_at": data.get("archived_at", None),
+                "updated": data.get("updated", None)
+            })
+        except Exception:
+            out.append({
+                "id": bio_id,
+                "name": bio_id,
+                "description": "",
+                "archived": False,
+                "archived_at": None,
+                "updated": None
+            })
+
+    # Sort: active first, then archived; within each group, newest updated first
+    return sorted(
+        out,
+        key=lambda x: (x["archived"], x["updated"] or ""),
+        reverse=True
+    )
+
 
 
 @app.route("/")
@@ -278,11 +306,19 @@ def add_type_prompt():
     return render_template("add_type_prompt.html", existing_types=existing_types)
 
 
-
-@app.route("/type/<type_name>/browse")
+@app.route("/type/<type_name>")
 def type_browse(type_name):
-    bios = list_biographies(type_name)
-    return render_template("type_browse.html", type_name=type_name, bios=bios)
+    show = (request.args.get("show") or "").lower()   # "", "archived", "all"
+    include_archived = show in ("archived", "all")
+    bios = list_biographies(type_name, include_archived=include_archived)
+    active = [b for b in bios if not b["archived"]]
+    archived = [b for b in bios if b["archived"]]
+    return render_template("type_browse.html",
+                           type_name=type_name,
+                           active_bios=active,
+                           archived_bios=archived,
+                           show=show)
+
 
 
 @app.route("/global_search")
@@ -950,6 +986,21 @@ def api_suggest_biographies():
     except Exception as e:
         print("[/api/labels/suggest_biographies] ERROR:", e)
         return jsonify({"ok": False, "reason": "Server error"}), 500
+
+
+@app.route("/api/bio/<type_name>/<bio_id>/archive", methods=["POST"])
+def api_archive_bio(type_name, bio_id):
+    if set_bio_archived(type_name, bio_id, True):
+        flash("Biography archived.", "success")
+        return redirect(url_for("type_browse", type_name=type_name))
+    return ("Not found", 404)
+
+@app.route("/api/bio/<type_name>/<bio_id>/unarchive", methods=["POST"])
+def api_unarchive_bio(type_name, bio_id):
+    if set_bio_archived(type_name, bio_id, False):
+        flash("Biography unarchived.", "success")
+        return redirect(url_for("type_browse", type_name=type_name, show="archived"))
+    return ("Not found", 404)
 
 
 @app.route("/<type_name>_step/time/<bio_id>", methods=["GET", "POST"])
@@ -2289,6 +2340,22 @@ def delete_property(type_name, prop_key):
     return redirect(url_for("type_properties", type_name=type_name))
 
 
+def _bio_path(type_name: str, bio_id: str) -> str:
+    return os.path.join("types", type_name, "biographies", f"{bio_id}.json")
+
+def set_bio_archived(type_name: str, bio_id: str, archived: bool) -> bool:
+    p = _bio_path(type_name, bio_id)
+    if not os.path.exists(p):
+        return False
+    data = load_json_as_dict(p) or {}
+    data["archived"] = bool(archived)
+    if archived:
+        data["archived_at"] = now_iso_utc()
+    else:
+        data.pop("archived_at", None)
+    data["updated"] = now_iso_utc()
+    save_dict_as_json(p, data)
+    return True
 
 
 @app.route("/suggest_labels", methods=["POST"])
