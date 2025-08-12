@@ -2078,6 +2078,168 @@ def general_step_labels(type_name, bio_id):
         skip_allowed=(len(expanded_groups) == 0)
     )
 
+@app.route("/general_step/events/<type_name>/<bio_id>", methods=["GET","POST"])
+def general_step_events(type_name, bio_id):
+    bio_file = os.path.join("types", type_name, "biographies", f"{bio_id}.json")
+    if not os.path.exists(bio_file):
+        return f"Biography {bio_id} not found for {type_name}.", 404
+    bio = load_json_as_dict(bio_file) or {}
+    bio.setdefault("entries", [])
+
+    def _as_int(x, default=None):
+        try: return int(x)
+        except: return default
+
+    # ensure entry index
+    idx = _as_int(session.get("entry_index"))
+    if idx is None or not (0 <= idx < len(bio["entries"])):
+        now = now_iso_utc()
+        bio["entries"].append({"created": now, "updated": now})
+        idx = len(bio["entries"]) - 1
+        session["entry_index"] = idx
+
+    # ---- load event groups from types/events/labels ----
+    def list_event_groups():
+        base = os.path.join("types", "events", "labels")
+        groups = []
+        if os.path.isdir(base):
+            for fn in os.listdir(base):
+                if not fn.endswith(".json"): continue
+                data = load_json_as_dict(os.path.join(base, fn)) or {}
+                groups.append({
+                    "key": data.get("key") or os.path.splitext(fn)[0],
+                    "label": data.get("label") or os.path.splitext(fn)[0].replace("_"," ").title(),
+                    "description": data.get("description",""),
+                    "options": data.get("options", [])
+                })
+        groups.sort(key=lambda g: g["label"].lower())
+        return groups
+
+    groups = list_event_groups()
+    chosen_group = (request.form.get("group_key") or request.args.get("group_key") or (groups[0]["key"] if groups else "")).strip()
+    chosen_option = (request.form.get("option_id") or "").strip()
+    group_doc = next((g for g in groups if g["key"] == chosen_group), {"options": []})
+    option_doc = next((o for o in group_doc["options"] if o.get("id") == chosen_option), None)
+
+    # allowed link target types for the chosen option
+    allowed_types = []
+    if option_doc and isinstance(option_doc.get("refer_to"), list) and option_doc["refer_to"]:
+        allowed_types = [rt.get("type") for rt in option_doc["refer_to"] if rt.get("source") == "biographies" and rt.get("type")]
+    if not allowed_types:
+        allowed_types = [type_name]
+
+    # linkable bios per allowed type
+    linkable = {t: list_biographies(t) for t in allowed_types}
+
+    # ---- SAVE: multiple rows, each with its own time ----
+    if request.method == "POST" and request.form.get("do_save") == "1":
+        option_ids      = request.form.getlist("row_option_id[]")
+        option_disps    = request.form.getlist("row_option_display[]")
+        link_types      = request.form.getlist("row_link_type[]")
+        link_bios       = request.form.getlist("row_link_bio[]")
+        row_confs       = request.form.getlist("row_confidence[]")
+
+        # per-row time fields (parallel arrays)
+        time_kinds      = request.form.getlist("row_time_kind[]")
+        time_dates      = request.form.getlist("row_date_value[]")
+        time_starts     = request.form.getlist("row_start_date[]")
+        time_ends       = request.form.getlist("row_end_date[]")
+        time_subvalues  = request.form.getlist("row_time_subvalue[]")
+        time_confidences= request.form.getlist("row_time_confidence[]")
+
+        e = bio["entries"][idx]
+        e.setdefault("events", [])
+        now = now_iso_utc()
+
+        # optional normaliser
+        try:
+            from time_utils import normalise_time_for_bio_entry
+        except Exception:
+            normalise_time_for_bio_entry = None
+
+        added = 0
+        for i in range(len(option_ids)):
+            oid   = (option_ids[i] or "").strip()
+            if not oid:
+                continue
+            odisp = (option_disps[i] or oid).strip()
+            ltyp  = (link_types[i] or "").strip()
+            lbio  = (link_bios[i] or "").strip()
+            conf  = _as_int(row_confs[i], 100) or 100
+
+            # build per-row time
+            k     = (time_kinds[i] or "").strip()
+            d     = (time_dates[i] or "").strip()
+            s     = (time_starts[i] or "").strip()
+            en    = (time_ends[i] or "").strip()
+            sub   = (time_subvalues[i] or "").strip()
+            tconf = _as_int(time_confidences[i], 100) or 100
+
+            raw_time = {}
+            if k:
+                raw_time = {"label_type": k, "confidence": tconf}
+                if k == "date":
+                    raw_time["date_value"] = d
+                elif k == "range":
+                    raw_time["start_date"] = s
+                    raw_time["end_date"]   = en
+                else:
+                    raw_time["subvalue"]   = sub
+
+            normalised = {}
+            if normalise_time_for_bio_entry and raw_time:
+                try:
+                    normalised = normalise_time_for_bio_entry(raw_time, biography=bio, option_meta=None) or {}
+                except Exception:
+                    normalised = {}
+
+            ev = {
+                "group_key": chosen_group,
+                "option_id": oid,
+                "option_display": odisp,
+                "linked_type": ltyp or None,
+                "linked_bio": lbio or None,
+                "confidence": conf,
+                "time": raw_time,
+                "time_normalised": normalised,
+                "created": now
+            }
+            e["events"].append(ev)
+            added += 1
+
+        if added:
+            e["updated"] = now
+            bio["updated"] = now
+            save_dict_as_json(bio_file, bio)
+            flash(f"Added {added} event(s).", "success")
+            return redirect(url_for("general_iframe_wizard", type=type_name, bio_id=bio_id, step="review"))
+        else:
+            flash("Nothing to add. Add at least one row.", "error")
+
+    # existing events on this entry
+    current_events = bio["entries"][idx].get("events") or []
+
+    # time categories for per-row dropdowns
+    time_catalog = load_time_catalog(type_name)
+    time_categories = [{"key": c["key"], "desc": c.get("description","")} for c in time_catalog.get("categories", [])]
+
+    return render_template(
+        "events_step.html",
+        type_name=type_name,
+        bio_id=bio_id,
+        bio_name=bio.get("name", bio_id),
+        groups=groups,
+        chosen_group=chosen_group,
+        group_doc=group_doc,
+        chosen_option=chosen_option,
+        allowed_types=allowed_types,
+        linkable=linkable,
+        current_events=current_events,
+        time_categories=time_categories,
+        types=list_types()  # list, not callable in Jinja
+    )
+
+
 # ---------- 6) Step: Review ----------
 @app.route("/general_step/review/<type_name>/<bio_id>")
 def general_step_review(type_name, bio_id):
@@ -5913,293 +6075,155 @@ def biography_editlabel_submit(type_name, biography_name, entry_index, label_ind
     return redirect(f"/biography/{type_name}/{biography_name}")
 
 
-
-@app.route('/events_add', methods=['GET','POST'])
+@app.route("/events/add", methods=["GET", "POST"])
 def events_add():
     """
-    Lets a user create a new event referencing multiple types (people, organisations, etc.),
-    with an optional date approach (exact/partial) or subfolder approach (like 'person_decade').
+    Create a new 'event' biography that:
+      - reuses your time catalog + normalisation
+      - lets you pick a relationship label (from events/labels/relationship.json if present)
+      - lets you attach multiple participants across types (person, organisation, building, …)
     """
+    events_dir = os.path.join("types", "events", "biographies")
+    os.makedirs(events_dir, exist_ok=True)
 
-    # 1) PATH to the events directory
-    events_biographies_path = "./types/events/biographies"
+    # ---- load selectable things ----
+    # Relationship options are data-driven if you add labels under types/events/labels/relationship.json
+    def _load_relationship_options():
+        labels_path = os.path.join("types", "events", "labels", "relationship.json")
+        try:
+            data = load_json_as_dict(labels_path) or {}
+            return [ {"id": o.get("id"), "display": o.get("display") or o.get("id")} for o in data.get("options", []) ]
+        except Exception:
+            # Fallback hard-coded
+            return [{"id":"employed_by","display":"Employed By"},
+                    {"id":"lived_in","display":"Lived In"},
+                    {"id":"founded","display":"Founded"},
+                    {"id":"collaborated","display":"Collaborated"},
+                    {"id":"visited","display":"Visited"}]
 
-    # Ensure the folder exists
-    os.makedirs(events_biographies_path, exist_ok=True)
+    relationship_opts = _load_relationship_options()
 
-    # 2) If POST => process form submission
-    if request.method == 'POST':
-        # a) Basic fields
-        relationship = request.form.get("relationship","").strip()  # e.g. "EMPLOYED_BY"
-        person_id    = request.form.get("person_id","").strip()
-        org_id       = request.form.get("org_id","").strip()
-        notes        = request.form.get("notes","").strip()
+    # Participants: allow picking from any known type folders you care about
+    selectable_types = ["person", "organisations", "buildings"]  # extend freely
+    per_type_bios = { t: list_biographies(t) for t in selectable_types }
 
-        # b) Approach => date or subfolder
-        chosen_approach = request.form.get("approach","date")
-        # if date => partial vs exact
-        date_mode = request.form.get("date_mode","exact")
-        start_value = ""
-        end_value   = ""
+    # Time catalog for events (you can put decade/era etc. under types/events/labels/_time/*)
+    def _time_catalog_for_events():
+        try:
+            return load_time_catalog("events")
+        except Exception:
+            return {"categories":[{"key":"date","description":"A date in time"},
+                                  {"key":"life_stage","description":"A period"}],
+                    "options":{}}
 
-        if chosen_approach == "date":
-            # user picking partial vs exact
-            if date_mode == "exact":
-                start_value = request.form.get("start_full_date","").strip()  # e.g. "1939-09-01"
-                end_value   = request.form.get("end_full_date","").strip()
-            else:
-                start_value = request.form.get("start_partial_year","").strip()  # e.g. "1939"
-                end_value   = request.form.get("end_partial_year","").strip()
+    time_catalog = _time_catalog_for_events()
+
+    if request.method == "POST":
+        # ---- gather form ----
+        name         = (request.form.get("name") or "").strip()
+        relationship = (request.form.get("relationship") or "").strip()
+        notes        = (request.form.get("notes") or "").strip()
+
+        # Participants come as rows: participant_type[i], participant_bio[i], role[i], confidence[i]
+        participants = []
+        idx = 0
+        while True:
+            tkey = request.form.get(f"participant_type[{idx}]")
+            bid  = request.form.get(f"participant_bio[{idx}]")
+            role = (request.form.get(f"participant_role[{idx}]") or "").strip()
+            conf = request.form.get(f"participant_conf[{idx}]")
+            if tkey is None and bid is None:
+                break
+            if (tkey or "").strip() and (bid or "").strip():
+                try:
+                    confv = int(conf) if conf is not None else 100
+                except Exception:
+                    confv = 100
+                participants.append({
+                    "type": tkey.strip(),
+                    "bio_id": bid.strip(),
+                    "role": role,
+                    "confidence": confv
+                })
+            idx += 1
+
+        # Time selection (same shape your time_step uses)
+        lt = (request.form.get("label_type") or "").strip()
+        sub = (request.form.get("subvalue") or "").strip()
+        dv  = (request.form.get("date_value") or "").strip()
+        sd  = (request.form.get("start_date") or "").strip()
+        ed  = (request.form.get("end_date") or "").strip()
+        try:
+            tconf = int(request.form.get("time_confidence") or "100")
+        except Exception:
+            tconf = 100
+
+        raw_time = {"label_type": lt, "confidence": tconf}
+        if lt == "date":
+            raw_time["date_value"] = dv
+        elif lt == "range":
+            raw_time["start_date"] = sd
+            raw_time["end_date"]   = ed
         else:
-            # subfolder approach => e.g. 'person_decade'
-            # user picks from subfolder for start, end
-            start_sub_val = request.form.get("start_sub_val","").strip()
-            if start_sub_val == "custom":
-                start_sub_val = request.form.get("start_custom_val","").strip() or "Custom"
-            end_sub_val = request.form.get("end_sub_val","").strip()
-            if end_sub_val == "custom":
-                end_sub_val = request.form.get("end_custom_val","").strip() or "Custom"
+            raw_time["subvalue"] = sub
 
-            start_value = start_sub_val
-            end_value   = end_sub_val
+        # Option meta for time (if decade/era etc.)
+        opt_meta = None
+        for o in time_catalog.get("options", {}).get(lt, []):
+            if o.get("id") == sub:
+                opt_meta = o
+                break
 
-        # c) Build new event JSON structure
-        import time
-        timestamp = str(int(time.time()))  # unique-ish
-        new_event_id = f"E_{timestamp}"
-        new_event_data = {
-            "id": new_event_id,
-            "relationship": relationship,
-            "person_id": person_id,
-            "org_id": org_id,
-            "approach": chosen_approach,  # "date" or "person_decade" or something
-            "date_mode": date_mode,       # "exact" or "partial" if date
-            "start_value": start_value,
-            "end_value": end_value,
-            "notes": notes
+        try:
+            from time_utils import normalise_time_for_bio_entry
+            time_norm = normalise_time_for_bio_entry(raw_time, biography={}, option_meta=opt_meta)
+        except Exception:
+            time_norm = {}
+
+        # Event entry label bucket (relationship)
+        rel_label = []
+        if relationship:
+            rel_label = [{
+                "label_type": "relationship",
+                "id": relationship,
+                "confidence": 100
+            }]
+
+        # ---- write file ----
+        now_iso = now_iso_utc()
+        new_id  = f"evt_{uuid.uuid4().hex[:12]}"
+        payload = {
+            "id": new_id,
+            "uid": uuid.uuid4().hex,
+            "name": name or new_id.replace("_"," ").title(),
+            "type": "events",
+            "created": now_iso,
+            "updated": now_iso,
+            "archived": False,
+            "entries": [{
+                "created": now_iso,
+                "updated": now_iso,
+                "time": raw_time,
+                "time_normalised": time_norm,
+                "events": rel_label,
+                "participants": participants,
+                "notes": notes
+            }]
         }
+        save_dict_as_json(os.path.join(events_dir, f"{new_id}.json"), payload)
+        flash("Event created.", "success")
+        return redirect(url_for("biography_view", type_name="events", bio_id=new_id))
 
-        # d) Save new event to e.g. /types/events/biographies/E_<timestamp>.json
-        new_event_path = os.path.join(events_biographies_path, f"{new_event_id}.json")
-        save_dict_as_json(new_event_path, new_event_data)
+    # ---- GET: render a template ----
+    # (Make a simple template 'event_add.html' with fields for: name, relationship,
+    #  dynamic participant rows, and the same time widget layout you use in time_step.html.)
+    return render_template(
+        "event_add.html",
+        relationship_opts=relationship_opts,
+        per_type_bios=per_type_bios,
+        time_catalog=time_catalog
+    )
 
-        flash(f"Event {new_event_id} created successfully!", "success")
-        return redirect("/events_list")  # or wherever you want to go
-
-    # 3) If GET => show form
-    # We'll gather known people and org IDs from your existing directories to populate dropdowns
-
-    # known people
-    people_path = "./types/people/biographies"
-    people_files = [f for f in os.listdir(people_path) if f.endswith(".json")]
-    people_options = []
-    for pf in people_files:
-        # load each JSON, extract ID or name
-        p_data = load_json_as_dict(os.path.join(people_path, pf))
-        pid    = p_data.get("id", pf[:-5])  # fallback
-        pname  = p_data.get("name", pid)
-        people_options.append((pid, pname))
-
-    # known organisations
-    org_path = "./types/organisations/biographies"
-    org_files = [f for f in os.listdir(org_path) if f.endswith(".json")]
-    org_options = []
-    for of in org_files:
-        o_data = load_json_as_dict(os.path.join(org_path, of))
-        oid    = o_data.get("id", of[:-5])
-        oname  = o_data.get("name", oid)
-        org_options.append((oid, oname))
-
-    # We'll also define relationships
-    possible_relationships = ["EMPLOYED_BY","LIVED_IN","FOUNDED","COLLABORATED","VISITED"]
-
-    # We'll define a plain triple-quoted string for the form
-    html_form = r"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <title>Add Event</title>
-      <style>
-        .hidden { display: none; }
-      </style>
-      <script>
-      function onApproachChange() {
-        let apSel = document.getElementById("approach").value;
-        let dateSec = document.getElementById("date_approach_section");
-        let subSec  = document.getElementById("subfolder_approach_section");
-        if(apSel==="date") {
-          dateSec.style.display="block";
-          subSec.style.display="none";
-        } else {
-          dateSec.style.display="none";
-          subSec.style.display="block";
-        }
-      }
-      function onDateModeChange(prefix) {
-        let exactRad = document.getElementById(prefix+"_date_mode_exact");
-        let partialRad= document.getElementById(prefix+"_date_mode_partial");
-        let exactDiv = document.getElementById(prefix+"_exactDiv");
-        let partDiv  = document.getElementById(prefix+"_partialDiv");
-        if(exactRad.checked) {
-          exactDiv.style.display="block";
-          partDiv.style.display="none";
-        } else {
-          exactDiv.style.display="none";
-          partDiv.style.display="block";
-        }
-      }
-      function checkCustom(prefix) {
-        let sel= document.getElementById(prefix+"_sub_val");
-        let cust= document.getElementById(prefix+"_custom_val");
-        if(sel.value==="custom"){
-          sel.style.display="none";
-          cust.style.display="inline-block";
-        } else {
-          cust.style.display="none";
-          sel.style.display="inline-block";
-        }
-      }
-      window.onload=function(){
-        onApproachChange();
-        onDateModeChange("start");
-        onDateModeChange("end");
-      }
-      </script>
-    </head>
-    <body>
-      <h1>Add Event</h1>
-      <form method="post">
-        <label>Relationship:</label>
-        <select name="relationship" id="relationship">
-          RELATIONSHIP_OPTIONS
-        </select>
-        <br><br>
-
-        <label>Person:</label>
-        <select name="person_id" id="person_id">
-          PEOPLE_OPTIONS
-        </select>
-        <br>
-
-        <label>Organisation:</label>
-        <select name="org_id" id="org_id">
-          ORG_OPTIONS
-        </select>
-        <br>
-
-        <label>Notes:</label>
-        <input type="text" name="notes" size="50"><br><br>
-
-        <h2>Approach:</h2>
-        <select id="approach" name="approach" onchange="onApproachChange()">
-          <option value="date">Date</option>
-          <option value="person_decade">Person Decade</option>
-        </select>
-
-        <div id="date_approach_section" style="display:none;">
-          <!-- Start date approach -->
-          <h3>Start (Date)</h3>
-          <label>
-            <input type="radio" id="start_date_mode_exact" name="date_mode" value="exact"
-                   onclick="onDateModeChange('start')" checked>Exact
-          </label>
-          <label>
-            <input type="radio" id="start_date_mode_partial" name="date_mode" value="partial"
-                   onclick="onDateModeChange('start')">Partial
-          </label>
-          <div id="start_exactDiv">
-            <label>Exact Start Date:</label>
-            <input type="date" name="start_full_date">
-          </div>
-          <div id="start_partialDiv" class="hidden">
-            <label>Partial Start Year:</label>
-            <input type="number" name="start_partial_year" min="1" max="9999">
-          </div>
-
-          <!-- End date approach -->
-          <h3>End (Date)</h3>
-          <label>
-            <input type="radio" id="end_date_mode_exact" name="end_date_mode" value="exact"
-                   onclick="onDateModeChange('end')" checked>Exact
-          </label>
-          <label>
-            <input type="radio" id="end_date_mode_partial" name="end_date_mode" value="partial"
-                   onclick="onDateModeChange('end')">Partial
-          </label>
-          <div id="end_exactDiv">
-            <label>Exact End Date:</label>
-            <input type="date" name="end_full_date">
-          </div>
-          <div id="end_partialDiv" class="hidden">
-            <label>Partial End Year:</label>
-            <input type="number" name="end_partial_year" min="1" max="9999">
-          </div>
-        </div>
-
-        <div id="subfolder_approach_section" style="display:none;">
-          <!-- e.g. person_decade approach -->
-          <h3>Start (Subfolder)</h3>
-          <select id="start_sub_val" name="start_sub_val" onchange="checkCustom('start')">
-            <option value="1920s">1920s</option>
-            <option value="1930s">1930s</option>
-            <option value="custom">Enter Custom Value</option>
-          </select>
-          <input type="text" id="start_custom_val" name="start_custom_val" style="display:none;">
-
-          <h3>End (Subfolder)</h3>
-          <select id="end_sub_val" name="end_sub_val" onchange="checkCustom('end')">
-            <option value="1920s">1920s</option>
-            <option value="1930s">1930s</option>
-            <option value="custom">Enter Custom Value</option>
-          </select>
-          <input type="text" id="end_custom_val" name="end_custom_val" style="display:none;">
-        </div>
-
-        <br><br>
-        <button type="submit">Add Event</button>
-      </form>
-    </body>
-    </html>
-    """
-
-    # 4) We'll dynamically build the <option> lists for relationships, people, orgs
-
-    # relationship
-    possible_relationships = ["EMPLOYED_BY","LIVED_IN","VISITED","FOUNDED","COLLABORATED"]
-    relationship_html = "".join(f'<option value="{r}">{r}</option>' for r in possible_relationships)
-
-    # People
-    people_dir = "./types/people/biographies"
-    people_opts = []
-    if os.path.exists(people_dir):
-        for pf in os.listdir(people_dir):
-            if pf.endswith(".json"):
-                p_data = load_json_as_dict(os.path.join(people_dir, pf))
-                pid    = p_data.get("id", pf[:-5])
-                pname  = p_data.get("name", pid)
-                people_opts.append(f'<option value="{pid}">{pname}</option>')
-    people_html = "".join(people_opts)
-
-    # Orgs
-    orgs_dir = "./types/organisations/biographies"
-    org_opts = []
-    if os.path.exists(orgs_dir):
-        for of in os.listdir(orgs_dir):
-            if of.endswith(".json"):
-                o_data = load_json_as_dict(os.path.join(orgs_dir, of))
-                oid    = o_data.get("id", of[:-5])
-                oname  = o_data.get("name", oid)
-                org_opts.append(f'<option value="{oid}">{oname}</option>')
-    orgs_html = "".join(org_opts)
-
-    # 5) Insert them into the HTML with .replace
-    final_form = html_form
-    final_form = final_form.replace("RELATIONSHIP_OPTIONS", relationship_html)
-    final_form = final_form.replace("PEOPLE_OPTIONS", people_html)
-    final_form = final_form.replace("ORG_OPTIONS", orgs_html)
-
-    return final_form
 
 
 if __name__ == "__main__":
