@@ -53,7 +53,12 @@
       </div>
       <div class="toolbar">
         <a class="btn secondary" href="{{ url_for('type_browse', type_name=type_name) }}">⬅️ Back to {{ type_name|replace('_',' ')|title }}</a>
-        <a class="btn secondary" href="{{ url_for('search_or_add_biography', type_name=type_name, q=bio.name or bio_id) }}">🔎 Most Like</a>
+        <a class="btn ghost"
+   href="{{ url_for('most_like_type', type_name=type_name, bio_id=bio_id) }}">
+  🔍 Find Similar {{ type_name|replace('_',' ')|title }}
+</a>
+
+
       </div>
     </div>
 

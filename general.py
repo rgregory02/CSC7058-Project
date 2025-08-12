@@ -2800,179 +2800,225 @@ def suggest_labels():
             "error": str(e)
         }), 500
 
+@app.route("/most_like/<type_name>/<bio_id>")
+def most_like_type(type_name, bio_id):
+    """
+    Compare one biography against *all other biographies of the same type*
+    using an MSE-like score over confidence vectors, grouped by time period.
+    Both LABELS (lists saved under entry keys) and EVENTS (entry['events'])
+    are included.
 
-@app.route("/most_like/<person_id>")
-def most_like(person_id):
+    Vector element = confidence (0..100) of a thing present in a time bucket.
+    Missing things = 0. MSE is averaged over the union of keys per-time.
+    """
     import math
 
-    def extract_by_time(person_data):
-        time_vectors = {}
-        for entry in person_data.get("entries", []):
-            time_key = entry.get("time", {}).get("subvalue") or entry.get("time", {}).get("date_value") or "unknown"
-            if time_key not in time_vectors:
-                time_vectors[time_key] = {}
+    # ---------- helpers ----------
+    def _uk_dob(meta):
+        # Keep whatever you already use; this just prevents KeyErrors if absent
+        return meta.get("dob") or meta.get("date_of_birth") or ""
 
-            for key, values in entry.items():
-                if key in ["time", "created", "status"]:
+    def _time_key(entry: dict) -> str:
+        """
+        A stable, human-readable time bucket key for grouping.
+        Preference: subvalue (e.g. 'teens'), else date_value (YYYY-MM-DD),
+        else start..end (range), else 'unknown'.
+        """
+        t = (entry or {}).get("time") or {}
+        if t.get("subvalue"):
+            return str(t["subvalue"])
+        if t.get("date_value"):
+            return str(t["date_value"])        # already ISO-like (YYYY[-MM[-DD]])
+        if t.get("start_date") or t.get("end_date"):
+            s = t.get("start_date", "")
+            e = t.get("end_date", "")
+            return f"{s}..{e}".strip(".")
+        return "unknown"
+
+    def _safe_name(x: dict, fallback: str) -> str:
+        return (x or {}).get("name") or fallback
+
+    def _extract_vectors_by_time(bio_json: dict) -> dict:
+        """
+        Produce:
+            {
+              "<time_key>": {
+                  "<vector_key>": {
+                      "confidence": int 0..100,
+                      "kind": "label" | "event",
+                      "display": str,            # for rendering
+                      "meta": {...}              # extra fields for display
+                  },
+                  ...
+              },
+              ...
+            }
+        """
+        out = {}
+        for entry in bio_json.get("entries", []) or []:
+            tk = _time_key(entry)
+            out.setdefault(tk, {})
+
+            # ----- LABELS (any list under entry that isn't time/events/created/updated/status) -----
+            for bucket_key, values in (entry or {}).items():
+                if bucket_key in ("time", "time_normalised", "events", "created", "updated", "status"):
                     continue
-                if isinstance(values, list):
-                    for label in values:
-                        label_type = label.get("label_type")
-                        label_id = label.get("id")
-                        display = label.get("display", "")
-                        confidence = label.get("confidence", 100)
-                        if label_type and label_id:
-                            vector_key = f"{label_type}/{label_id}"
-                            time_vectors[time_key][vector_key] = {
-                                "confidence": confidence,
-                                "label_type": label_type,
-                                "id": label_id,
-                                "display": display
-                            }
-        return time_vectors
+                if not isinstance(values, list):
+                    continue
 
-    # Load target
-    target_path = f"./types/person/biographies/{person_id}.json"
+                for lab in values:
+                    if not isinstance(lab, dict):
+                        continue
+                    lid  = (lab.get("id") or "").strip()
+                    ltyp = (lab.get("label_type") or bucket_key or "").strip()
+                    if not lid or not ltyp:
+                        continue
+
+                    # Vector key for labels
+                    vkey = f"L::{ltyp}::{lid}"
+
+                    out[tk][vkey] = {
+                        "confidence": int(lab.get("confidence", 100)),
+                        "kind": "label",
+                        "display": lab.get("display") or lid.replace("_", " ").title(),
+                        "meta": {
+                            "label_type": ltyp,
+                            "id": lid
+                        }
+                    }
+
+            # ----- EVENTS -----
+            for ev in (entry.get("events") or []):
+                if not isinstance(ev, dict):
+                    continue
+                gk   = (ev.get("group_key") or "event").strip()
+                oid  = (ev.get("option_id") or ev.get("option_display") or "").strip()
+                cid  = (ev.get("child_option_id") or "").strip()
+                ltyp = (ev.get("link_type") or "").strip()
+                lbio = (ev.get("linked_bio") or "").strip()
+
+                # Require *some* identity:
+                if not (gk or oid or cid or ltyp or lbio):
+                    continue
+
+                # Vector key for events (structure is order-sensitive but stable)
+                parts = [gk, oid, cid, ltyp, lbio]
+                # compress empties at the end
+                while parts and not parts[-1]:
+                    parts.pop()
+                vkey = "E::" + "/".join(parts) if parts else "E::" + gk
+
+                # Confidence defaults like labels
+                conf = int(ev.get("confidence", 100))
+
+                # Human display
+                disp = ev.get("option_display") or oid or gk
+                if cid:
+                    disp += f" → {cid}"
+
+                # Optional: show linked type/target
+                extra = []
+                if ltyp: extra.append(ltyp)
+                if lbio: extra.append(lbio)
+                if extra:
+                    disp += f" ({' → '.join(extra)})"
+
+                out[tk][vkey] = {
+                    "confidence": conf,
+                    "kind": "event",
+                    "display": disp,
+                    "meta": {
+                        "group_key": gk, "option_id": oid, "child_id": cid,
+                        "link_type": ltyp, "linked_bio": lbio
+                    }
+                }
+
+        return out
+
+    # ---------- load the target biography ----------
+    target_path = os.path.join("types", type_name, "biographies", f"{bio_id}.json")
     if not os.path.exists(target_path):
-        return f"Person {person_id} not found", 404
+        return f"{type_name} biography '{bio_id}' not found.", 404
 
-    target_data = load_json_as_dict(target_path)
-    target_by_time = extract_by_time(target_data)
+    target = load_json_as_dict(target_path) or {}
+    target_name = _safe_name(target, bio_id)
+    target_vecs = _extract_vectors_by_time(target)
 
-    scores = []
-
-    for filename in os.listdir("./types/person/biographies"):
-        if not filename.endswith(".json"):
+    # ---------- compare to all others of same type ----------
+    bio_folder = os.path.join("types", type_name, "biographies")
+    candidates = []
+    for fn in os.listdir(bio_folder):
+        if not fn.endswith(".json"):
             continue
-        other_id = filename.replace(".json", "")
-        if other_id == person_id:
+        other_id = fn[:-5]
+        if other_id == bio_id:
             continue
 
-        other_data = load_json_as_dict(f"./types/person/biographies/{filename}")
-        other_by_time = extract_by_time(other_data)
+        other = load_json_as_dict(os.path.join(bio_folder, fn)) or {}
+        other_vecs = _extract_vectors_by_time(other)
 
-        # Compare only overlapping time periods
-        shared_times = set(target_by_time.keys()) & set(other_by_time.keys())
-        total_error = 0
+        # Per-time comparison on union of keys (labels + events)
+        shared_times = set(target_vecs.keys()) & set(other_vecs.keys())
+        if not shared_times:
+            continue
+
+        total_err = 0.0
         count = 0
-        matched_by_time = {}
+        shared_labels_by_time = {}
+        shared_events_by_time = {}
 
-        for time_key in shared_times:
-            t_vec = target_by_time[time_key]
-            o_vec = other_by_time[time_key]
-            all_keys = set(t_vec.keys()) | set(o_vec.keys())
+        for tk in shared_times:
+            tv = target_vecs[tk]
+            ov = other_vecs[tk]
+            all_keys = set(tv.keys()) | set(ov.keys())
 
-            for key in all_keys:
-                t_val = t_vec.get(key, {}).get("confidence", 0)
-                o_val = o_vec.get(key, {}).get("confidence", 0)
-                error = ((t_val - o_val) / 100) ** 2
-                total_error += error
+            for k in all_keys:
+                t_conf = tv.get(k, {}).get("confidence", 0)
+                o_conf = ov.get(k, {}).get("confidence", 0)
+                # normalise to 0..1 first
+                err = ((t_conf - o_conf) / 100.0) ** 2
+                total_err += err
                 count += 1
 
-                if key in t_vec and key in o_vec:
-                    if time_key not in matched_by_time:
-                        matched_by_time[time_key] = []
-                    matched_by_time[time_key].append({
-                        "label_type": t_vec[key].get("label_type", ""),
-                        "display": t_vec[key].get("display", key.split("/")[-1]),
-                        "confidence_1": t_val,
-                        "confidence_2": o_val
-                    })
+                # if both present, record for display
+                if k in tv and k in ov:
+                    item = {
+                        "display": tv[k]["display"],
+                        "confidence_1": t_conf,
+                        "confidence_2": o_conf
+                    }
+                    if tv[k]["kind"] == "event":
+                        shared_events_by_time.setdefault(tk, []).append(item)
+                    else:
+                        # label
+                        # keep label_type too for context in UI
+                        item["label_type"] = tv[k]["meta"].get("label_type", "")
+                        shared_labels_by_time.setdefault(tk, []).append(item)
 
         if count == 0:
             continue
 
-        mse = total_error / count
+        mse = total_err / count
 
-        scores.append({
-            "person_id": other_id,
+        candidates.append({
+            "id": other_id,
+            "name": _safe_name(other, other_id),
+            "dob": _uk_dob(other),
             "mse": mse,
-            "name": other_data.get("name", other_id),
-            "dob": other_data.get("dob", "Unknown"),
-            "shared_labels_by_time": matched_by_time
+            "shared_labels_by_time": shared_labels_by_time,
+            "shared_events_by_time": shared_events_by_time
         })
 
-    scores.sort(key=lambda x: x["mse"])
-    top_matches = scores[:5]
+    candidates.sort(key=lambda x: x["mse"])
+    top_matches = candidates[:5]
 
-    return render_template("most_like_results.html",
-                           person_name=target_data.get("name", person_id),
-                           matches=top_matches)
-
-@app.route("/search_or_add_biography/<type_name>", methods=["GET", "POST"])
-def search_or_add_biography(type_name):
-    bio_folder = f"./types/{type_name}/biographies"
-    os.makedirs(bio_folder, exist_ok=True)
-
-    matched = []
-    query = ""
-    return_url = request.args.get("return_url", url_for("index_page"))
-
-    # Handle POST actions
-    if request.method == "POST":
-        if "search_query" in request.form:
-            query = request.form["search_query"].strip().lower()
-            for root, _, files in os.walk(bio_folder):
-                for f in files:
-                    if f.endswith(".json") and query in f.lower():
-                        bio_id = f[:-5]
-                        filepath = os.path.join(root, f)
-                        try:
-                            with open(filepath, "r") as file:
-                                data = json.load(file)
-                            matched.append({
-                                "id": bio_id,
-                                "display": data.get("name", bio_id),
-                                "description": data.get("description", "")
-                            })
-                        except Exception as e:
-                            print(f"[ERROR] Reading biography {filepath}: {e}")
-
-        elif "new_bio_name" in request.form:
-            name = request.form["new_bio_name"].strip()
-            desc = request.form.get("new_bio_description", "").strip()
-            bio_id = name.lower().replace(" ", "_")
-            filepath = os.path.join(bio_folder, f"{bio_id}.json")
-
-            if not os.path.exists(filepath):
-                new_bio = {
-                    "name": name,
-                    "description": desc,
-                    "created": datetime.now().isoformat()
-                }
-                with open(filepath, "w") as f:
-                    json.dump(new_bio, f, indent=2)
-
-                flash(f"Biography '{name}' created successfully.", "success")
-                return redirect(return_url)
-            else:
-                flash("A biography with this name already exists.", "error")
-
-    # Load and filter all available biographies (even when not searching)
-    for root, _, files in os.walk(bio_folder):
-        for f in files:
-            if f.endswith(".json"):
-                bio_id = f[:-5]
-                filepath = os.path.join(root, f)
-                try:
-                    with open(filepath, "r") as file:
-                        data = json.load(file)
-                    display_name = data.get("name", bio_id)
-                    description = data.get("description", "")
-                    if not query or query in display_name.lower():
-                        matched.append({
-                            "id": bio_id,
-                            "display": display_name,
-                            "description": description
-                        })
-                except Exception as e:
-                    print(f"[ERROR] Reading biography {filepath}: {e}")
-
-    return render_template("search_or_add_biography.html",
-                           type_name=type_name,
-                           query=query,
-                           results=matched,
-                           return_url=return_url)
+    return render_template(
+        "most_like_results_generic.html",
+        type_name=type_name,
+        bio_id=bio_id,
+        base_name=target_name,
+        matches=top_matches
+    )
 
 
 
