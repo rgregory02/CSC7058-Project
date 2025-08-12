@@ -1,0 +1,79 @@
+{
+    "id": "teddy_3",
+    "uid": "8fb46f301eba4d75a649df66b46a927a",
+    "name": "Teddy",
+    "type": "person",
+    "created": "2025-08-12T18:54:08.308327+00:00",
+    "updated": "2025-08-12T19:13:41.120730+00:00",
+    "entries": [
+        {
+            "created": "2025-08-12T18:54:12.173482+00:00",
+            "updated": "2025-08-12T19:13:41.120730+00:00",
+            "time": {
+                "label_type": "date",
+                "confidence": 100,
+                "date_value": "2025-08-07"
+            },
+            "time_normalised": {
+                "kind": "date",
+                "start_iso": "2025-08-07",
+                "end_iso": "2025-08-07",
+                "start_ts": 1754524800,
+                "end_ts": 1754524800,
+                "precision": "exact",
+                "age_years": null,
+                "notes": "Direct date entry"
+            },
+            "person": [],
+            "events": [
+                {
+                    "group_key": "relationship",
+                    "option_id": "child",
+                    "option_display": "Child",
+                    "link_type": "person",
+                    "confidence": 100,
+                    "time": {
+                        "label_type": "life_stage",
+                        "confidence": 68,
+                        "subvalue": ""
+                    },
+                    "time_normalised": {
+                        "kind": "life_stage",
+                        "start_iso": null,
+                        "end_iso": null,
+                        "start_ts": null,
+                        "end_ts": null,
+                        "precision": "unknown",
+                        "age_years": null,
+                        "notes": "Unrecognised time label (no bounds)"
+                    },
+                    "created": "2025-08-12T19:13:13.858099+00:00"
+                },
+                {
+                    "group_key": "relationship",
+                    "option_id": "spouse",
+                    "option_display": "Spouse",
+                    "link_type": "person",
+                    "linked_bio": "Person_7152719",
+                    "confidence": 74,
+                    "time": {
+                        "label_type": "life_stage",
+                        "confidence": 42,
+                        "subvalue": ""
+                    },
+                    "time_normalised": {
+                        "kind": "life_stage",
+                        "start_iso": null,
+                        "end_iso": null,
+                        "start_ts": null,
+                        "end_ts": null,
+                        "precision": "unknown",
+                        "age_years": null,
+                        "notes": "Unrecognised time label (no bounds)"
+                    },
+                    "created": "2025-08-12T19:13:41.120706+00:00"
+                }
+            ]
+        }
+    ]
+}

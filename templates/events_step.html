@@ -13,44 +13,77 @@
     @media (max-width:900px){ .grid{ grid-template-columns:1fr; } }
     .card{ background:#fff; border:1px solid #e7e9f2; border-radius:12px; padding:16px; }
     .row{ display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap; }
-    .btn{ padding:8px 14px; border-radius:8px; border:0; cursor:pointer; font-weight:700; }
-    .btn.primary{ background:#6c63ff; color:#fff; }
-    .btn.outline{ background:#fff; color:#6c63ff; border:1px solid #6c63ff; }
+    .btn{ padding:10px 16px; border-radius:10px; border:0; cursor:pointer; font-weight:700; }
+    .btn.primary{ background:#2563eb; color:#fff; }
+    .btn.outline{ background:#fff; color:#2563eb; border:1px solid #2563eb; }
     .small{ font-size:12px; color:#6b7280; }
     .event-row{ border-left:4px solid #e5e7eb; background:#fafafa; border-radius:8px; padding:10px; margin-bottom:10px; }
     select,input[type="text"],input[type="date"]{ padding:8px; border:1px solid #dfe3ee; border-radius:8px; }
     .hidden{ display:none; }
+    .flash-container{ margin-bottom:10px; }
+    .flash-banner{ padding:10px; border-radius:8px; }
+    .flash-success{ background:#ecfdf5; color:#065f46; }
+    .flash-error{ background:#fef2f2; color:#991b1b; }
   </style>
 
   <script>
-    // ---------- helpers ----------
+    // --- utilities ---
     function parseJSONFromScript(id){
-      try{ return JSON.parse(document.getElementById(id).textContent || '{}'); }
+      try{ return JSON.parse((document.getElementById(id)?.textContent) || '{}'); }
       catch(e){ return {}; }
     }
+
+    // Will be filled AFTER the payload <script> exists in the DOM.
+    let TIME_OPTIONS_BY_KEY = {};
+    let OPTIONS = [];
+
     function biosForTypeOptionHtml(type, bag){
       const arr = bag[type] || [];
       return ['<option value="">(none)</option>']
         .concat(arr.map(b => `<option value="${b.id}">${(b.name||b.id)}</option>`))
         .join('');
     }
+
     function wireTimeVisibility(row){
-      const kindSel = row.querySelector('select[name="row_time_kind[]"]');
-      const dateBox = row.querySelector('[data-time="date"]');
-      const rangeBox= row.querySelector('[data-time="range"]');
-      const subBox  = row.querySelector('[data-time="sub"]');
+      const kindSel   = row.querySelector('select[name="row_time_kind[]"]');
+      const dateBox   = row.querySelector('[data-time="date"]');
+      const rangeBox  = row.querySelector('[data-time="range"]');
+      const subBox    = row.querySelector('[data-time="sub"]');
+      const labelBox  = row.querySelector('[data-time="label"]');
+      const labelSel  = row.querySelector('select[name="row_time_label[]"]');
+      const labelFree = row.querySelector('input[name="row_time_label_free[]"]');
+
       const update = () => {
-        const k = (kindSel.value||'').trim();
-        dateBox.classList.toggle('hidden', k!=='date');
-        rangeBox.classList.toggle('hidden', k!=='range');
-        subBox.classList.toggle('hidden', !(k && k!=='date' && k!=='range'));
+        const k = (kindSel.value || '').trim();
+        const hasFolder = !!TIME_OPTIONS_BY_KEY[k];
+
+        // visibility
+        dateBox.classList.toggle('hidden', k !== 'date');
+        rangeBox.classList.toggle('hidden', k !== 'range');
+        labelBox.classList.toggle('hidden', !hasFolder);
+        // sub visible only when not date/range and no folder-backed labels
+        subBox.classList.toggle('hidden', (k === '' || k === 'date' || k === 'range' || hasFolder));
+
+        // populate labels for folder-backed kinds
+        if (hasFolder && labelSel){
+          const opts = TIME_OPTIONS_BY_KEY[k] || [];
+          labelSel.innerHTML = '<option value="">— choose time label —</option>' +
+            opts.map(o => `<option value="${o.id}">${o.display}</option>`).join('');
+        } else if (labelSel){
+          labelSel.innerHTML = '';
+        }
+
+        // optional cleanup when hidden
+        if (labelBox.classList.contains('hidden') && labelFree) labelFree.value = '';
+        if (subBox.classList.contains('hidden')){
+          const subIn = row.querySelector('input[name="row_time_subvalue[]"]');
+          if (subIn) subIn.value = '';
+        }
       };
+
       kindSel.addEventListener('change', update);
       update();
     }
-
-    // OPTIONS is the single source of truth for the "Option" select
-    let OPTIONS = [];
 
     function refreshChildSelect(){
       const optSel = document.getElementById('option_id');
@@ -66,7 +99,8 @@
         childWrap.classList.remove('hidden');
         childSel.appendChild(new Option('— choose —', ''));
         opt.children.forEach(c => {
-          childSel.appendChild(new Option(c.label || c.display || c.id, c.id));
+          const label = c.label || c.display || c.id;
+          childSel.appendChild(new Option(label, c.id));
         });
       }
     }
@@ -77,6 +111,7 @@
       const optSel   = document.getElementById('option_id');
       const childSel = document.getElementById('child_option_id');
       const optId    = optSel?.value || '';
+      if(!optId){ alert('Pick an option first.'); return; }
       const optText  = optSel?.options[optSel.selectedIndex]?.text || optId;
 
       const childShown = childSel && !childSel.closest('.hidden');
@@ -91,7 +126,7 @@
       row.innerHTML = `
         <div class="row">
           <strong style="min-width:120px">Option:</strong>
-          <span>${optText || '(pick above)'}${childText ? ' → ' + childText : ''}</span>
+          <span>${optText}${childText ? ' → ' + childText : ''}</span>
           <input type="hidden" name="row_option_id[]" value="${optId}">
           <input type="hidden" name="row_option_display[]" value="${(childText||optText)}">
           <input type="hidden" name="row_child_option_id[]" value="${childId}">
@@ -104,9 +139,7 @@
           </select>
 
           <label>Target</label>
-          <select name="row_link_bio[]">
-            ${biosForTypeOptionHtml(linkTypesTmpl.options[0]?.value || '', linkable)}
-          </select>
+          <select name="row_link_bio[]"></select>
 
           <label>Confidence</label>
           <input type="range" name="row_confidence[]" min="0" max="100" value="100"
@@ -132,7 +165,13 @@
           </span>
 
           <span data-time="sub" class="hidden">
-            <input type="text" name="row_time_subvalue[]" placeholder="e.g. 1920s / ww2 / toddler">
+            <input type="text" name="row_time_subvalue[]" placeholder="e.g. toddler / WW2 / 1990s">
+          </span>
+
+          <span data-time="label" class="hidden" style="display:inline-flex; gap:8px; align-items:center;">
+            <!-- NOTE: starts empty; will be populated via TIME_OPTIONS_BY_KEY based on selected kind -->
+            <select name="row_time_label[]"></select>
+            <input type="text" name="row_time_label_free[]" placeholder="or enter custom period">
           </span>
 
           <label>Conf</label>
@@ -145,14 +184,18 @@
 
       const tSel = row.querySelector('select[name="row_link_type[]"]');
       const bSel = row.querySelector('select[name="row_link_bio[]"]');
-      tSel.addEventListener('change', () => { bSel.innerHTML = biosForTypeOptionHtml(tSel.value, linkable); });
+      const setTargets = () => { bSel.innerHTML = biosForTypeOptionHtml(tSel.value, parseJSONFromScript('linkable_payload')); };
+      tSel.addEventListener('change', setTargets);
+      setTargets();
 
       wireTimeVisibility(row);
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-      // single source of truth for options
-      OPTIONS = {{ (options | default([], true)) | tojson }};
+      // Load payloads NOW that the script tags exist
+      TIME_OPTIONS_BY_KEY = parseJSONFromScript('time_options_payload');
+      OPTIONS = {{ (options or []) | tojson }};
+
       refreshChildSelect();
       document.getElementById('option_id')?.addEventListener('change', refreshChildSelect);
     });
@@ -160,100 +203,130 @@
 </head>
 <body>
 <div class="box">
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-container">
+        {% for category, message in messages %}
+          <div class="flash-banner flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
   <h1>🧩 Events</h1>
   <div class="subheading">
     <strong>{{ bio_name }}</strong> • {{ type_name|replace('_',' ')|title }}
   </div>
 
-  <!-- Linkable biographies payload: { "<type>":[{id,name,description,updated},...] } -->
+  <!-- payloads -->
   <script id="linkable_payload" type="application/json">{{ (linkable or {})|tojson }}</script>
+  <script id="time_options_payload" type="application/json">{{ (time_options_by_key or {})|tojson }}</script>
 
-  <div class="grid">
-    <div class="card">
-      <h3>Build Events</h3>
-      <form method="POST">
-        <input type="hidden" name="do_save" value="1">
+  {% set has_events = (current_events|length) > 0 %}
+  {% set start = show_builder %}
 
-        <div class="row">
-          <label>Group</label>
-          <select id="group_key" name="group_key" onchange="this.form.submit()">
-            {% for g in groups %}
-              <option value="{{ g.key }}" {% if g.key==chosen_group %}selected{% endif %}>{{ g.label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-
-        <div class="row">
-          <label>Option</label>
-          <select id="option_id" name="option_id">
-            <option value="">— choose —</option>
-            {% for o in (options or []) %}
-              <option value="{{ o.id }}" {% if o.id==chosen_option %}selected{% endif %}>
-                {{ o.display or o.label or o.id }}
-              </option>
-            {% endfor %}
-          </select>
-
-          <span id="child_wrap" class="hidden" style="display:inline-flex;gap:8px;align-items:center">
-            <label>Child</label>
-            <select id="child_option_id" name="child_option_id"></select>
-          </span>
-
-          <button type="button" class="btn outline" onclick="addRowFromSelected()">+ Add Row</button>
-        </div>
-
-        <!-- hidden templates -->
-        <select id="linkTypeTemplate" class="hidden">
-          {% for t in allowed_types %}
-            <option value="{{ t }}">{{ t|replace('_',' ')|title }}</option>
-          {% endfor %}
-        </select>
-
-        <select id="timeKindsTemplate" class="hidden">
-          <option value="">— none —</option>
-          {% for cat in time_categories %}
-            <option value="{{ cat.key }}">{{ cat.desc or cat.key }}</option>
-          {% endfor %}
-        </select>
-
-        <div id="rows"></div>
-
-        <div style="margin-top:10px">
-          <button type="submit" class="btn primary">✅ Save Events & Continue</button>
-        </div>
-      </form>
-    </div>
-
-    <div class="card">
-      <h3>Current Entry — Events</h3>
-      {% if current_events %}
-        <ul class="small" style="margin:0 0 0 16px">
-          {% for ev in current_events %}
-            <li>
-              <strong>{{ ev.option_display or ev.option_id }}</strong>
-              {% if ev.link_type and ev.linked_bio %}
-                — <em>{{ ev.link_type }}</em> → <code>{{ ev.linked_bio }}</code>
-              {% endif %}
-              {% if ev.time and ev.time.label_type=='date' %} • {{ ev.time.date_value }}
-              {% elif ev.time and ev.time.label_type=='range' %} • {{ ev.time.start_date }}…{{ ev.time.end_date }}
-              {% elif ev.time and ev.time.subvalue %} • {{ ev.time.subvalue|replace('_',' ')|title }}
-              {% endif %}
-              {% if ev.confidence is not none %} ({{ ev.confidence }}%){% endif %}
-            </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <div class="small">No events yet.</div>
-      {% endif %}
-
+  {% if not start and not has_events %}
+    <div class="card" style="max-width:680px;margin:16px auto;text-align:center">
+      <h3 style="margin-top:0">Add your first event?</h3>
+      <p class="small">Choose an event property, optionally link to an existing biography, assign a time period (date, range, label, or free text), then save. You can add multiple events in one go.</p>
+      <a class="btn primary" href="{{ url_for('general_step_events', type_name=type_name, bio_id=bio_id) }}?start=1">Start adding events</a>
       <div style="margin-top:10px">
         <a class="btn outline" target="_top"
            href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='review') }}">Skip to Review</a>
+      </div>
+    </div>
+  {% endif %}
+
+  <div id="builder" style="{{ 'display:block' if (start or has_events) else 'display:none' }}">
+    <div class="grid">
+      <div class="card">
+        <h3>Build Events</h3>
+        <form method="POST">
+          <input type="hidden" name="do_save" value="1">
+
+          <div class="row">
+            <label>Group</label>
+            <select id="group_key" name="group_key" onchange="this.form.submit()">
+              {% for g in groups %}
+                <option value="{{ g.key }}" {% if g.key==chosen_group %}selected{% endif %}>{{ g.label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="row">
+            <label>Option</label>
+            <select id="option_id" name="option_id">
+              <option value="">— choose —</option>
+              {% for o in (options or []) %}
+                <option value="{{ o.id }}">{{ o.display or o.label or o.id }}</option>
+              {% endfor %}
+            </select>
+
+            <span id="child_wrap" class="hidden" style="display:inline-flex;gap:8px;align-items:center">
+              <label>Child</label>
+              <select id="child_option_id" name="child_option_id"></select>
+            </span>
+
+            <button type="button" class="btn outline" onclick="addRowFromSelected()">+ Add Row</button>
+          </div>
+
+          <select id="linkTypeTemplate" class="hidden">
+            {% for t in allowed_types %}
+              <option value="{{ t }}">{{ t|replace('_',' ')|title }}</option>
+            {% endfor %}
+          </select>
+
+          <select id="timeKindsTemplate" class="hidden">
+            <option value="">— none —</option>
+            {% for kind in time_kinds %}
+              <option value="{{ kind.key }}">{{ kind.desc }}</option>
+            {% endfor %}
+          </select>
+
+          <div id="rows"></div>
+
+          <div style="display:flex; gap:8px; margin-top:12px;">
+            <button type="submit" class="btn outline" name="next_action" value="stay">💾 Save & Add More</button>
+            <button type="submit" class="btn primary" name="next_action" value="review">✅ Save Events & Continue</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h3>Current Entry — Events</h3>
+        {% if current_events %}
+          <ul class="small" style="margin:0 0 0 16px">
+            {% for ev in current_events %}
+              <li>
+                <strong>{{ ev.option_display or ev.option_id }}</strong>
+                {% if ev.link_type and ev.linked_bio %}
+                  — <em>{{ ev.link_type }}</em> → <code>{{ ev.linked_bio }}</code>
+                {% endif %}
+                {% if ev.time %}
+                  {% if ev.time.label_type=='date' %} • {{ ev.time.date_value }}
+                  {% elif ev.time.label_type=='range' %} • {{ ev.time.start_date }}…{{ ev.time.end_date }}
+                  {% elif ev.time.label_type=='sub' and ev.time.subvalue %} • {{ ev.time.subvalue|replace('_',' ')|title }}
+                  {% else %}
+                    {% if ev.time.label_id %} • {{ ev.time.label_id }}{% endif %}
+                    {% if ev.time.label_free %} ({{ ev.time.label_free }}){% endif %}
+                  {% endif %}
+                {% endif %}
+                {% if ev.confidence is not none %} ({{ ev.confidence }}%){% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <div class="small">No events yet.</div>
+        {% endif %}
+
+        <div style="margin-top:10px">
+          <a class="btn outline" target="_top"
+             href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='review') }}">Skip to Review</a>
+        </div>
       </div>
     </div>
   </div>
 </div>
 </body>
 </html>
-
-

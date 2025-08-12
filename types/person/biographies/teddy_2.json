@@ -4,11 +4,11 @@
     "name": "Teddy",
     "type": "person",
     "created": "2025-08-12T18:40:16.677955+00:00",
-    "updated": "2025-08-12T18:40:28.482862+00:00",
+    "updated": "2025-08-12T18:42:42.030563+00:00",
     "entries": [
         {
             "created": "2025-08-12T18:40:23.145727+00:00",
-            "updated": "2025-08-12T18:40:28.482862+00:00",
+            "updated": "2025-08-12T18:42:42.030563+00:00",
             "time": {
                 "label_type": "date",
                 "confidence": 55,
@@ -24,7 +24,17 @@
                 "age_years": null,
                 "notes": "Direct date entry"
             },
-            "person": []
+            "person": [],
+            "events": [
+                {
+                    "group_key": "relationship",
+                    "option_id": "child",
+                    "option_display": "child",
+                    "link_type": "person",
+                    "confidence": 100,
+                    "created": "2025-08-12T18:42:42.030535+00:00"
+                }
+            ]
         }
     ]
 }

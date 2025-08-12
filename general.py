@@ -2078,6 +2078,133 @@ def general_step_labels(type_name, bio_id):
         skip_allowed=(len(expanded_groups) == 0)
     )
 
+from flask import request, render_template, redirect, url_for, flash, session
+import os
+
+# Assumed helpers in your codebase:
+# - load_json_as_dict(path) -> dict
+# - save_dict_as_json(path, data) -> None
+# - list_types() -> list[str]
+# - list_biographies(type_name) -> list[{"id":..., "name":..., ...}]
+# - now_iso_utc() -> str
+
+# -----------------------------
+# Helpers (events + time labels)
+# -----------------------------
+
+def _load_time_kinds_and_options():
+    """
+    Build:
+      - time_kinds: list[{key, desc, has_folder}] from types/time/labels/*.json
+      - time_options_by_key: { key: [ {id,display}, ... ] } from child files in same-named folders
+    """
+    base = os.path.join("types", "time", "labels")
+    time_kinds, options_by_key = [], {}
+
+    if not os.path.isdir(base):
+        return time_kinds, options_by_key
+
+    for fn in sorted(os.listdir(base)):
+        if not fn.endswith(".json"):
+            continue
+
+        key = os.path.splitext(fn)[0]  # e.g. "life_stage", "date", "range"
+        data = load_json_as_dict(os.path.join(base, fn)) or {}
+        desc = (data.get("description") or data.get("label") or key.replace("_", " ").title()).strip()
+
+        has_folder = os.path.isdir(os.path.join(base, key))
+        time_kinds.append({"key": key, "desc": desc, "has_folder": has_folder})
+
+        if has_folder:
+            folder = os.path.join(base, key)
+            opts = []
+            for cf in sorted(os.listdir(folder)):
+                if not cf.endswith(".json"):
+                    continue
+                item = load_json_as_dict(os.path.join(folder, cf)) or {}
+                oid  = (item.get("id") or os.path.splitext(cf)[0]).strip()
+                disp = (item.get("display") or item.get("label") or oid.replace("_"," ").title()).strip()
+                if oid:
+                    opts.append({"id": oid, "display": disp})
+            options_by_key[key] = opts
+
+    return time_kinds, options_by_key
+
+
+def _list_event_groups() -> list:
+    base = os.path.join("types", "events", "labels")
+    if not os.path.isdir(base):
+        return []
+    out = []
+    for fn in os.listdir(base):
+        if not fn.endswith(".json"):
+            continue
+        data = load_json_as_dict(os.path.join(base, fn)) or {}
+        key = data.get("key") or os.path.splitext(fn)[0]
+        label = data.get("label") or key.replace("_", " ").title()
+        out.append({
+            "key": key,
+            "label": label,
+            "description": data.get("description", ""),
+            "meta": data,
+        })
+    out.sort(key=lambda x: x["label"].lower())
+    return out
+
+
+def _options_from_dir(t: str, k: str) -> list:
+    base = os.path.join("types", t, "labels", k)
+    if not os.path.isdir(base):
+        return []
+    out = []
+    for fn in sorted(os.listdir(base)):
+        if not fn.endswith(".json") or fn == "_group.json":
+            continue
+        data = load_json_as_dict(os.path.join(base, fn)) or {}
+        opt_id = (data.get("id") or os.path.splitext(fn)[0]).strip()
+        label = (data.get("display") or data.get("label") or data.get("name") or opt_id.replace("_", " ").title())
+        opt = {"id": opt_id, "display": label}
+        if isinstance(data.get("children"), list):
+            opt["children"] = data["children"]
+        if isinstance(data.get("refer_to"), dict):
+            opt["refer_to"] = data["refer_to"]
+        out.append(opt)
+    return out
+
+
+def _options_from_file(t: str, k: str) -> list:
+    jf = os.path.join("types", t, "labels", f"{k}.json")
+    if not os.path.isfile(jf):
+        return []
+    data = load_json_as_dict(jf) or {}
+    return data.get("options", []) or []
+
+
+def _resolve_group_options(scope_t: str, meta: dict) -> list:
+    """
+    Resolve the options for an event group using its 'source' or embedded 'options'.
+    """
+    src = (meta or {}).get("source") or {}
+    kind = (src.get("kind") or "").strip()
+    if kind in ("type_labels", "self_labels"):
+        t = (src.get("type") or (scope_t if kind == "self_labels" else "")).strip()
+        k = (src.get("path") or "").strip()
+        if t and k:
+            dir_opts = _options_from_dir(t, k)
+            file_opts = _options_from_file(t, k)
+            if dir_opts and file_opts:
+                seen = {o.get("id") for o in dir_opts}
+                merged = list(dir_opts)
+                merged.extend([o for o in file_opts if o.get("id") not in seen])
+                return merged
+            return dir_opts or file_opts
+    return (meta or {}).get("options", []) or []
+
+
+# -----------------------------
+# Route
+# -----------------------------
+
 @app.route("/general_step/events/<type_name>/<bio_id>", methods=["GET", "POST"])
 def general_step_events(type_name, bio_id):
     bio_path = os.path.join("types", type_name, "biographies", f"{bio_id}.json")
@@ -2087,121 +2214,27 @@ def general_step_events(type_name, bio_id):
     bio = load_json_as_dict(bio_path) or {}
     bio.setdefault("entries", [])
 
-    # Ensure an active entry index
+    # Ensure active entry index (created earlier in wizard; else create)
     idx = session.get("entry_index")
-    if idx is None or not (0 <= int(idx) < len(bio["entries"])):
+    if not isinstance(idx, int) or not (0 <= idx < len(bio["entries"])):
         bio["entries"].append({"created": now_iso_utc(), "updated": now_iso_utc()})
         idx = len(bio["entries"]) - 1
         session["entry_index"] = idx
 
-    # ---------- helpers ----------
-    def _list_event_groups() -> list:
-        """Return event property groups from types/events/labels (key, label, description, meta)."""
-        base = os.path.join("types", "events", "labels")
-        if not os.path.isdir(base):
-            return []
-        out = []
-        for fn in os.listdir(base):
-            if not fn.endswith(".json"):
-                continue
-            data = load_json_as_dict(os.path.join(base, fn)) or {}
-            key  = data.get("key") or os.path.splitext(fn)[0]
-            label= data.get("label") or key.replace("_", " ").title()
-            out.append({
-                "key": key,
-                "label": label,
-                "description": data.get("description", ""),
-                "meta": data,
-            })
-        out.sort(key=lambda x: x["label"].lower())
-        return out
-
-    def _resolve_group_options(scope_t: str, meta: dict) -> list:
-        """
-        Follow the group's `source` to fetch real options.
-
-        Supports both:
-          - directory: types/<type>/labels/<path>/        (each *.json is one option)
-          - file     : types/<type>/labels/<path>.json     (expects {"options":[...]})
-
-        IMPORTANT: Prefer the directory when both exist (folder >= file).
-        If both exist, merge them, de-duplicating by 'id' (dir wins).
-        """
-
-        def _options_from_dir(t: str, k: str) -> list:
-            base = os.path.join("types", t, "labels", k)
-            if not os.path.isdir(base):
-                return []
-            out = []
-            for fn in sorted(os.listdir(base)):
-                if not fn.endswith(".json") or fn == "_group.json":
-                    continue
-                p = os.path.join(base, fn)
-                data = load_json_as_dict(p) or {}
-                opt_id = (data.get("id") or os.path.splitext(fn)[0]).strip()
-                label  = (
-                    data.get("display")
-                    or data.get("label")
-                    or data.get("name")
-                    or opt_id.replace("_", " ").title()
-                )
-                opt = {"id": opt_id, "display": label}
-                if isinstance(data.get("children"), list):
-                    opt["children"] = data["children"]
-                out.append(opt)
-            return out
-
-        def _options_from_file(t: str, k: str) -> list:
-            jf = os.path.join("types", t, "labels", f"{k}.json")
-            if not os.path.isfile(jf):
-                return []
-            data = load_json_as_dict(jf) or {}
-            return data.get("options", []) or []
-
-        src  = (meta or {}).get("source") or {}
-        kind = (src.get("kind") or "").strip()
-
-        if kind in ("type_labels", "self_labels"):
-            t = (src.get("type") or (scope_t if kind == "self_labels" else "")).strip()
-            k = (src.get("path") or "").strip()
-            if t and k:
-                dir_opts  = _options_from_dir(t, k)
-                file_opts = _options_from_file(t, k)
-                if dir_opts and file_opts:
-                    # merge by id, prefer dir entries
-                    seen = {o["id"] for o in dir_opts if "id" in o}
-                    merged = list(dir_opts)
-                    merged.extend([o for o in file_opts if o.get("id") not in seen])
-                    return merged
-                return dir_opts or file_opts
-
-        # fallback: embedded options on the event group itself
-        return (meta or {}).get("options", [])
-
-    def _json_ready(x):
-        """Remove non-serializable values; ensure safe for |tojson in templates."""
-        if isinstance(x, dict):
-            return {str(k): _json_ready(v) for k, v in x.items() if v is not None}
-        if isinstance(x, list):
-            return [_json_ready(v) for v in x]
-        if isinstance(x, (str, int, float, bool)) or x is None:
-            return x
-        return str(x)
-
-    # ---------- inputs / selection ----------
     scope_type = (request.form.get("scope_type") or request.args.get("scope_type") or type_name).strip()
 
     groups = _list_event_groups()
     incoming_group = (request.form.get("group_key") or request.args.get("group_key") or "").strip()
     if not incoming_group and groups:
-        incoming_group = groups[0]["key"]  # default so Options is populated on initial GET
-    group_key  = incoming_group
+        incoming_group = groups[0]["key"]
+
+    group_key = incoming_group
     group_meta = next((g["meta"] for g in groups if g["key"] == group_key), {}) if group_key else {}
 
+    # Resolve group options for the option/child pickers
     options_raw = _resolve_group_options(scope_type, group_meta)
-    options     = _json_ready(options_raw)  # JSON‑safe for template
 
-    # Which linked type should we show? (option-specific refer_to beats group-level link_biography)
+    # Compute default link target (option-level refer_to beats group-level link_biography)
     chosen_option_id = (request.form.get("option_id") or "").strip()
     refer_to_type = ""
     if chosen_option_id:
@@ -2212,94 +2245,141 @@ def general_step_events(type_name, bio_id):
         lb = (group_meta or {}).get("link_biography") or {}
         refer_to_type = (lb.get("type") or "").strip()
 
-    target_bios = list_biographies(refer_to_type) if refer_to_type else []
+    # 🔴 IMPORTANT: Load time kinds/options BEFORE handling POST (used in save loop)
+    time_kinds, time_options_by_key = _load_time_kinds_and_options()
 
-    # ---------- save one composed event ----------
+    # ---------- save multiple rows ----------
     if request.method == "POST" and request.form.get("do_save") == "1":
-        option_id    = (request.form.get("option_id") or "").strip()
-        option_disp  = (request.form.get("option_display") or "").strip()
-        child_id     = (request.form.get("child_option_id") or "").strip()
-        link_type    = (request.form.get("link_type") or "").strip()
-        link_bio     = (request.form.get("linked_bio") or "").strip()
-        conf_val     = int(request.form.get("confidence") or 100)
+        row_option_ids       = request.form.getlist("row_option_id[]")
+        row_option_displays  = request.form.getlist("row_option_display[]")
+        row_child_ids        = request.form.getlist("row_child_option_id[]")
+        row_link_types       = request.form.getlist("row_link_type[]")
+        row_link_bios        = request.form.getlist("row_link_bio[]")
+        row_confidences      = request.form.getlist("row_confidence[]")
 
-        # per‑event time
-        t_kind  = (request.form.get("time_kind") or "").strip()
-        t_conf  = int(request.form.get("time_confidence") or 100)
-        raw_time = {"label_type": t_kind, "confidence": t_conf} if t_kind else None
-        if t_kind == "date":
-            raw_time["date_value"] = (request.form.get("date_value") or "").strip()
-        elif t_kind == "range":
-            raw_time["start_date"] = (request.form.get("start_date") or "").strip()
-            raw_time["end_date"]   = (request.form.get("end_date") or "").strip()
-        elif t_kind:
-            raw_time["subvalue"]   = (request.form.get("time_subvalue") or "").strip()
+        row_time_kinds       = request.form.getlist("row_time_kind[]")
+        row_time_conf        = request.form.getlist("row_time_confidence[]")
+        row_date_values      = request.form.getlist("row_date_value[]")
+        row_start_dates      = request.form.getlist("row_start_date[]")
+        row_end_dates        = request.form.getlist("row_end_date[]")
+        row_time_subvalues   = request.form.getlist("row_time_subvalue[]")
+        row_time_labels      = request.form.getlist("row_time_label[]")
+        row_time_label_free  = request.form.getlist("row_time_label_free[]")
 
-        normalised = {}
-        if raw_time:
-            try:
-                from time_utils import normalise_time_for_bio_entry
-                normalised = normalise_time_for_bio_entry(raw_time, biography=bio, option_meta=None) or {}
-            except Exception:
-                normalised = {}
-
-        event = {
-            "group_key": group_key,
-            "option_id": option_id,
-            "child_option_id": child_id or None,
-            "option_display": option_disp or child_id or option_id,
-            "link_type": link_type or refer_to_type or None,
-            "linked_bio": link_bio or None,
-            "confidence": conf_val,
-            "time": raw_time or None,
-            "time_normalised": normalised or None,
-            "created": now_iso_utc(),
-        }
-        # strip Nones
-        event = {k: v for k, v in event.items() if v is not None}
-
+        added = 0
         entry = bio["entries"][idx]
-        entry.setdefault("events", []).append(event)
-        entry["updated"] = now_iso_utc()
-        bio["updated"]  = entry["updated"]
-        save_dict_as_json(bio_path, bio)
-        flash("Event added.", "success")
-        return redirect(url_for("general_iframe_wizard", type=type_name, bio_id=bio_id, step="review"))
+        entry.setdefault("events", [])
+
+        n = len(row_option_ids)
+        for i in range(n):
+            option_id   = (row_option_ids[i] or "").strip()
+            option_disp = (row_option_displays[i] or "").strip()
+            child_id    = (row_child_ids[i] or "").strip() if i < len(row_child_ids) else ""
+            link_type   = (row_link_types[i] or "").strip() if i < len(row_link_types) else ""
+            link_bio    = (row_link_bios[i] or "").strip() if i < len(row_link_bios) else ""
+
+            try:
+                conf_val = int(row_confidences[i]) if i < len(row_confidences) else 100
+            except Exception:
+                conf_val = 100
+
+            # time per row
+            t_kind = (row_time_kinds[i] or "").strip() if i < len(row_time_kinds) else ""
+            try:
+                t_conf = int(row_time_conf[i]) if i < len(row_time_conf) else 100
+            except Exception:
+                t_conf = 100
+
+            raw_time = None
+            if t_kind:
+                raw_time = {"label_type": t_kind, "confidence": t_conf}
+                if t_kind == "date":
+                    raw_time["date_value"] = (row_date_values[i] or "").strip() if i < len(row_date_values) else ""
+                elif t_kind == "range":
+                    raw_time["start_date"] = (row_start_dates[i] or "").strip() if i < len(row_start_dates) else ""
+                    raw_time["end_date"]   = (row_end_dates[i] or "").strip() if i < len(row_end_dates) else ""
+                else:
+                    # Folder‑backed kinds → label + optional free text; otherwise fallback to subvalue
+                    if t_kind in time_options_by_key:
+                        raw_time["label_id"]   = (row_time_labels[i] or "").strip() if i < len(row_time_labels) else ""
+                        raw_time["label_free"] = (row_time_label_free[i] or "").strip() if i < len(row_time_label_free) else ""
+                    else:
+                        raw_time["subvalue"]   = (row_time_subvalues[i] or "").strip() if i < len(row_time_subvalues) else ""
+
+            # normalise time if your util exists (safe)
+            normalised = {}
+            if raw_time:
+                try:
+                    from time_utils import normalise_time_for_bio_entry
+                    normalised = normalise_time_for_bio_entry(raw_time, biography=bio, option_meta=None) or {}
+                except Exception:
+                    normalised = {}
+
+            event = {
+                "group_key": group_key,
+                "option_id": option_id or None,
+                "child_option_id": child_id or None,
+                "option_display": (option_disp or child_id or option_id) or None,
+                "link_type": link_type or (refer_to_type or None),
+                "linked_bio": link_bio or None,
+                "confidence": conf_val,
+                "time": raw_time or None,
+                "time_normalised": normalised or None,
+                "created": now_iso_utc(),
+            }
+            # Strip None/blank
+            event = {k: v for k, v in event.items() if v not in (None, "")}
+
+            # Skip empty rows
+            if not event.get("option_id") and not event.get("option_display"):
+                continue
+
+            entry["events"].append(event)
+            added += 1
+
+        if added:
+            entry["updated"] = now_iso_utc()
+            bio["updated"]   = entry["updated"]
+            save_dict_as_json(bio_path, bio)
+            flash(f"Added {added} event{'s' if added != 1 else ''}.", "success")
+        else:
+            flash("No events to add.", "error")
+
+        next_action = (request.form.get("next_action") or "stay").strip().lower()
+        if next_action == "review":
+            return redirect(url_for("general_iframe_wizard", type=type_name, bio_id=bio_id, step="review"))
+        return redirect(url_for("general_step_events", type_name=type_name, bio_id=bio_id))
 
     # ---------- data for template ----------
-    time_catalog = load_time_catalog(scope_type)
-    time_categories = [{"key": c["key"], "desc": c.get("description", "")} for c in time_catalog.get("categories", [])]
+    options = options_raw
 
     try:
         type_list = list_types()
     except Exception:
         type_list = []
 
-    # For dynamic “Link type → Target” dropdowns
     linkable = {t: list_biographies(t) for t in type_list}
-
     current_events = (bio["entries"][idx] or {}).get("events", [])
+    show_builder = bool(request.args.get("start") == "1" or current_events)
 
     return render_template(
         "events_step.html",
         type_name=type_name,
         bio_id=bio_id,
         bio_name=bio.get("name", bio_id),
-
         scope_type=scope_type,
         types=type_list,
-
         groups=groups,
         chosen_group=group_key,
         group_doc=group_meta,
-
-        options=options,                  # JSON‑safe
+        options=options,
         allowed_types=type_list,
         linkable=linkable,
-        target_bios=target_bios,
-
-        time_categories=time_categories,
+        target_bios=list_biographies(refer_to_type) if refer_to_type else [],
+        time_kinds=time_kinds,
+        time_options_by_key=time_options_by_key,
         current_events=current_events,
+        show_builder=show_builder,
     )
 
 
