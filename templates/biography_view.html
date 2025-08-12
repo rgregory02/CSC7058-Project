@@ -114,7 +114,28 @@
   ✏️ Edit (From Start)
 </a>
 
-          <a class="btn secondary" href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='review') }}">Archive Biography</a>
+{% set return_to = request.referrer or request.url %}
+
+{% if bio.get('archived') %}
+  <form method="post"
+        action="{{ url_for('api_unarchive_bio', type_name=type_name, bio_id=bio_id) }}"
+        style="display:inline;">
+    <input type="hidden" name="next" value="{{ return_to }}">
+    <button type="submit" class="btn secondary" style="background:#4CAF50;color:#fff;">
+      ♻️ Unarchive
+    </button>
+  </form>
+{% else %}
+  <form method="post"
+        action="{{ url_for('api_archive_bio', type_name=type_name, bio_id=bio_id) }}"
+        style="display:inline;">
+    <input type="hidden" name="next" value="{{ return_to }}">
+    <button type="submit" class="btn secondary" style="background:#c62828;color:#fff;">
+      🗄️ Archive Biography
+    </button>
+  </form>
+{% endif %}
+
         </ul>
       </div>
     </div>

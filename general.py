@@ -990,17 +990,22 @@ def api_suggest_biographies():
 
 @app.route("/api/bio/<type_name>/<bio_id>/archive", methods=["POST"])
 def api_archive_bio(type_name, bio_id):
+    nxt = request.form.get("next") or request.args.get("next") or request.referrer \
+          or url_for("type_browse", type_name=type_name)
     if set_bio_archived(type_name, bio_id, True):
         flash("Biography archived.", "success")
-        return redirect(url_for("type_browse", type_name=type_name))
+        return redirect(nxt)
     return ("Not found", 404)
 
 @app.route("/api/bio/<type_name>/<bio_id>/unarchive", methods=["POST"])
 def api_unarchive_bio(type_name, bio_id):
+    nxt = request.form.get("next") or request.args.get("next") or request.referrer \
+          or url_for("type_browse", type_name=type_name, show="archived")
     if set_bio_archived(type_name, bio_id, False):
         flash("Biography unarchived.", "success")
-        return redirect(url_for("type_browse", type_name=type_name, show="archived"))
+        return redirect(nxt)
     return ("Not found", 404)
+
 
 
 @app.route("/<type_name>_step/time/<bio_id>", methods=["GET", "POST"])
