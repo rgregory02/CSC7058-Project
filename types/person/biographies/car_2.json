@@ -1,0 +1,29 @@
+{
+    "id": "car_2",
+    "uid": "07407199343844d28f2b0a137bbb92eb",
+    "name": "Car",
+    "type": "person",
+    "created": "2025-08-12T21:26:00.146727+00:00",
+    "updated": "2025-08-12T21:26:14.520590+00:00",
+    "entries": [
+        {
+            "created": "2025-08-12T21:26:14.520590+00:00",
+            "updated": "2025-08-12T21:26:14.520590+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 100,
+                "subvalue": "infant"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 0.5,
+                "notes": "Life stage 'infant' (no reference date — absolute bounds unknown)"
+            }
+        }
+    ]
+}

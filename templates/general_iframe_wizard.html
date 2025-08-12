@@ -5,6 +5,7 @@
   <title>General Wizard — {{ type_name|replace('_',' ')|title }}</title>
   <link rel="stylesheet" href="/static/styles.css">
   <style>
+    .box { max-width: 1100px; margin: 24px auto; }
     iframe {
       width: 100%;
       height: 78vh;
@@ -12,45 +13,88 @@
       border-radius: 10px;
       background: #fff;
     }
+    .nav-bar { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-bottom:10px; }
+    .btn { display:inline-block; padding:8px 12px; border-radius:8px; text-decoration:none; background:#eef0f7; color:#333; }
     .btn.active { background-color: #2e7d32; color: white; }
-    .nav-bar { margin-bottom: 10px; }
-    .nav-bar .btn { margin-right: 5px; }
+    .btn.secondary { background:#dfe3ee; }
+    .spacer { flex:1 1 auto; }
+    .quick { display:flex; gap:6px; }
   </style>
+  <script>
+    function setIframe(src) {
+      const f = document.getElementById('wizardFrame');
+      if (f) f.src = src;
+    }
+    function gotoStep(step) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('step', step);
+      window.location.href = url.toString();
+    }
+    function setDOBPreset() {
+      // Open the Time step directly inside the iframe with the DOB preset.
+      // This does NOT change the outer step; it just loads the inner page you need.
+      const src = "{{ url_for('general_step_time', type_name=type_name, bio_id=bio_id) }}?preset=dob";
+      setIframe(src);
+      // Also highlight the Time tab to reflect where we are working.
+      const tabs = document.querySelectorAll('.nav-bar a.btn');
+      tabs.forEach(t => t.classList.remove('active'));
+      const timeTab = document.getElementById('tab-time');
+      if (timeTab) timeTab.classList.add('active');
+    }
+    function addEvents() {
+      // Quick jump to Events tab (outer routing)
+      gotoStep('events');
+    }
+  </script>
 </head>
 <body>
   <div class="box">
     <h1>🧩 General Wizard — {{ type_name|replace('_',' ')|title }}</h1>
-    
-    <div class="nav-bar">
-      <a class="btn {% if step == 'start' %}active{% endif %}" 
-         href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='start') }}">Start</a>
-      <a class="btn {% if step == 'time' %}active{% endif %}" 
-         href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='time') }}">Time</a>
-      <a class="btn {% if step == 'labels' %}active{% endif %}" 
-         href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='labels') }}">Labels</a>
-         <!-- nav buttons -->
-<a class="btn {% if step == 'events' %}active{% endif %}"
-   href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='events') }}">Events</a>
 
-      <a class="btn {% if step == 'review' %}active{% endif %}" 
+    <div class="nav-bar">
+      <a id="tab-start"  class="btn {% if step == 'start' %}active{% endif %}"
+         href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='start') }}">Start</a>
+
+      <a id="tab-time"   class="btn {% if step == 'time' %}active{% endif %}"
+         href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='time') }}">Time</a>
+
+      <a id="tab-labels" class="btn {% if step == 'labels' %}active{% endif %}"
+         href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='labels') }}">Labels</a>
+
+      <a id="tab-events" class="btn {% if step == 'events' %}active{% endif %}"
+         href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='events') }}">Events</a>
+
+      <a id="tab-review" class="btn {% if step == 'review' %}active{% endif %}"
          href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='review') }}">Review</a>
-      <a class="btn secondary" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+
+      <span class="spacer"></span>
+
+      <!-- Quick actions (don’t change your backend; these just steer the iframe/step) -->
+      <div class="quick">
+        <a class="btn" href="javascript:void(0)" onclick="setDOBPreset()">🎂 Set DOB</a>
+        <a class="btn" href="javascript:void(0)" onclick="addEvents()">➕ Add Events</a>
+        <a class="btn secondary" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+      </div>
     </div>
 
     {% if step == 'start' %}
-      <iframe src="{{ url_for('general_step_start', type_name=type_name, bio_id=bio_id) }}"></iframe>
+      <iframe id="wizardFrame" src="{{ url_for('general_step_start', type_name=type_name, bio_id=bio_id) }}"></iframe>
+
     {% elif step == 'time' %}
-      <iframe src="{{ url_for('general_step_time', type_name=type_name, bio_id=bio_id) }}"></iframe>
+      <iframe id="wizardFrame" src="{{ url_for('general_step_time', type_name=type_name, bio_id=bio_id) }}"></iframe>
+
     {% elif step == 'labels' %}
-      <!-- Fix: point directly to the real endpoint -->
-      <iframe src="{{ url_for('general_step_labels', type_name=type_name, bio_id=bio_id) }}"></iframe>
-      {% elif step == 'events' %}
-  <iframe src="{{ url_for('general_step_events', type_name=type_name, bio_id=bio_id) }}"></iframe>
+      <iframe id="wizardFrame" src="{{ url_for('general_step_labels', type_name=type_name, bio_id=bio_id) }}"></iframe>
+
+    {% elif step == 'events' %}
+      <iframe id="wizardFrame" src="{{ url_for('general_step_events', type_name=type_name, bio_id=bio_id) }}"></iframe>
 
     {% elif step == 'review' %}
-      <iframe src="{{ url_for('general_step_review', type_name=type_name, bio_id=bio_id) }}"></iframe>
+      <iframe id="wizardFrame" src="{{ url_for('general_step_review', type_name=type_name, bio_id=bio_id) }}"></iframe>
+
     {% else %}
       <div class="flash-error">Unknown step.</div>
+      <iframe id="wizardFrame" src="{{ url_for('general_step_start', type_name=type_name, bio_id=bio_id) }}"></iframe>
     {% endif %}
   </div>
 </body>

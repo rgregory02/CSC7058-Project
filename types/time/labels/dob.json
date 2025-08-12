@@ -1,0 +1,12 @@
+{
+  "key": "dob",
+  "name": "Date of Birth",
+  "description": "The day this person was born.",
+  "input": "date",
+
+  "ui": {
+    "allow_confidence": false,
+    "display_template": "Born on {{date_value}}"
+  }
+}
+

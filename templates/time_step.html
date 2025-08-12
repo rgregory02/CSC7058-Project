@@ -27,9 +27,9 @@
       <strong>Type:</strong> {{ type_name|replace('_', ' ')|title }}
     </div>
 
-<form id="timeForm" method="POST" action="{{ url_for('general_step_time', type_name=type_name, bio_id=bio_id) }}">
-  <label for="label_type">Time Type:</label>
-  <select name="label_type" id="label_type" onchange="this.form.submit()">
+    <form id="timeForm" method="POST" action="{{ url_for('general_step_time', type_name=type_name, bio_id=bio_id) }}">
+      <label for="label_type">Time Type:</label>
+      <select name="label_type" id="label_type" onchange="this.form.submit()">
         <option value="">-- Choose --</option>
         {% for item in label_files %}
           <option value="{{ item.key }}" {% if item.key == selected_label_type %}selected{% endif %}>
@@ -39,8 +39,11 @@
       </select>
       <br><br>
 
-      {% if selected_label_type == "date" %}
-        <label for="date_value">📅 Select Date (YYYY-MM-DD):</label>
+      {# Treat DOB like a single date #}
+      {% if selected_label_type in ["date", "dob"] %}
+        <label for="date_value">
+          📅 {% if selected_label_type == "dob" %}Date of Birth{% else %}Select Date (YYYY-MM-DD){% endif %}:
+        </label>
         <input type="date" name="date_value" id="date_value" value="{{ selected_date }}">
         <div class="hint" style="margin-top:6px;">
           Displayed as UK: <span id="date_value_preview">
@@ -100,14 +103,14 @@
         <br><br>
       {% endif %}
 
-  <div style="margin-top: 20px;">
-    {% if edit_entry_index is not none %}
-      <button type="submit" name="do_save" value="1" class="primary-button">💾 Save Edits</button>
-      <button type="submit" name="cancel_edit" value="true" class="clear-btn">❌ Cancel</button>
-    {% else %}
-      <button type="submit" name="do_save" value="1" class="primary-button">➡️ Continue</button>
-    {% endif %}
-  </div>
+      <div style="margin-top: 20px;">
+        {% if edit_entry_index is not none %}
+          <button type="submit" name="do_save" value="1" class="primary-button">💾 Save Edits</button>
+          <button type="submit" name="cancel_edit" value="true" class="clear-btn">❌ Cancel</button>
+        {% else %}
+          <button type="submit" name="do_save" value="1" class="primary-button">➡️ Continue</button>
+        {% endif %}
+      </div>
     </form>
 
     {% if existing_entries %}
@@ -120,7 +123,7 @@
       </ul>
     {% endif %}
 
-    <!-- Always-visible inline creation for TIME catalog -->
+    <!-- Inline TIME admin (unchanged) -->
     <div class="label-group-box">
       <h3>🛠️ Add Time Labels Inline</h3>
       <p class="muted">Writes to <code>types/{{ type_name }}/time/labels/...</code> (or global fallback) and appears immediately after a short reload.</p>
@@ -208,7 +211,7 @@
       return s;
     }
 
-    // Date (single) preview live
+    // Date (single) preview live (works for date and dob)
     (function(){
       const inp = document.getElementById('date_value');
       const prev = document.getElementById('date_value_preview');
@@ -256,7 +259,7 @@
       });
     })();
 
-    // ---------- Inline TIME admin (always visible) ----------
+    // ---------- Inline TIME admin (unchanged) ----------
     async function _postJSON(url, body){
       const res = await fetch(url, {
         method: "POST",
@@ -317,3 +320,4 @@
   </script>
 </body>
 </html>
+

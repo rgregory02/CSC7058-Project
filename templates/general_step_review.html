@@ -38,6 +38,11 @@
     .actions a.neutral { background:#2d7ff9; color:#fff; }
     .actions a:hover { opacity:.92; transform:translateY(-2px); }
     .monosmall { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size:.92em; color:#333; }
+
+    .events-list { list-style: none; padding-left: 0; }
+    .event-item { border-left:4px solid #e0e7e4; background:#fafdfb; padding:10px 12px; border-radius:8px; margin-bottom:10px; }
+    .event-title { font-weight:700; }
+    .event-meta { font-size:.9em; color:#555; }
   </style>
 </head>
 <body>
@@ -55,6 +60,16 @@
     <div class="details">
       <p><strong>Type:</strong> {{ type_name|replace('_',' ')|title }}</p>
       <p class="monosmall"><strong>ID:</strong> {{ bio_id }}</p>
+
+      {# DOB summary + derived ages #}
+      {% if dob_iso %}
+        <p>
+          <strong>DOB:</strong> {{ dob_iso|uk_date }}
+          {% if age_now is not none %} • <strong>Age now:</strong> {{ age_now }}{% endif %}
+          {% if age_at_entry is not none %} • <strong>Age at entry:</strong> {{ age_at_entry }}{% endif %}
+        </p>
+      {% endif %}
+
       {% if entry and entry.get('created') %}
         <p><strong>Entry created:</strong> {{ entry.get('created')|uk_datetime }}</p>
       {% endif %}
@@ -95,6 +110,11 @@
 
         <div class="key">Confidence</div>
         <div><span class="confidence-tag {{ time_conf_class }}">{{ time_conf }}%</span></div>
+
+        {% if age_at_entry is not none %}
+          <div class="key">Age at start</div>
+          <div>{{ age_at_entry }}</div>
+        {% endif %}
       </div>
 
       {# ---- Time Normalised (dict) ---- #}
@@ -125,7 +145,7 @@
 
       {# ---- Labels: only lists ---- #}
       {% for k, v in entry.items() %}
-        {% if k not in ['time','time_normalised','created','updated','status'] and v %}
+        {% if k not in ['time','time_normalised','created','updated','status','events'] and v %}
           {% if v is sequence and not (v is string) %}
             <h4 class="label-section-title">{{ k|replace('_',' ')|title }}</h4>
             {% for label in v %}
@@ -157,6 +177,29 @@
           {% endif %}
         {% endif %}
       {% endfor %}
+
+      {# ---- Events in this entry ---- #}
+      <h4 class="label-section-title">Events</h4>
+      {% if events and events|length > 0 %}
+        <ul class="events-list">
+          {% for ev in events %}
+            <li class="event-item">
+              <div class="event-title">{{ ev.option_display or ev.option_id or 'Event' }}</div>
+              <div class="event-meta">
+                {% if ev.link_type and ev.linked_bio %}
+                  Linked: <em>{{ ev.link_type|replace('_',' ')|title }}</em> → <code>{{ ev.linked_bio_name or ev.linked_bio }}</code>
+                  {% if ev.confidence is not none %} • {{ ev.confidence }}%{% endif %}
+                {% elif ev.confidence is not none %}
+                  Confidence: {{ ev.confidence }}%
+                {% endif %}
+                {% if ev.time_text %} • Time: {{ ev.time_text|replace('_',' ')|title }}{% endif %}
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="muted">No events in this entry.</div>
+      {% endif %}
     </div>
 
     <div class="actions">
@@ -172,5 +215,6 @@
   </div>
 </body>
 </html>
+
 
 

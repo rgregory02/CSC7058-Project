@@ -1,0 +1,30 @@
+{
+    "id": "tony_2",
+    "uid": "564c9283f53c4252a0456af26c976428",
+    "name": "Tony",
+    "type": "person",
+    "created": "2025-08-12T22:13:06.303329+00:00",
+    "updated": "2025-08-12T22:13:15.712220+00:00",
+    "entries": [
+        {
+            "created": "2025-08-12T22:13:11.978878+00:00",
+            "updated": "2025-08-12T22:13:15.712220+00:00",
+            "time": {
+                "label_type": "date",
+                "confidence": 100,
+                "date_value": "2025-08-08"
+            },
+            "time_normalised": {
+                "kind": "date",
+                "start_iso": "2025-08-08",
+                "end_iso": "2025-08-08",
+                "start_ts": 1754611200,
+                "end_ts": 1754611200,
+                "precision": "exact",
+                "age_years": null,
+                "notes": "Direct date entry"
+            },
+            "person": []
+        }
+    ]
+}

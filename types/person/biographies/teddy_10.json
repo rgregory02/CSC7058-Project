@@ -1,0 +1,88 @@
+{
+    "id": "teddy_10",
+    "uid": "2bdff1174c024301a0c8e1bd6008ad20",
+    "name": "Teddy",
+    "type": "person",
+    "created": "2025-08-12T22:31:13.737180+00:00",
+    "updated": "2025-08-12T22:36:25.846600+00:00",
+    "entries": [
+        {
+            "created": "2025-08-12T22:31:18.791915+00:00",
+            "updated": "2025-08-12T22:36:25.846600+00:00",
+            "time": {
+                "label_type": "dob",
+                "confidence": 100,
+                "date_value": "2025-08-24"
+            },
+            "time_normalised": {
+                "kind": "dob",
+                "start_iso": "2025-08-24",
+                "end_iso": "2025-08-24",
+                "start_ts": 1755993600,
+                "end_ts": 1755993600,
+                "precision": "exact",
+                "age_years": null,
+                "notes": "Fallback date parsing from date_value"
+            },
+            "person": [
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 56,
+                    "id": "1"
+                }
+            ],
+            "events": [
+                {
+                    "group_key": "relationship",
+                    "option_id": "child",
+                    "option_display": "Child",
+                    "link_type": "buildings",
+                    "linked_bio": "teddy",
+                    "confidence": 100,
+                    "time": {
+                        "label_type": "date",
+                        "confidence": 100,
+                        "date_value": "2025-07-31"
+                    },
+                    "time_normalised": {
+                        "kind": "date",
+                        "start_iso": "2025-07-31",
+                        "end_iso": "2025-07-31",
+                        "start_ts": 1753920000,
+                        "end_ts": 1753920000,
+                        "precision": "exact",
+                        "age_years": null,
+                        "notes": "Direct date entry"
+                    },
+                    "created": "2025-08-12T22:36:01.273261+00:00"
+                },
+                {
+                    "group_key": "relationship",
+                    "option_id": "spouse",
+                    "option_display": "Spouse",
+                    "link_type": "person",
+                    "linked_bio": "teddy_9",
+                    "confidence": 100,
+                    "time": {
+                        "label_type": "life_stage",
+                        "confidence": 100,
+                        "label_id": "eighties",
+                        "label_free": ""
+                    },
+                    "time_normalised": {
+                        "kind": "life_stage",
+                        "start_iso": null,
+                        "end_iso": null,
+                        "start_ts": null,
+                        "end_ts": null,
+                        "precision": "unknown",
+                        "age_years": null,
+                        "notes": "Unrecognised time label (no bounds)"
+                    },
+                    "created": "2025-08-12T22:36:25.846581+00:00"
+                }
+            ]
+        }
+    ],
+    "dob": "2025-08-24"
+}

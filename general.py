@@ -1691,8 +1691,11 @@ def general_step_time(type_name, bio_id):
     elif "editing_entry" not in session:
         session["editing_entry"] = False  # default to add mode
 
+    # Optional preset (e.g. ?preset=dob to jump straight to DOB)
+    preset_kind = (request.args.get("preset") or "").strip()
+
     # ---------- read form values ----------
-    selected_label_type = (request.form.get("label_type") or "").strip()
+    selected_label_type = (request.form.get("label_type") or preset_kind or "").strip()
     selected_subvalue   = (request.form.get("subvalue") or "").strip()
     selected_date       = (request.form.get("date_value") or "").strip()
     selected_start      = (request.form.get("start_date") or "").strip()
@@ -1726,10 +1729,11 @@ def general_step_time(type_name, bio_id):
     error_message = ""
 
     if request.method == "POST" and do_save:
+        # Treat 'dob' exactly like 'date' for validation/saving
         valid = (
-            (selected_label_type == "date"  and bool(selected_date)) or
+            (selected_label_type in ("date", "dob") and bool(selected_date)) or
             (selected_label_type == "range" and bool(selected_start or selected_end)) or
-            (selected_label_type not in ("date", "range") and bool(selected_subvalue))
+            (selected_label_type not in ("date", "dob", "range") and bool(selected_subvalue))
         )
 
         if not valid:
@@ -1738,7 +1742,7 @@ def general_step_time(type_name, bio_id):
             raw = {"label_type": selected_label_type, "confidence": conf_val}
             label_value = ""
 
-            if selected_label_type == "date":
+            if selected_label_type in ("date", "dob"):
                 raw["date_value"] = selected_date
                 label_value = selected_date
             elif selected_label_type == "range":
@@ -1749,7 +1753,7 @@ def general_step_time(type_name, bio_id):
                 raw["subvalue"] = selected_subvalue
                 label_value = selected_subvalue
 
-            # Option metadata
+            # Option metadata (for decade/era bounds, etc.)
             catalog = load_time_catalog(type_name)
             opt_meta = None
             if selected_label_type in catalog.get("options", {}):
@@ -1776,7 +1780,7 @@ def general_step_time(type_name, bio_id):
             if session.get("editing_entry"):
                 # Overwrite existing
                 if entry_index is None or not (0 <= entry_index < len(bio_data["entries"])):
-                    return f"Invalid edit index", 400
+                    return "Invalid edit index", 400
             else:
                 # Add new
                 entry = {"created": now_iso, "updated": now_iso}
@@ -1792,12 +1796,17 @@ def general_step_time(type_name, bio_id):
             e["updated"] = now_iso
             bio_data["updated"] = now_iso
 
+            # If this is a Date of Birth, also copy to the biography root for easy querying
+            if selected_label_type == "dob" and selected_date:
+                bio_data["dob"] = selected_date
+
+            # Compact selection for the Labels page header
             session["time_selection"] = {
                 "label": label_value,
                 "confidence": conf_val,
                 "label_type": selected_label_type,
-                "date_value": selected_date if selected_label_type == "date" else "",
-                "subvalue":   selected_subvalue if selected_label_type not in ("date", "range") else "",
+                "date_value": selected_date if selected_label_type in ("date", "dob") else "",
+                "subvalue":   selected_subvalue if selected_label_type not in ("date", "dob", "range") else "",
                 "start_date": selected_start if selected_label_type == "range" else "",
                 "end_date":   selected_end if selected_label_type == "range" else "",
             }
@@ -1809,8 +1818,9 @@ def general_step_time(type_name, bio_id):
     catalog = load_time_catalog(type_name)
     label_files = [{"key": c["key"], "desc": c.get("description", "")} for c in catalog["categories"]]
 
+    # Build sublabels for current selection (exclude date/range/dob from subvalue UI)
     subfolder_labels = []
-    if selected_label_type and selected_label_type not in ("date", "range"):
+    if selected_label_type and selected_label_type not in ("date", "dob", "range"):
         for o in catalog.get("options", {}).get(selected_label_type, []):
             subfolder_labels.append({
                 "name": o["id"],
@@ -1819,10 +1829,16 @@ def general_step_time(type_name, bio_id):
             })
         subfolder_labels.sort(key=lambda x: (x.get("order", 999), x["name"]))
 
+    # Existing time display list
     display_list = []
     for entry in bio_data.get("entries", []):
         t = entry.get("time", {}) or {}
-        tag = t.get("subvalue") or t.get("date_value") or (t.get("start_date", "") + ".." + t.get("end_date", "")).strip(".")
+        tag = (
+            ("DOB: " + t.get("date_value")) if (t.get("label_type") == "dob" and t.get("date_value"))
+            else t.get("subvalue")
+            or t.get("date_value")
+            or (t.get("start_date", "") + ".." + t.get("end_date", "")).strip(".")
+        )
         conf = t.get("confidence", "unknown")
         display_list.append((tag or "[unspecified]", conf))
 
@@ -1844,6 +1860,7 @@ def general_step_time(type_name, bio_id):
         existing_entries=display_list,
         error_message=error_message
     )
+
 
 @app.route("/general_step/labels/<type_name>/<bio_id>", methods=["GET", "POST"])
 def general_step_labels(type_name, bio_id):
@@ -2077,20 +2094,6 @@ def general_step_labels(type_name, bio_id):
         bio_name=bio_data.get("name", bio_id),
         skip_allowed=(len(expanded_groups) == 0)
     )
-
-from flask import request, render_template, redirect, url_for, flash, session
-import os
-
-# Assumed helpers in your codebase:
-# - load_json_as_dict(path) -> dict
-# - save_dict_as_json(path, data) -> None
-# - list_types() -> list[str]
-# - list_biographies(type_name) -> list[{"id":..., "name":..., ...}]
-# - now_iso_utc() -> str
-
-# -----------------------------
-# Helpers (events + time labels)
-# -----------------------------
 
 def _load_time_kinds_and_options():
     """
@@ -2383,15 +2386,123 @@ def general_step_events(type_name, bio_id):
     )
 
 
+
 # ---------- 6) Step: Review ----------
 @app.route("/general_step/review/<type_name>/<bio_id>")
 def general_step_review(type_name, bio_id):
-    bio_file = f"./types/{type_name}/biographies/{bio_id}.json"
+    bio_file = os.path.join("types", type_name, "biographies", f"{bio_id}.json")
     if not os.path.exists(bio_file):
         return f"Biography {bio_id} not found.", 404
-    data = load_json_as_dict(bio_file)
-    return render_template("general_step_review.html",
-                           type_name=type_name, bio_id=bio_id, bio=data)
+
+    bio = load_json_as_dict(bio_file) or {}
+    entries = bio.get("entries", []) or []
+
+    # Helpers
+    from datetime import date
+
+    def _to_date(iso_str):
+        """Parse 'YYYY', 'YYYY-MM', or 'YYYY-MM-DD' to python date (best effort)."""
+        if not iso_str:
+            return None
+        s = str(iso_str)
+        try:
+            if len(s) == 4:                 # YYYY
+                return date(int(s), 1, 1)
+            if len(s) == 7:                 # YYYY-MM
+                y, m = s.split("-")
+                return date(int(y), int(m), 1)
+            if len(s) == 10:                # YYYY-MM-DD
+                y, m, d = s.split("-")
+                return date(int(y), int(m), int(d))
+        except Exception:
+            return None
+        return None
+
+    def _age_years(d_birth, d_ref):
+        """Whole-year age at d_ref."""
+        if not d_birth or not d_ref:
+            return None
+        years = d_ref.year - d_birth.year
+        # did birthday occur yet this year?
+        before_bday = (d_ref.month, d_ref.day) < (d_birth.month, d_birth.day)
+        return years - (1 if before_bday else 0)
+
+    # Find a DOB in any entry (time.label_type == "dob" with date_value, or best hint)
+    dob_iso = None
+    for e in entries:
+        t = (e or {}).get("time", {}) or {}
+        if (t.get("label_type") or "").lower() in ("dob", "date_of_birth"):
+            dob_iso = t.get("date_value") or t.get("start_date") or t.get("end_date")
+            if dob_iso:
+                break
+
+    dob_date = _to_date(dob_iso)
+    age_now = _age_years(dob_date, date.today()) if dob_date else None
+
+    # Current/last entry (same logic template uses)
+    entry_index = session.get("entry_index")
+    try:
+        entry_index = int(entry_index) if entry_index is not None else None
+    except Exception:
+        entry_index = None
+    entry = entries[entry_index] if (entry_index is not None and 0 <= entry_index < len(entries)) else (entries[-1] if entries else {})
+
+    # Derive a reference date for the entry (start of range/date_value if present)
+    ref_iso = None
+    t = (entry or {}).get("time", {}) or {}
+    if t.get("date_value"):
+        ref_iso = t.get("date_value")
+    elif t.get("start_date"):
+        ref_iso = t.get("start_date")
+    elif t.get("end_date"):
+        ref_iso = t.get("end_date")
+    # Else, if time_normalised has start_iso/end_iso, prefer start
+    tn = (entry or {}).get("time_normalised") or {}
+    ref_iso = ref_iso or tn.get("start_iso") or tn.get("end_iso")
+
+    age_at_entry = _age_years(dob_date, _to_date(ref_iso)) if dob_date and ref_iso else None
+
+    # Prepare events display: enrich linked biography names (if possible)
+    def _load_bio_name(_type, _id):
+        if not _type or not _id:
+            return None
+        path = os.path.join("types", _type, "biographies", f"{_id}.json")
+        try:
+            if os.path.exists(path):
+                d = load_json_as_dict(path) or {}
+                return d.get("name") or _id
+        except Exception:
+            pass
+        return _id
+
+    events = []
+    for ev in (entry or {}).get("events", []) or []:
+        pretty = dict(ev)
+        if ev.get("link_type") and ev.get("linked_bio"):
+            pretty["linked_bio_name"] = _load_bio_name(ev.get("link_type"), ev.get("linked_bio"))
+        # Try to create a single human string for time
+        et = ev.get("time") or {}
+        if et.get("label_type") == "date" and et.get("date_value"):
+            pretty["time_text"] = et["date_value"]
+        elif et.get("label_type") == "range":
+            pretty["time_text"] = f"{et.get('start_date','?')} … {et.get('end_date','')}".strip()
+        elif et.get("subvalue"):
+            pretty["time_text"] = et["subvalue"]
+        else:
+            pretty["time_text"] = ""
+        events.append(pretty)
+
+    return render_template(
+        "general_step_review.html",
+        type_name=type_name,
+        bio_id=bio_id,
+        bio=bio,
+        dob_iso=dob_iso,
+        age_now=age_now,
+        age_at_entry=age_at_entry,
+        events=events,
+    )
+
 
 
 @app.route("/type/<type_name>/archive", methods=["GET", "POST"])
