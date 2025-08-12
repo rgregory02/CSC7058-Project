@@ -28,6 +28,10 @@
          href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='time') }}">Time</a>
       <a class="btn {% if step == 'labels' %}active{% endif %}" 
          href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='labels') }}">Labels</a>
+         <!-- nav buttons -->
+<a class="btn {% if step == 'events' %}active{% endif %}"
+   href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='events') }}">Events</a>
+
       <a class="btn {% if step == 'review' %}active{% endif %}" 
          href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='review') }}">Review</a>
       <a class="btn secondary" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
@@ -40,6 +44,9 @@
     {% elif step == 'labels' %}
       <!-- Fix: point directly to the real endpoint -->
       <iframe src="{{ url_for('general_step_labels', type_name=type_name, bio_id=bio_id) }}"></iframe>
+      {% elif step == 'events' %}
+  <iframe src="{{ url_for('general_step_events', type_name=type_name, bio_id=bio_id) }}"></iframe>
+
     {% elif step == 'review' %}
       <iframe src="{{ url_for('general_step_review', type_name=type_name, bio_id=bio_id) }}"></iframe>
     {% else %}

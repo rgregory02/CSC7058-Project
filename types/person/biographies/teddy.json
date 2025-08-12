@@ -1,18 +1,30 @@
 {
+    "id": "teddy",
+    "uid": "6a5647979de64752ae9849c2617fca0e",
     "name": "Teddy",
     "type": "person",
-    "created": "2025-08-09T20:17:56.284349",
+    "created": "2025-08-12T18:21:19.041970+00:00",
+    "updated": "2025-08-12T18:21:30.089952+00:00",
     "entries": [
         {
+            "created": "2025-08-12T18:21:25.570174+00:00",
+            "updated": "2025-08-12T18:21:30.089952+00:00",
             "time": {
-                "label": "infant",
+                "label_type": "date",
                 "confidence": 100,
-                "label_type": "life_stage",
-                "date_value": "",
-                "subvalue": "infant"
+                "date_value": "2025-08-01"
             },
-            "created": "2025-08-09T21:28:03.501259",
-            "buildings": []
+            "time_normalised": {
+                "kind": "date",
+                "start_iso": "2025-08-01",
+                "end_iso": "2025-08-01",
+                "start_ts": 1754006400,
+                "end_ts": 1754006400,
+                "precision": "exact",
+                "age_years": null,
+                "notes": "Direct date entry"
+            },
+            "person": []
         }
     ]
 }
