@@ -1352,6 +1352,51 @@ def api_bio_paths(type_name):
                 paths.add(rel.replace("\\", "/"))
     return jsonify(sorted(paths))
 
+@app.post("/api/time/admin/create_group")
+def api_time_admin_create_group():
+    p = request.get_json(silent=True) or {}
+    type_name = (p.get("type_name") or "").strip()
+    key = _slugify(p.get("key"))
+    if not type_name or not key:
+        return {"ok": False, "error": "missing_fields"}, 400
+    base = os.path.join(_time_labels_root_for(type_name))
+    os.makedirs(base, exist_ok=True)
+    desc_path = os.path.join(base, f"{key}.json")
+    if os.path.exists(desc_path):
+        return {"ok": False, "error": "group_exists"}, 409
+    data = {"label": (p.get("label") or key.replace("_"," ").title()),
+            "description": p.get("description",""), "order": int(p.get("order", 999))}
+    _safe_json_write(desc_path, data)
+    os.makedirs(os.path.join(base, key), exist_ok=True)
+    return {"ok": True, "group_key": key}
+
+@app.post("/api/time/admin/create_option")
+def api_time_admin_create_option():
+    p = request.get_json(silent=True) or {}
+    type_name = (p.get("type_name") or "").strip()
+    group_key = _slugify(p.get("group_key"))
+    opt_id    = _slugify(p.get("id"))
+    if not type_name or not group_key or not opt_id:
+        return {"ok": False, "error": "missing_fields"}, 400
+    base = _time_labels_root_for(type_name)
+    folder = os.path.join(base, group_key)
+    if not os.path.isdir(folder):
+        return {"ok": False, "error": "group_missing"}, 404
+    path = os.path.join(folder, f"{opt_id}.json")
+    if os.path.exists(path):
+        return {"ok": False, "error": "option_exists"}, 409
+    data = {
+        "id": opt_id,
+        "display": p.get("display") or opt_id.replace("_"," ").title(),
+        "description": p.get("description",""),
+        "order": int(p.get("order", 999)),
+        "start_iso": p.get("start_iso"),
+        "end_iso": p.get("end_iso")
+    }
+    if not data["start_iso"]: data.pop("start_iso")
+    if not data["end_iso"]:   data.pop("end_iso")
+    _safe_json_write(path, data)
+    return {"ok": True, "id": opt_id}
 
 @app.route("/api/type/<type_name>/labels.json")
 def type_labels_api(type_name):
@@ -1401,18 +1446,63 @@ def api_labels_admin_create_option():
 def general_iframe_wizard():
     """
     Unified entry to the wizard.
-    - GET step=start  -> render start form (general_step_start.html)
-    - POST step=start -> create/select bio, then redirect to step=time
-    - GET other steps -> render the iframe container (general_iframe_wizard.html)
+    POST on step=start:
+      - creates a new biography OR selects existing, then redirects to step=time.
     """
     step = (request.args.get("step") or "start").strip()
-    preselected_type = (request.args.get("type") or "").strip()
+    q_type = (request.args.get("type") or "").strip()
     bio_id = (request.args.get("bio_id") or "").strip()
 
-    # --- Start screen (form lives on this same route) ---
+    # ---- Try to infer type_name from bio file if not provided ----
+    type_name = q_type
+    if not type_name and bio_id:
+        # Try scanning known types or read the bio file by path guess
+        # (We assume standard layout: types/<type_name>/biographies/<bio_id>.json)
+        # Fast path: if caller supplied 'type' arg earlier, keep it.
+        try:
+            # Search for the bio in any type folder (cheap scan)
+            for t in list_types():  # your helper that lists 'types' subfolders
+                candidate = os.path.join("types", t, "biographies", f"{bio_id}.json")
+                if os.path.exists(candidate):
+                    data = load_json_as_dict(candidate) or {}
+                    type_name = data.get("type") or t
+                    break
+        except Exception:
+            pass
+
+    # -------- Handle edit-intent flags from querystring --------
+    edit_entry = request.args.get("edit_entry_index")
+    edit_bio   = request.args.get("edit_bio")
+
+    if bio_id and type_name:
+        bio_file = os.path.join("types", type_name, "biographies", f"{bio_id}.json")
+        if os.path.exists(bio_file):
+            bio = load_json_as_dict(bio_file) or {}
+            entries = bio.get("entries") or []
+
+            # Entry edit (locks to an entry index → overwrite on save)
+            if edit_entry is not None:
+                try:
+                    idx = int(edit_entry)
+                    if 0 <= idx < len(entries):
+                        session["entry_index"] = idx
+                        session["editing_entry"] = True
+                except ValueError:
+                    pass
+
+            # Bio-level edit (start step lets you overwrite name/description/etc.)
+            if edit_bio:
+                session["editing_bio"] = True
+        else:
+            # If a type/bio mismatch slips through, clear edit flags
+            session.pop("entry_index", None)
+            session.pop("editing_entry", None)
+            session.pop("editing_bio", None)
+
+    # =========================== START STEP ===========================
     if step == "start":
         if request.method == "POST":
-            type_name = (request.form.get("type_name") or preselected_type or "").strip()
+            type_name = (request.form.get("type_name") or type_name or "").strip()
             chosen_bio = (request.form.get("bio_id") or "").strip()
             new_name   = (request.form.get("new_bio_name") or "").strip()
 
@@ -1424,38 +1514,54 @@ def general_iframe_wizard():
             if chosen_bio and new_name:
                 new_name = ""
 
-            # Validate existing bio belongs to the type
+            # Select existing biography
             if chosen_bio:
                 path = os.path.join("types", type_name, "biographies", f"{chosen_bio}.json")
                 if not os.path.exists(path):
                     flash("That biography doesn’t belong to the selected type.", "error")
                     return redirect(url_for("general_iframe_wizard", step="start", type=type_name))
                 bio_id = chosen_bio
-            else:
-                # Create new biography
-                slug_base = re.sub(r"[^a-zA-Z0-9_]+", "_", new_name).strip("_").lower() or "untitled"
-                bio_dir   = os.path.join("types", type_name, "biographies")
-                os.makedirs(bio_dir, exist_ok=True)
 
-                slug = slug_base
-                i = 2
-                while os.path.exists(os.path.join(bio_dir, f"{slug}.json")):
-                    slug = f"{slug_base}_{i}"
-                    i += 1
+                # If user came here with edit_bio=1, allow overwriting top-level fields now
+                if session.get("editing_bio"):
+                    data = load_json_as_dict(path) or {}
+                    # Overwrite basic fields from form if provided
+                    if new_name:
+                        data["name"] = new_name
+                    data["updated"] = now_iso_utc()
+                    save_dict_as_json(path, data)
+                    # Optional: clear the flag here or keep until review
+                    # session.pop("editing_bio", None)
 
-                data = {
-                    "id": slug,
-                    "uid": uuid.uuid4().hex,
-                    "name": new_name or slug.replace("_", " ").title(),
-                    "type": type_name,
-                    "created": now_iso_utc(),
-                    "updated": now_iso_utc(),
-                    "entries": []
-                }
-                save_dict_as_json(os.path.join(bio_dir, f"{slug}.json"), data)
-                bio_id = slug
+                return redirect(url_for("general_iframe_wizard", type=type_name, bio_id=bio_id, step="time"))
 
-            # Straight into the wizard at the Time step
+            # Otherwise create a new biography
+            bio_dir = os.path.join("types", type_name, "biographies")
+            os.makedirs(bio_dir, exist_ok=True)
+
+            slug_base = re.sub(r"[^a-zA-Z0-9_]+", "_", new_name).strip("_").lower() or "untitled"
+            slug = slug_base
+            i = 2
+            while os.path.exists(os.path.join(bio_dir, f"{slug}.json")):
+                slug = f"{slug_base}_{i}"
+                i += 1
+
+            data = {
+                "id": slug,
+                "uid": uuid.uuid4().hex,
+                "name": new_name or slug.replace("_", " ").title(),
+                "type": type_name,
+                "created": now_iso_utc(),
+                "updated": now_iso_utc(),
+                "entries": []
+            }
+            save_dict_as_json(os.path.join(bio_dir, f"{slug}.json"), data)
+            bio_id = slug
+
+            # New bios always start as add-mode (not editing an existing entry)
+            session.pop("entry_index", None)
+            session["editing_entry"] = False
+
             return redirect(url_for("general_iframe_wizard", type=type_name, bio_id=bio_id, step="time"))
 
         # GET start: render the picker/creator form
@@ -1465,210 +1571,270 @@ def general_iframe_wizard():
             "general_step_start.html",
             types=types,
             per_type_bios=per_type_bios,
-            preselected_type=preselected_type
+            preselected_type=type_name or ""
         )
 
-    # --- For time/labels/review: keep your existing iframe container ---
+    # ===================== OTHER STEPS (IFRAME CONTAINER) =====================
+    # Ensure we have a type_name to pass to template for its url_for calls
+    if not type_name:
+        # Last-ditch attempt: if still unknown, avoid template errors
+        flash("Type is missing for this wizard session.", "error")
+        return redirect(url_for("general_iframe_wizard", step="start"))
+
     return render_template(
         "general_iframe_wizard.html",
-        type_name=preselected_type,   # populated when you linked here
+        type_name=type_name,
         bio_id=bio_id,
         step=step
     )
 
 
+def _time_labels_root_for(type_name: str) -> str:
+    # 1) per-type override, else 2) global
+    p1 = os.path.join("types", type_name, "time", "labels")
+    if os.path.isdir(p1):
+        return p1
+    return os.path.join("types", "time", "labels")
+
+def _read_json(path: str) -> dict:
+    try:
+        return load_json_as_dict(path) or {}
+    except Exception:
+        return {}
+
+def load_time_catalog(type_name: str) -> dict:
+    """
+    Returns a dict:
+    {
+      "categories": [ {"key":"date","description":...}, {"key":"decade",...}, ... ],
+      "options": { "life_stage":[ {...}, ... ], "decade":[ {...}, ... ], "era":[ {...}, ... ] }
+    }
+    """
+    root = _time_labels_root_for(type_name)
+    os.makedirs(root, exist_ok=True)
+
+    cats = []
+    opts = {}
+
+    # categories = all *.json at root
+    for f in os.listdir(root):
+        if not f.endswith(".json"):
+            continue
+        key = os.path.splitext(f)[0]
+        meta = _read_json(os.path.join(root, f))
+        cats.append({
+            "key": key,
+            "description": meta.get("description", ""),
+            "order": meta.get("order", 999)
+        })
+
+    # options by subfolder
+    for cat in [c["key"] for c in cats]:
+        subdir = os.path.join(root, cat)
+        if os.path.isdir(subdir):
+            arr = []
+            for g in os.listdir(subdir):
+                if g.endswith(".json"):
+                    j = _read_json(os.path.join(subdir, g))
+                    arr.append({
+                        "id": os.path.splitext(g)[0],
+                        "display": j.get("display") or os.path.splitext(g)[0].replace("_"," ").title(),
+                        "description": j.get("description", ""),
+                        "order": j.get("order", 999),
+                        # pass through optional bounds for normaliser
+                        "start_iso": j.get("start_iso"),
+                        "end_iso": j.get("end_iso"),
+                        "image": j.get("image") or j.get("image_url")
+                    })
+            arr.sort(key=lambda x: (x.get("order", 999), x["display"]))
+            opts[cat] = arr
+
+    cats.sort(key=lambda x: (x.get("order", 999), x["key"]))
+    return {"categories": cats, "options": opts}
+
+
 @app.route("/general_step/time/<type_name>/<bio_id>", methods=["GET", "POST"])
 def general_step_time(type_name, bio_id):
-    labels_folder = "./types/time/labels"
-    bio_file = f"./types/{type_name}/biographies/{bio_id}.json"
-    os.makedirs(labels_folder, exist_ok=True)
+    labels_root = _time_labels_root_for(type_name)
+    bio_file = os.path.join("types", type_name, "biographies", f"{bio_id}.json")
+    os.makedirs(labels_root, exist_ok=True)
 
     if not os.path.exists(bio_file):
         return f"Biography {bio_id} not found.", 404
 
     bio_data = load_json_as_dict(bio_file) or {}
     bio_data.setdefault("entries", [])
-    name = bio_data.get("name", bio_id)
 
-    # ---- defaults and prefill holders
-    selected_label_type = ""
-    selected_subvalue = ""
-    selected_date = ""
-    selected_confidence = ""
-    selected_range_start = ""
-    selected_range_end = ""
-
-    # ---- POST: capture, normalise, save
-    if request.method == "POST":
-        selected_label_type = (request.form.get("label_type") or "").strip().lower()
-        selected_subvalue   = (request.form.get("subvalue") or "").strip()
-        selected_date       = (request.form.get("date_value") or "").strip()
-        selected_confidence = (request.form.get("confidence") or "100").strip()
-        selected_range_start = (request.form.get("start_date") or "").strip()
-        selected_range_end   = (request.form.get("end_date") or "").strip()
-
+    # ---------- helper ----------
+    def _as_int(x, default=None):
         try:
-            confidence_value = int(selected_confidence)
+            return int(x)
         except (TypeError, ValueError):
-            confidence_value = 100
+            return default
 
-        # Validate minimal inputs per kind
-        valid = False
-        if selected_label_type == "date":
-            valid = bool(selected_date)
-        elif selected_label_type == "range":
-            # allow open-ended, but prefer at least one
-            valid = bool(selected_range_start or selected_range_end)
+    # ---------- detect edit mode ----------
+    edit_idx_raw = request.args.get("edit_entry_index")
+    if edit_idx_raw is not None:
+        idx = _as_int(edit_idx_raw)
+        if idx is not None and 0 <= idx < len(bio_data["entries"]):
+            session["entry_index"] = idx
+            session["editing_entry"] = True
+    elif "editing_entry" not in session:
+        session["editing_entry"] = False  # default to add mode
+
+    # ---------- read form values ----------
+    selected_label_type = (request.form.get("label_type") or "").strip()
+    selected_subvalue   = (request.form.get("subvalue") or "").strip()
+    selected_date       = (request.form.get("date_value") or "").strip()
+    selected_start      = (request.form.get("start_date") or "").strip()
+    selected_end        = (request.form.get("end_date") or "").strip()
+    selected_confidence = (request.form.get("confidence") or "").strip()
+    do_save             = (request.form.get("do_save") == "1")
+
+    conf_val = _as_int(selected_confidence, 100) if selected_confidence else 100
+    entry_index = _as_int(session.get("entry_index"))
+
+    # ---------- prefill form if editing ----------
+    if not do_save and request.method in ("GET", "POST"):
+        if session.get("editing_entry") and entry_index is not None and 0 <= entry_index < len(bio_data["entries"]):
+            cur = bio_data["entries"][entry_index] or {}
+            t = cur.get("time") or {}
+            if not selected_label_type:
+                selected_label_type = (t.get("label_type") or "").strip()
+            if not selected_subvalue:
+                selected_subvalue = (t.get("subvalue") or "").strip()
+            if not selected_date:
+                selected_date = (t.get("date_value") or "").strip()
+            if not selected_start:
+                selected_start = (t.get("start_date") or "").strip()
+            if not selected_end:
+                selected_end = (t.get("end_date") or "").strip()
+            if not selected_confidence:
+                selected_confidence = str(t.get("confidence", 100))
+                conf_val = _as_int(selected_confidence, 100)
+
+    # ---------- validation ----------
+    error_message = ""
+
+    if request.method == "POST" and do_save:
+        valid = (
+            (selected_label_type == "date"  and bool(selected_date)) or
+            (selected_label_type == "range" and bool(selected_start or selected_end)) or
+            (selected_label_type not in ("date", "range") and bool(selected_subvalue))
+        )
+
+        if not valid:
+            error_message = "Please complete the selected time fields before continuing."
         else:
-            valid = bool(selected_subvalue)
+            raw = {"label_type": selected_label_type, "confidence": conf_val}
+            label_value = ""
 
-        if valid:
-            # Build raw time payload (data-driven; add fields as needed)
-            raw = {
-                "label_type": selected_label_type,
-                "confidence": confidence_value
-            }
             if selected_label_type == "date":
                 raw["date_value"] = selected_date
+                label_value = selected_date
             elif selected_label_type == "range":
-                if selected_range_start:
-                    raw["start_date"] = selected_range_start
-                if selected_range_end:
-                    raw["end_date"] = selected_range_end
+                raw["start_date"] = selected_start
+                raw["end_date"]   = selected_end
+                label_value = f"{selected_start or '?'}..{selected_end or ''}".strip(".")
             else:
                 raw["subvalue"] = selected_subvalue
+                label_value = selected_subvalue
 
-            # Load option metadata if a sublabel was chosen (for decade/era/life_stage…)
-            option_meta = None
-            if selected_label_type not in ("date", "range") and selected_subvalue:
-                opt_path = os.path.join(labels_folder, selected_label_type, f"{selected_subvalue}.json")
-                if os.path.isfile(opt_path):
-                    try:
-                        option_meta = load_json_as_dict(opt_path) or {}
-                    except Exception:
-                        option_meta = None
+            # Option metadata
+            catalog = load_time_catalog(type_name)
+            opt_meta = None
+            if selected_label_type in catalog.get("options", {}):
+                for o in catalog["options"][selected_label_type]:
+                    if o["id"] == selected_subvalue:
+                        opt_meta = o
+                        break
 
-            # Normalise using your utility (uses dob_iso/founded_on/etc if present)
-            normalised = normalise_time_for_bio_entry(raw, biography=bio_data, option_meta=option_meta)
+            # Normalise
+            try:
+                from time_utils import normalise_time_for_bio_entry
+            except Exception:
+                normalise_time_for_bio_entry = None
 
-            # Session mirror for prefill
-            session["time_selection"] = {
-                **raw,  # keeps label_type, date_value/subvalue/range fields, confidence
-            }
+            normalised = {}
+            if normalise_time_for_bio_entry:
+                try:
+                    normalised = normalise_time_for_bio_entry(raw, biography=bio_data, option_meta=opt_meta)
+                except Exception:
+                    normalised = {}
 
-            # Ensure an in-progress entry; overwrite time if re-posting
-            entry_index = session.get("entry_index")
-            now = now_iso_utc()
+            now_iso = datetime.now(timezone.utc).isoformat()
 
-            if entry_index is None or not (0 <= int(entry_index) < len(bio_data["entries"])):
-                entry = {
-                    "time": raw,
-                    "time_normalised": normalised,
-                    "created": now,
-                    "updated": now
-                }
+            if session.get("editing_entry"):
+                # Overwrite existing
+                if entry_index is None or not (0 <= entry_index < len(bio_data["entries"])):
+                    return f"Invalid edit index", 400
+            else:
+                # Add new
+                entry = {"created": now_iso, "updated": now_iso}
                 bio_data["entries"].append(entry)
                 entry_index = len(bio_data["entries"]) - 1
                 session["entry_index"] = entry_index
-            else:
-                idx = int(entry_index)
-                e = bio_data["entries"][idx]
-                if not isinstance(e, dict):
-                    e = {}
-                    bio_data["entries"][idx] = e
-                e["time"] = raw
+
+            # Save time data
+            e = bio_data["entries"][entry_index]
+            e["time"] = raw
+            if normalised:
                 e["time_normalised"] = normalised
-                if "created" not in e:
-                    e["created"] = now
-                e["updated"] = now
+            e["updated"] = now_iso
+            bio_data["updated"] = now_iso
 
-            bio_data["updated"] = now
+            session["time_selection"] = {
+                "label": label_value,
+                "confidence": conf_val,
+                "label_type": selected_label_type,
+                "date_value": selected_date if selected_label_type == "date" else "",
+                "subvalue":   selected_subvalue if selected_label_type not in ("date", "range") else "",
+                "start_date": selected_start if selected_label_type == "range" else "",
+                "end_date":   selected_end if selected_label_type == "range" else "",
+            }
+
             save_dict_as_json(bio_file, bio_data)
-
-            # Proceed to the next (labels) step in your generalised iframe wizard
             return redirect(url_for("general_iframe_wizard", type=type_name, bio_id=bio_id, step="labels"))
 
-    # ---- GET / initial render: prefill from session if present
-    if request.method == "GET":
-        sess_time = session.get("time_selection") or {}
-        selected_label_type = selected_label_type or (sess_time.get("label_type") or "")
-        selected_subvalue   = selected_subvalue or (sess_time.get("subvalue") or "")
-        selected_date       = selected_date or (sess_time.get("date_value") or "")
-        selected_range_start = selected_range_start or (sess_time.get("start_date") or "")
-        selected_range_end   = selected_range_end or (sess_time.get("end_date") or "")
-        if not selected_confidence:
-            sc = sess_time.get("confidence")
-            selected_confidence = str(sc) if sc is not None else ""
+    # ---------- build template data ----------
+    catalog = load_time_catalog(type_name)
+    label_files = [{"key": c["key"], "desc": c.get("description", "")} for c in catalog["categories"]]
 
-    # ---- Build available time label files (purely folder-driven)
-    # e.g. date.json, life_stage.json, decade.json, era.json, range.json
-    label_files = []
-    if os.path.exists(labels_folder):
-        for f in os.listdir(labels_folder):
-            full = os.path.join(labels_folder, f)
-            if f.endswith(".json") and os.path.isfile(full):
-                try:
-                    data = load_json_as_dict(full) or {}
-                    label = os.path.splitext(f)[0]
-                    desc  = data.get("description", "")
-                    order = data.get("order", 999)
-                    label_files.append({"key": label, "desc": desc, "order": order})
-                except Exception:
-                    pass
-    label_files.sort(key=lambda d: (d.get("order", 999), d["key"]))
-
-    # If a non-date/non-range label type is selected, load its sublabels (if a folder exists)
     subfolder_labels = []
     if selected_label_type and selected_label_type not in ("date", "range"):
-        subfolder_path = os.path.join(labels_folder, selected_label_type)
-        if os.path.isdir(subfolder_path):
-            for f in os.listdir(subfolder_path):
-                if f.endswith(".json"):
-                    try:
-                        data = load_json_as_dict(os.path.join(subfolder_path, f)) or {}
-                        subfolder_labels.append({
-                            "name": os.path.splitext(f)[0],
-                            "description": data.get("description", ""),
-                            "order": data.get("order", 999)
-                        })
-                    except Exception:
-                        pass
-            subfolder_labels.sort(key=lambda x: (x.get("order", 999), x["name"]))
+        for o in catalog.get("options", {}).get(selected_label_type, []):
+            subfolder_labels.append({
+                "name": o["id"],
+                "description": o.get("description", ""),
+                "order": o.get("order", 999)
+            })
+        subfolder_labels.sort(key=lambda x: (x.get("order", 999), x["name"]))
 
-    # Existing entries list → prefer the normalised bounds
     display_list = []
     for entry in bio_data.get("entries", []):
-        tnorm = entry.get("time_normalised") or {}
-        traw  = entry.get("time") or {}
-        label_text = ""
-        if tnorm.get("start_iso") or tnorm.get("end_iso"):
-            s = tnorm.get("start_iso") or "?"
-            e = tnorm.get("end_iso") or s
-            prec = tnorm.get("precision") or "unknown"
-            label_text = f"{s} → {e} ({prec})"
-        else:
-            # fallback to raw
-            label_text = traw.get("subvalue") or traw.get("date_value") or "[unspecified]"
-        conf = traw.get("confidence", "unknown")
-        display_list.append((label_text, conf))
+        t = entry.get("time", {}) or {}
+        tag = t.get("subvalue") or t.get("date_value") or (t.get("start_date", "") + ".." + t.get("end_date", "")).strip(".")
+        conf = t.get("confidence", "unknown")
+        display_list.append((tag or "[unspecified]", conf))
+
+    selected_confidence = selected_confidence or "100"
 
     return render_template(
         "time_step.html",
-        name=name,
         type_name=type_name,
         bio_id=bio_id,
+        name=bio_data.get("name", bio_id),
         label_files=label_files,
         selected_label_type=selected_label_type,
         selected_subvalue=selected_subvalue,
         selected_date=selected_date,
+        selected_range_start=selected_start,
+        selected_range_end=selected_end,
         selected_confidence=selected_confidence,
-        selected_range_start=selected_range_start,
-        selected_range_end=selected_range_end,
         subfolder_labels=subfolder_labels,
         existing_entries=display_list,
-        edit_entry_index=None
+        error_message=error_message
     )
-
 
 @app.route("/general_step/labels/<type_name>/<bio_id>", methods=["GET", "POST"])
 def general_step_labels(type_name, bio_id):

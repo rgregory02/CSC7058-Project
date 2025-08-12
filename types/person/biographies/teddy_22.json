@@ -1,0 +1,56 @@
+{
+    "id": "teddy_22",
+    "uid": "dd8e7dbd8f884de289f36e8aa0f2adf8",
+    "name": "Teddy",
+    "type": "person",
+    "created": "2025-08-11T23:33:47.148910+00:00",
+    "updated": "2025-08-11T23:34:35.094368+00:00",
+    "entries": [
+        {
+            "created": "2025-08-11T23:33:52.816892+00:00",
+            "updated": "2025-08-11T23:34:35.094368+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 92,
+                "subvalue": "seventies"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 75,
+                "notes": "Life stage 'seventies' (no reference date — absolute bounds unknown)"
+            },
+            "person": [
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 18,
+                    "id": "0"
+                },
+                {
+                    "label_type": "educational_place",
+                    "confidence": 100,
+                    "id": "2_story_flat"
+                },
+                {
+                    "label_type": "hair_colour",
+                    "confidence": 100,
+                    "id": "brown_hair"
+                },
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 100,
+                    "id": "plumber"
+                },
+                {
+                    "label_type": "work_place",
+                    "confidence": 100,
+                    "id": "hospital"
+                }
+            ]
+        }
+    ]
+}

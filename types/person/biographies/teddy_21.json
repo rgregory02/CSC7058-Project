@@ -1,0 +1,56 @@
+{
+    "id": "teddy_21",
+    "uid": "8f3baf9b1dab47519fbdef7c93fa68ab",
+    "name": "Teddy",
+    "type": "person",
+    "created": "2025-08-11T22:35:24.040427+00:00",
+    "updated": "2025-08-11T22:48:16.305336+00:00",
+    "entries": [
+        {
+            "created": "2025-08-11T22:35:34.855511+00:00",
+            "updated": "2025-08-11T22:48:16.305336+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 100,
+                "subvalue": "childhood"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 6.5,
+                "notes": "Life stage 'childhood' (no reference date — absolute bounds unknown)"
+            },
+            "person": [
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 100,
+                    "id": "0"
+                },
+                {
+                    "label_type": "educational_place",
+                    "confidence": 100,
+                    "id": "school"
+                },
+                {
+                    "label_type": "hair_colour",
+                    "confidence": 100,
+                    "id": "brown_hair"
+                },
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 100,
+                    "id": "actor"
+                },
+                {
+                    "label_type": "relationship",
+                    "confidence": 100,
+                    "id": "parent"
+                }
+            ]
+        }
+    ]
+}

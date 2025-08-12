@@ -27,11 +27,15 @@
     .confidence-medium { color:orange; }
     .confidence-low { color:red; }
 
+    .kv { display:grid; grid-template-columns:150px 1fr; gap:6px 12px; margin:10px 0; }
+    .kv .key { color:#2e7d32; font-weight:600; text-align:right; }
+    .muted { color:#666; }
     .actions { display:flex; flex-wrap:wrap; justify-content:center; gap:14px; margin-top:6px; }
     .actions a { padding:12px 18px; border-radius:8px; text-decoration:none; font-size:1em; font-weight:700; transition:.15s; }
     .actions a.primary { background:#4CAF50; color:#fff; }
     .actions a.secondary { background:#888; color:#fff; }
     .actions a.tertiary { background:#6c63ff; color:#fff; }
+    .actions a.neutral { background:#2d7ff9; color:#fff; }
     .actions a:hover { opacity:.92; transform:translateY(-2px); }
     .monosmall { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size:.92em; color:#333; }
   </style>
@@ -52,86 +56,121 @@
       <p><strong>Type:</strong> {{ type_name|replace('_',' ')|title }}</p>
       <p class="monosmall"><strong>ID:</strong> {{ bio_id }}</p>
       {% if entry and entry.get('created') %}
-        <p><strong>Entry created:</strong> {{ entry.get('created') }}</p>
+        <p><strong>Entry created:</strong> {{ entry.get('created')|uk_datetime }}</p>
+      {% endif %}
+      {% if entry and entry.get('updated') %}
+        <p><strong>Entry updated:</strong> {{ entry.get('updated')|uk_datetime }}</p>
       {% endif %}
     </div>
 
     <div class="entry-block">
       <h3>📄 Snapshot of This Entry</h3>
 
-      {# ---- Time ---- #}
-      {% set t = entry.get('time', {}) %}
+      {# ---- Time (raw) ---- #}
+      {% set t = entry.get('time', {}) or {} %}
+      {% set time_conf = t.get('confidence', 0) %}
       {% set time_conf_class =
-        'confidence-high' if (t.get('confidence', 0) >= 67)
-        else 'confidence-medium' if (t.get('confidence', 0) >= 34)
+        'confidence-high' if (time_conf >= 67)
+        else 'confidence-medium' if (time_conf >= 34)
         else 'confidence-low'
       %}
-      <p><strong>Time:</strong>
+      <h4 class="label-section-title">Time</h4>
+      <div class="kv">
+        <div class="key">Kind</div>
+        <div>{{ t.get('label_type','—')|replace('_',' ')|title }}</div>
+
         {% if t.get('date_value') %}
-          {{ t.get('date_value') }}
+          <div class="key">Value</div>
+          <div>{{ t.get('date_value')|uk_date }}</div>
         {% elif t.get('subvalue') %}
-          {{ t.get('subvalue')|replace('_',' ')|title }}
+          <div class="key">Value</div>
+          <div>{{ t.get('subvalue')|replace('_',' ')|title }}</div>
+        {% elif t.get('start_date') or t.get('end_date') %}
+          <div class="key">Range</div>
+          <div>{{ (t.get('start_date') or '')|uk_date }} … {{ (t.get('end_date') or '')|uk_date }}</div>
         {% else %}
-          Unknown
+          <div class="key">Value</div>
+          <div class="muted">Unknown</div>
         {% endif %}
-        <span class="confidence-tag {{ time_conf_class }}">(Confidence: {{ t.get('confidence', 0) }}%)</span>
-      </p>
 
-      {# ---- Labels per type in the entry ---- #}
+        <div class="key">Confidence</div>
+        <div><span class="confidence-tag {{ time_conf_class }}">{{ time_conf }}%</span></div>
+      </div>
+
+      {# ---- Time Normalised (dict) ---- #}
+      {% set tn = entry.get('time_normalised') %}
+      {% if tn is mapping %}
+        <h4 class="label-section-title">Time Normalised</h4>
+        <div class="kv">
+          {% if tn.get('kind') is not none %}
+            <div class="key">Kind</div><div>{{ tn.get('kind')|replace('_',' ')|title }}</div>
+          {% endif %}
+          {% if tn.get('start_iso') %}
+            <div class="key">Start</div><div>{{ tn.get('start_iso')|uk_date }}</div>
+          {% endif %}
+          {% if tn.get('end_iso') %}
+            <div class="key">End</div><div>{{ tn.get('end_iso')|uk_date }}</div>
+          {% endif %}
+          {% if tn.get('precision') %}
+            <div class="key">Precision</div><div>{{ tn.get('precision')|replace('_',' ')|title }}</div>
+          {% endif %}
+          {% if tn.get('age_years') is not none %}
+            <div class="key">Age (yrs)</div><div>{{ tn.get('age_years') }}</div>
+          {% endif %}
+          {% if tn.get('notes') %}
+            <div class="key">Notes</div><div>{{ tn.get('notes') }}</div>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      {# ---- Labels: only lists ---- #}
       {% for k, v in entry.items() %}
-        {% if k not in ['time','created','status'] and v %}
-          <h4 class="label-section-title">{{ k|replace('_',' ')|title }}</h4>
-
-          {% for label in v %}
-            {% if label is mapping %}
-              {% set conf = label.get('confidence', 0) %}
-              {% set label_conf_class =
-                'confidence-high' if (conf >= 67)
-                else 'confidence-medium' if (conf >= 34)
-                else 'confidence-low'
-              %}
-              {% set display_text =
-                  label.get('display') or label.get('label') or label.get('id') or 'Unnamed' %}
-
-              <div class="label-block">
-                <strong>{{ label.get('label_type','Label')|replace('_',' ')|title }}</strong>
-                – {{ display_text|replace('_',' ')|title }}
-
-                {# Linked biography snippet if present #}
-                {% if label.get('biography_data') %}
-                  <div class="biography-info">
-                    📖 <strong>{{ label.biography_data.get('name','Unknown') }}</strong><br>
-                    {% if label.biography_data.get('description') %}
-                      <em>{{ label.biography_data.get('description') }}</em>
-                    {% endif %}
-                  </div>
-                {% endif %}
-
-                <div class="confidence-tag {{ label_conf_class }}">Confidence: {{ conf }}%</div>
-
-                {% if label.get('description') %}
-                  <em>{{ label.get('description') }}</em>
-                {% endif %}
-                {% if label.get('image_url') %}
-                  <img src="{{ label.get('image_url') }}" alt="{{ display_text }}">
-                {% endif %}
-              </div>
-            {% else %}
-              <pre class="monosmall" style="color:#b00;">Non-dict label encountered: {{ label|tojson }}</pre>
-            {% endif %}
-          {% endfor %}
+        {% if k not in ['time','time_normalised','created','updated','status'] and v %}
+          {% if v is sequence and not (v is string) %}
+            <h4 class="label-section-title">{{ k|replace('_',' ')|title }}</h4>
+            {% for label in v %}
+              {% if label is mapping %}
+                {% set conf = label.get('confidence', 0) %}
+                {% set label_conf_class =
+                  'confidence-high' if (conf >= 67)
+                  else 'confidence-medium' if (conf >= 34)
+                  else 'confidence-low'
+                %}
+                {% set display_text = label.get('display') or label.get('label') or label.get('id') or 'Unnamed' %}
+                <div class="label-block">
+                  <strong>{{ label.get('label_type','Label')|replace('_',' ')|title }}</strong>
+                  – {{ display_text|replace('_',' ')|title }}
+                  {% if label.get('biography_data') %}
+                    <div class="biography-info">
+                      📖 <strong>{{ label.biography_data.get('name','Unknown') }}</strong><br>
+                      {% if label.biography_data.get('description') %}
+                        <em>{{ label.biography_data.get('description') }}</em>
+                      {% endif %}
+                    </div>
+                  {% endif %}
+                  <div class="confidence-tag {{ label_conf_class }}">Confidence: {{ conf }}%</div>
+                  {% if label.get('description') %}<em>{{ label.get('description') }}</em>{% endif %}
+                  {% if label.get('image_url') %}<img src="{{ label.get('image_url') }}" alt="{{ display_text }}">{% endif %}
+                </div>
+              {% endif %}
+            {% endfor %}
+          {% endif %}
         {% endif %}
       {% endfor %}
     </div>
 
     <div class="actions">
-      <a class="primary" target="_top"
+      <a class="neutral"   target="_top"
+         href="{{ url_for('biography_view', type_name=type_name, bio_id=bio_id) }}">📄 Biography View</a>
+      <a class="primary"   target="_top"
          href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='labels') }}">✏️ Edit Labels</a>
-      <a class="tertiary" target="_top"
-         href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='time') }}">➕ Add Another Time Period</a>
+      <a class="tertiary"  target="_top"
+         href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='time') }}">⏱️ Add Another Time Period</a>
       <a class="secondary" target="_top"
          href="{{ url_for('type_browse', type_name=type_name) }}">📚 Back to {{ type_name|replace('_',' ')|title }} List</a>
     </div>
   </div>
 </body>
 </html>
+
+

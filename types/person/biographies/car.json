@@ -1,0 +1,36 @@
+{
+    "id": "car",
+    "uid": "dace29bfd7944bd388991a5b08b2a089",
+    "name": "Car",
+    "type": "person",
+    "created": "2025-08-12T00:25:48.039798+00:00",
+    "updated": "2025-08-12T00:25:56.409074+00:00",
+    "entries": [
+        {
+            "created": "2025-08-12T00:25:53.452156+00:00",
+            "updated": "2025-08-12T00:25:56.409074+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 44,
+                "subvalue": "preteen"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "unknown",
+                "age_years": 11.5,
+                "notes": "Life stage 'preteen' (no reference date — absolute bounds unknown)"
+            },
+            "person": [
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 100,
+                    "id": "1"
+                }
+            ]
+        }
+    ]
+}

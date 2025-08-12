@@ -1,0 +1,134 @@
+{
+    "id": "tony_4",
+    "uid": "6239e3909d9244a8944a86af44ee57a7",
+    "name": "Tony",
+    "type": "person",
+    "created": "2025-08-12T00:20:15.446873+00:00",
+    "updated": "2025-08-12T00:22:04.307206+00:00",
+    "entries": [
+        {
+            "created": "2025-08-12T00:20:20.850980+00:00",
+            "updated": "2025-08-12T00:20:24.424394+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 100,
+                "subvalue": "preteen"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 11.5,
+                "notes": "Life stage 'preteen' (no reference date — absolute bounds unknown)"
+            },
+            "person": [
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 100,
+                    "id": "1"
+                }
+            ]
+        },
+        {
+            "created": "2025-08-12T00:20:37.467244+00:00",
+            "updated": "2025-08-12T00:20:43.453976+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 62,
+                "subvalue": "preteen"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 11.5,
+                "notes": "Life stage 'preteen' (no reference date — absolute bounds unknown)"
+            },
+            "person": [
+                {
+                    "label_type": "educational_place",
+                    "confidence": 100,
+                    "id": "school"
+                },
+                {
+                    "label_type": "eye_colour",
+                    "confidence": 100,
+                    "id": "blue"
+                }
+            ]
+        },
+        {
+            "created": "2025-08-12T00:21:11.383138+00:00",
+            "updated": "2025-08-12T00:21:18.222004+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 77,
+                "subvalue": "seventies"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 75,
+                "notes": "Life stage 'seventies' (no reference date — absolute bounds unknown)"
+            },
+            "person": [
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 100,
+                    "id": "1"
+                },
+                {
+                    "label_type": "educational_place",
+                    "confidence": 100,
+                    "id": "school"
+                },
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 100,
+                    "id": "teacher"
+                },
+                {
+                    "label_type": "relationship",
+                    "confidence": 100,
+                    "id": "child"
+                }
+            ]
+        },
+        {
+            "created": "2025-08-12T00:22:00.984859+00:00",
+            "updated": "2025-08-12T00:22:04.307206+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 10,
+                "subvalue": "toddler"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "unknown",
+                "age_years": 1.5,
+                "notes": "Life stage 'toddler' (no reference date — absolute bounds unknown)"
+            },
+            "person": [
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 100,
+                    "id": "1"
+                }
+            ]
+        }
+    ]
+}

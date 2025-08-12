@@ -1,0 +1,98 @@
+{
+    "id": "teddy_23",
+    "uid": "1437a95396ab4ed6bedf53399cff2256",
+    "name": "Teddy",
+    "type": "person",
+    "created": "2025-08-11T23:38:39.077490+00:00",
+    "updated": "2025-08-11T23:56:50.431118+00:00",
+    "entries": [
+        {
+            "created": "2025-08-11T23:38:45.755854+00:00",
+            "updated": "2025-08-11T23:38:58.799021+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 62,
+                "subvalue": "teens"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 15,
+                "notes": "Life stage 'teens' (no reference date — absolute bounds unknown)"
+            },
+            "person": [
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 48,
+                    "id": "1"
+                },
+                {
+                    "label_type": "educational_place",
+                    "confidence": 100,
+                    "id": "school"
+                }
+            ]
+        },
+        {
+            "created": "2025-08-11T23:39:10.790593+00:00",
+            "updated": "2025-08-11T23:39:16.243968+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 71,
+                "subvalue": "infant"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 0.5,
+                "notes": "Life stage 'infant' (no reference date — absolute bounds unknown)"
+            },
+            "person": [
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 100,
+                    "id": "detective"
+                },
+                {
+                    "label_type": "relationship",
+                    "confidence": 100,
+                    "id": "child"
+                }
+            ]
+        },
+        {
+            "created": "2025-08-11T23:56:46.909440+00:00",
+            "updated": "2025-08-11T23:56:50.431118+00:00",
+            "time": {
+                "label_type": "date",
+                "confidence": 100,
+                "date_value": "2025-08-06"
+            },
+            "time_normalised": {
+                "kind": "date",
+                "start_iso": "2025-08-06",
+                "end_iso": "2025-08-06",
+                "start_ts": 1754438400,
+                "end_ts": 1754438400,
+                "precision": "exact",
+                "age_years": null,
+                "notes": "Direct date entry"
+            },
+            "person": [
+                {
+                    "label_type": "eye_colour",
+                    "confidence": 100,
+                    "id": "blue"
+                }
+            ]
+        }
+    ]
+}

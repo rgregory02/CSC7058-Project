@@ -4,6 +4,20 @@
   <meta charset="UTF-8">
   <title>Select Time – {{ name }}</title>
   <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    body { background:#f2f2f2; padding:40px; font-family:sans-serif; }
+    .box { background:#fff; max-width:980px; margin:auto; padding:28px; border-radius:12px; box-shadow:0 2px 12px rgba(0,0,0,.08); }
+    h1 { margin: 0 0 6px; }
+    .subheading { color:#555; margin-bottom:18px; }
+    .hint { color:#666; font-size:0.9em; }
+    .primary-button { display:inline-block; background:#6c63ff; color:#fff; font-weight:700; padding:10px 20px; border-radius:8px; text-decoration:none; border:none; cursor:pointer; }
+    .primary-button:hover { background:#5a54d6; }
+    .clear-btn { background:#fff; border:1px solid #bbb; color:#444; padding:4px 10px; border-radius:6px; cursor:pointer; font-size:.85em; margin-left:10px; }
+    .label-group-box { border:1px solid #ddd; border-radius:10px; padding:18px; margin-top:24px; background:#fff; }
+    details { border:1px dashed #ccd; border-radius:10px; padding:10px 12px; background:#fafaff; }
+    details > summary { cursor:pointer; font-weight:700; }
+    .muted { color:#666; font-size:.9em; }
+  </style>
 </head>
 <body>
   <div class="box">
@@ -13,9 +27,9 @@
       <strong>Type:</strong> {{ type_name|replace('_', ' ')|title }}
     </div>
 
-    <form method="POST" action="{{ url_for('general_step_time', type_name=type_name, bio_id=bio_id) }}">
-      <label for="label_type">Time Type:</label>
-      <select name="label_type" id="label_type" onchange="this.form.submit()">
+<form id="timeForm" method="POST" action="{{ url_for('general_step_time', type_name=type_name, bio_id=bio_id) }}">
+  <label for="label_type">Time Type:</label>
+  <select name="label_type" id="label_type" onchange="this.form.submit()">
         <option value="">-- Choose --</option>
         {% for item in label_files %}
           <option value="{{ item.key }}" {% if item.key == selected_label_type %}selected{% endif %}>
@@ -26,9 +40,9 @@
       <br><br>
 
       {% if selected_label_type == "date" %}
-        <label for="date_value">📅 Select Date (YYYY or YYYY-MM or YYYY-MM-DD):</label>
+        <label for="date_value">📅 Select Date (YYYY-MM-DD):</label>
         <input type="date" name="date_value" id="date_value" value="{{ selected_date }}">
-        <div class="hint" style="margin-top:6px;color:#666;font-size:0.9em;">
+        <div class="hint" style="margin-top:6px;">
           Displayed as UK: <span id="date_value_preview">
             {% if selected_date %}{{ selected_date|uk_date }}{% else %}—{% endif %}
           </span>
@@ -45,9 +59,7 @@
             placeholder="e.g. 12/06/1990 or 06/1990 or 1990"
             value="{{ selected_range_start }}"
           >
-          <div class="hint" style="margin-top:6px;color:#666;font-size:0.9em;">
-            UK preview: <span id="start_date_preview">—</span>
-          </div>
+          <div class="hint" style="margin-top:6px;">UK preview: <span id="start_date_preview">—</span></div>
         </div>
         <div style="margin-top:10px;">
           <label for="end_date">📐 End (optional — DD/MM/YYYY, MM/YYYY, or YYYY):</label>
@@ -58,12 +70,10 @@
             placeholder="e.g. 31/12/1999 or 12/1999 or 1999"
             value="{{ selected_range_end }}"
           >
-          <div class="hint" style="margin-top:6px;color:#666;font-size:0.9em;">
-            UK preview: <span id="end_date_preview">—</span>
-          </div>
+          <div class="hint" style="margin-top:6px;">UK preview: <span id="end_date_preview">—</span></div>
         </div>
-        <p style="color:#666;margin-top:8px;font-size:0.9em;">
-          You can type UK-style dates (DD/MM/YYYY), months (MM/YYYY), or just a year. We’ll normalise them to exact bounds on save.
+        <p class="hint" style="margin-top:8px;">
+          You can type UK-style dates (DD/MM/YYYY), months (MM/YYYY), or just a year. We’ll normalise them to period bounds on save.
         </p>
         <br>
 
@@ -90,39 +100,82 @@
         <br><br>
       {% endif %}
 
-      <div style="margin-top: 20px;">
-        {% if edit_entry_index is not none %}
-          <button type="submit">💾 Save Edits</button>
-          <button type="submit" name="cancel_edit" value="true">❌ Cancel</button>
-        {% else %}
-          <button type="submit">➡️ Continue</button>
-        {% endif %}
-      </div>
+  <div style="margin-top: 20px;">
+    {% if edit_entry_index is not none %}
+      <button type="submit" name="do_save" value="1" class="primary-button">💾 Save Edits</button>
+      <button type="submit" name="cancel_edit" value="true" class="clear-btn">❌ Cancel</button>
+    {% else %}
+      <button type="submit" name="do_save" value="1" class="primary-button">➡️ Continue</button>
+    {% endif %}
+  </div>
     </form>
 
     {% if existing_entries %}
       <hr>
       <h3>🗂️ Existing Entries</h3>
       <ul>
-        {# existing_entries is (label, confidence); label may already be preformatted #}
         {% for label, confidence in existing_entries %}
           <li>{{ label|safe }} ({{ confidence }}%)</li>
         {% endfor %}
       </ul>
     {% endif %}
+
+    <!-- Always-visible inline creation for TIME catalog -->
+    <div class="label-group-box">
+      <h3>🛠️ Add Time Labels Inline</h3>
+      <p class="muted">Writes to <code>types/{{ type_name }}/time/labels/...</code> (or global fallback) and appears immediately after a short reload.</p>
+
+      <details style="margin:8px 0">
+        <summary>➕ New Time Group (category)</summary>
+        <div style="margin-top:10px; display:grid; gap:8px; grid-template-columns:1fr 1fr;">
+          <input id="t_group_key" placeholder="key (e.g. decade, era, life_stage)" />
+          <input id="t_group_label" placeholder="Label (optional)" />
+          <input id="t_group_desc" placeholder="Description (optional)" />
+          <input id="t_group_order" type="number" value="999" placeholder="Order" />
+          <button type="button" class="primary-button" onclick="timeCreateGroup()">Create Group</button>
+        </div>
+        <div id="time_admin_group_status" class="muted" style="margin-top:6px"></div>
+      </details>
+
+      <details style="margin:8px 0">
+        <summary>➕ New Option in Group</summary>
+        <div style="margin-top:10px; display:grid; gap:8px;">
+          <div>
+            <label class="muted">Group</label>
+            <select id="t_opt_group_key" style="width:100%">
+              {% for item in label_files %}
+                <option value="{{ item.key }}">{{ item.key }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr;">
+            <input id="t_opt_id" placeholder="option id (e.g. 1990s, teens, victorian)">
+            <input id="t_opt_display" placeholder="Display (optional)">
+          </div>
+          <input id="t_opt_desc" placeholder="Description (optional)">
+          <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr 1fr;">
+            <input id="t_opt_start" placeholder="start_iso (YYYY[-MM[-DD]]) — optional">
+            <input id="t_opt_end" placeholder="end_iso (YYYY[-MM[-DD]]) — optional">
+            <input id="t_opt_order" type="number" value="999" placeholder="Order">
+          </div>
+          <button type="button" class="primary-button" onclick="timeCreateOption()">Create Option</button>
+          <div id="time_admin_option_status" class="muted" style="margin-top:6px"></div>
+        </div>
+      </details>
+    </div>
   </div>
 
   <script>
+    // ---------- Confidence ----------
     function updateConfidenceDisplay(value) {
       const el = document.getElementById("confidence_display");
       if (el) el.textContent = value + "%";
     }
 
-    // --- UK previews (client-side only; server still normalises on save) ---
+    // ---------- UK preview helpers ----------
     function isoToUk(iso) {
       if (!iso) return "";
-      // 'YYYY' or 'YYYY-MM' or 'YYYY-MM-DD'
-      if (/^\d{4}$/.test(iso)) return iso;
+      if (/^\d{4}$/.test(iso)) return iso; // year only
       if (/^\d{4}-\d{2}$/.test(iso)) {
         const [y, m] = iso.split("-");
         return `${parseInt(m,10)}/${y}`;
@@ -133,14 +186,13 @@
       }
       return iso; // fallback
     }
-
     function ukGuessToIso(s) {
       if (!s) return "";
       s = s.trim();
       // DD/MM/YYYY
       let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
       if (m) {
-        const d = String(parseInt(m[1],10)).padStart(2,'0');
+        const d  = String(parseInt(m[1],10)).padStart(2,'0');
         const mo = String(parseInt(m[2],10)).padStart(2,'0');
         return `${m[3]}-${mo}-${d}`;
       }
@@ -156,20 +208,18 @@
       return s;
     }
 
-    // Date (single) preview
+    // Date (single) preview live
     (function(){
       const inp = document.getElementById('date_value');
       const prev = document.getElementById('date_value_preview');
       if (inp && prev) {
-        const update = () => {
-          prev.textContent = isoToUk(inp.value || "");
-        };
+        const update = () => { prev.textContent = isoToUk(inp.value || ""); };
         inp.addEventListener('input', update);
         update();
       }
     })();
 
-    // Range previews
+    // Range previews live
     (function(){
       const s = document.getElementById('start_date');
       const e = document.getElementById('end_date');
@@ -181,12 +231,89 @@
         const iso = ukGuessToIso(inp.value || "");
         outp.textContent = iso ? isoToUk(iso) : "—";
       }
-
       if (s && sp) {
         s.addEventListener('input', () => updateOne(s, sp));
-        // initialise on load
         updateOne(s, sp);
       }
       if (e && ep) {
-        e
+        e.addEventListener('input', () => updateOne(e, ep));
+        updateOne(e, ep);
+      }
+    })();
 
+    // Convert UK text to ISO before submit (server normaliser expects ISO-ish)
+    (function(){
+      const form = document.getElementById('timeForm');
+      if (!form) return;
+      form.addEventListener('submit', () => {
+        const lt = document.getElementById('label_type')?.value || '';
+        if (lt === 'range') {
+          const s = document.getElementById('start_date');
+          const e = document.getElementById('end_date');
+          if (s) s.value = ukGuessToIso(s.value || '');
+          if (e) e.value = ukGuessToIso(e.value || '');
+        }
+      });
+    })();
+
+    // ---------- Inline TIME admin (always visible) ----------
+    async function _postJSON(url, body){
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify(body)
+      });
+      let data = {};
+      try { data = await res.json(); } catch(_){}
+      if(!res.ok || !data.ok){ throw new Error(data.error || res.statusText); }
+      return data;
+    }
+    function _msgAt(id, s, ok=true){
+      const el = document.getElementById(id);
+      if(!el) return;
+      el.textContent = s;
+      el.style.color = ok ? "green" : "crimson";
+    }
+
+    async function timeCreateGroup(){
+      const key   = document.getElementById('t_group_key').value.trim();
+      const label = document.getElementById('t_group_label').value.trim();
+      const desc  = document.getElementById('t_group_desc').value.trim();
+      const order = parseInt(document.getElementById('t_group_order').value || '999', 10);
+      if (!key){ _msgAt('time_admin_group_status','Key is required.', false); return; }
+      try{
+        await _postJSON('/api/time/admin/create_group', {
+          type_name: "{{ type_name }}", key, label, description: desc, order
+        });
+        _msgAt('time_admin_group_status','Group created. Reloading…', true);
+        setTimeout(()=>location.reload(), 600);
+      }catch(e){
+        _msgAt('time_admin_group_status','Create group failed: ' + e.message, false);
+      }
+    }
+
+    async function timeCreateOption(){
+      const group_key = document.getElementById('t_opt_group_key').value;
+      const id        = document.getElementById('t_opt_id').value.trim();
+      const display   = document.getElementById('t_opt_display').value.trim();
+      const description = document.getElementById('t_opt_desc').value.trim();
+      const start_iso = document.getElementById('t_opt_start').value.trim();
+      const end_iso   = document.getElementById('t_opt_end').value.trim();
+      const order     = parseInt(document.getElementById('t_opt_order').value || '999', 10);
+
+      if (!group_key || !id){ _msgAt('time_admin_option_status','Group and id are required.', false); return; }
+
+      try{
+        await _postJSON('/api/time/admin/create_option', {
+          type_name: "{{ type_name }}",
+          group_key, id, display, description, start_iso, end_iso, order
+        });
+        _msgAt('time_admin_option_status','Option created. Reloading…', true);
+        setTimeout(()=>location.reload(), 600);
+      }catch(e){
+        _msgAt('time_admin_option_status','Create option failed: ' + e.message, false);
+      }
+    }
+  </script>
+</body>
+</html>
