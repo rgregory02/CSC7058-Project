@@ -87,92 +87,90 @@
                  value="{{ selected_id or '' }}">
         {% endif %}
 
-        {% if group.input %}
-          {# ---------- Free text / date / number / textarea / select ---------- #}
-          {% set field = group.input %}
-          {% set field_name = field.name or 'value' %}
-          {% set existing_val = existing.get(field_name) or existing.get('id') or '' %}
+{% if group.input %}
+  {# ---------- Free text / date / number / textarea / select ---------- #}
+  {% set field = group.input %}
+  {% set field_name = field.name or 'value' %}
+  {% set existing_val = existing.get(field_name) or existing.get('id') or '' %}
 
-          <div class="field" style="margin-top:10px">
-            <label for="fld_{{ safe_key }}" class="muted">{{ field.label or group.label }}</label>
-            {% if field.kind in ['text','email','tel','date','month','datetime-local','number'] %}
-              <input id="fld_{{ safe_key }}"
-                     type="{{ field.kind }}"
-                     name="input_{{ group.key }}"
-                     placeholder="{{ field.placeholder or '' }}"
-                     value="{{ existing_val }}"
-                     {% if group.required %}required{% endif %}>
-            {% elif field.kind == 'textarea' %}
-              <textarea id="fld_{{ safe_key }}"
-                        name="input_{{ group.key }}"
-                        placeholder="{{ field.placeholder or '' }}"
-                        {% if group.required %}required{% endif %}>{{ existing_val }}</textarea>
-            {% elif field.kind == 'select' %}
-              <select id="fld_{{ safe_key }}" name="input_{{ group.key }}" {% if group.required %}required{% endif %}>
-                {% if field.placeholder %}<option value="">{{ field.placeholder }}</option>{% endif %}
-                {% for opt in field.options or [] %}
-                  <option value="{{ opt.id }}"{% if existing_val == opt.id %} selected="selected"{% endif %}>
-                    {{ opt.display or opt.id }}
-                  </option>
-                {% endfor %}
-              </select>
-            {% endif %}
-            {% if field.help %}<div class="muted" style="margin-top:6px">{{ field.help }}</div>{% endif %}
-          </div>
+  <div class="field" style="margin-top:10px">
+    <label for="fld_{{ safe_key }}" class="muted">{{ field.label or group.label }}</label>
+    {% if field.kind in ['text','email','tel','date','month','datetime-local','number'] %}
+      <input id="fld_{{ safe_key }}"
+             type="{{ field.kind }}"
+             name="input_{{ group.key }}"
+             placeholder="{{ field.placeholder or '' }}"
+             value="{{ existing_val }}"
+             {% if group.required %}required{% endif %}>
+    {% elif field.kind == 'textarea' %}
+      <textarea id="fld_{{ safe_key }}"
+                name="input_{{ group.key }}"
+                placeholder="{{ field.placeholder or '' }}"
+                {% if group.required %}required{% endif %}>{{ existing_val }}</textarea>
+    {% elif field.kind == 'select' %}
+      <select id="fld_{{ safe_key }}" name="input_{{ group.key }}" {% if group.required %}required{% endif %}>
+        {% if field.placeholder %}<option value="">{{ field.placeholder }}</option>{% endif %}
+        {% for opt in field.options or [] %}
+          <option value="{{ opt.id }}"{% if existing_val == opt.id %} selected="selected"{% endif %}>
+            {{ opt.display or opt.id }}
+          </option>
+        {% endfor %}
+      </select>
+    {% endif %}
+    {% if field.help %}<div class="muted" style="margin-top:6px">{{ field.help }}</div>{% endif %}
+  </div>
 
-          {# Optional: confidence for input fields too (uses same name pattern) #}
-          <div class="confidence-slider">
-            <label class="muted">Confidence:</label><br>
-            <input type="range"
-                   name="confidence_{{ group.key }}"
-                   id="confidence_{{ safe_key }}"
-                   min="0" max="100"
-                   value="{{ matched_conf }}"
-                   oninput="updateConfidence('{{ group.key }}')">
-            <div class="confidence-display">
-              <span id="confidence_display_{{ safe_key }}">{{ matched_conf }}%</span>
-              <span id="confidence_level_{{ safe_key }}"></span>
-            </div>
-          </div>
+  {# Optional: confidence for input fields too (uses same name pattern) #}
+  <div class="confidence-slider">
+    <label class="muted">Confidence:</label><br>
+    <input type="range"
+           name="confidence_{{ group.key }}"
+           id="confidence_{{ safe_key }}"
+           min="0" max="100"
+           value="{{ matched_conf }}"
+           oninput="updateConfidence('{{ group.key }}')">
+    <div class="confidence-display">
+      <span id="confidence_display_{{ safe_key }}">{{ matched_conf }}%</span>
+      <span id="confidence_level_{{ safe_key }}"></span>
+    </div>
+  </div>
 
-          {# Skip the label cards for input groups #}
-          {% continue %}
-        {% endif %}
+{% else %}
+  {% set is_cross_bio = group.refer_to and group.refer_to.source == 'biographies' %}
+  {% if group.options and not is_cross_bio %}
+    <div class="label-options">
+      {% for item in group.options %}
+        {% set is_selected = (selected_id == item.id) %}
+        {% set img = item.image or item.image_url %}
+        <div class="label-card {% if is_selected %}selected{% endif %}"
+             id="card_{{ safe_key }}_{{ item.id }}"
+             data-group="{{ group.key }}"
+             data-value="{{ item.id }}"
+             tabindex="0"
+             onclick="selectLabel('{{ group.key }}','{{ item.id }}', {{ 'true' if is_child else 'false' }})"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); this.click();}">
+          {% if img %}<img src="{{ img }}" alt="{{ item.display or item.id }}">{% endif %}
+          <div><strong>{{ item.display or item.id }}</strong></div>
+          {% if item.description %}<div class="label-description">{{ item.description }}</div>{% endif %}
+        </div>
+      {% endfor %}
+    </div>
 
-        {% set is_cross_bio = group.refer_to and group.refer_to.source == 'biographies' %}
-        {% if group.options and not is_cross_bio %}
-          <div class="label-options">
-            {% for item in group.options %}
-              {% set is_selected = (selected_id == item.id) %}
-              {% set img = item.image or item.image_url %}
-              <div class="label-card {% if is_selected %}selected{% endif %}"
-                   id="card_{{ safe_key }}_{{ item.id }}"
-                   data-group="{{ group.key }}"
-                   data-value="{{ item.id }}"
-                   tabindex="0"
-                   onclick="selectLabel('{{ group.key }}','{{ item.id }}', {{ 'true' if is_child else 'false' }})"
-                   onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); this.click();}">
-                {% if img %}<img src="{{ img }}" alt="{{ item.display or item.id }}">{% endif %}
-                <div><strong>{{ item.display or item.id }}</strong></div>
-                {% if item.description %}<div class="label-description">{{ item.description }}</div>{% endif %}
-              </div>
-            {% endfor %}
-          </div>
-
-          <div class="confidence-slider">
-            <label for="confidence_{{ safe_key }}">🎯 Confidence:</label><br>
-            <input type="range"
-                   name="confidence_{{ group.key }}"
-                   id="confidence_{{ safe_key }}"
-                   min="0" max="100"
-                   value="{{ matched_conf }}"
-                   oninput="updateConfidence('{{ group.key }}')">
-            <div class="confidence-display">
-              <span id="confidence_display_{{ safe_key }}">{{ matched_conf }}%</span>
-              <span id="confidence_level_{{ safe_key }}"></span>
-            </div>
-          </div>
-        {% endif %}
+    <div class="confidence-slider">
+      <label for="confidence_{{ safe_key }}">🎯 Confidence:</label><br>
+      <input type="range"
+             name="confidence_{{ group.key }}"
+             id="confidence_{{ safe_key }}"
+             min="0" max="100"
+             value="{{ matched_conf }}"
+             oninput="updateConfidence('{{ group.key }}')">
+      <div class="confidence-display">
+        <span id="confidence_display_{{ safe_key }}">{{ matched_conf }}%</span>
+        <span id="confidence_level_{{ safe_key }}"></span>
+      </div>
+    </div>
+  {% endif %}
+{% endif %}
 
         {# ---------- Linked biographies (server-rendered) ---------- #}
         {% set sugg_key = group.key.replace('/', '__') %}

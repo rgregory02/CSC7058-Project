@@ -1667,31 +1667,41 @@ def general_step_time(type_name, bio_id):
     labels_root = _time_labels_root_for(type_name)
     bio_file = os.path.join("types", type_name, "biographies", f"{bio_id}.json")
     os.makedirs(labels_root, exist_ok=True)
-
     if not os.path.exists(bio_file):
         return f"Biography {bio_id} not found.", 404
 
     bio_data = load_json_as_dict(bio_file) or {}
     bio_data.setdefault("entries", [])
 
-    # ---------- helper ----------
     def _as_int(x, default=None):
         try:
             return int(x)
         except (TypeError, ValueError):
             return default
 
-    # ---------- detect edit mode ----------
-    edit_idx_raw = request.args.get("edit_entry_index")
-    if edit_idx_raw is not None:
-        idx = _as_int(edit_idx_raw)
+    # ---------- edit/add mode detection (UPDATED) ----------
+    # Priority:
+    #  1) ?edit_entry_index=i  -> edit that specific entry
+    #  2) ?new=1               -> force "add new" mode
+    #  3) otherwise, if there's a valid session entry_index, DEFAULT TO EDIT that entry
+    #     (so changing Time mid-wizard overwrites the existing entry)
+    entry_index = _as_int(session.get("entry_index"))
+    if request.args.get("edit_entry_index") is not None:
+        idx = _as_int(request.args.get("edit_entry_index"))
         if idx is not None and 0 <= idx < len(bio_data["entries"]):
+            entry_index = idx
             session["entry_index"] = idx
             session["editing_entry"] = True
-    elif "editing_entry" not in session:
-        session["editing_entry"] = False  # default to add mode
+        else:
+            session["editing_entry"] = False
+    elif request.args.get("new") in ("1", "true", "True"):
+        session["editing_entry"] = False
+    else:
+        session["editing_entry"] = bool(
+            entry_index is not None and 0 <= entry_index < len(bio_data["entries"])
+        )
 
-    # Optional preset (e.g. ?preset=dob to jump straight to DOB)
+    # Optional preset (e.g. ?preset=dob)
     preset_kind = (request.args.get("preset") or "").strip()
 
     # ---------- read form values ----------
@@ -1704,7 +1714,6 @@ def general_step_time(type_name, bio_id):
     do_save             = (request.form.get("do_save") == "1")
 
     conf_val = _as_int(selected_confidence, 100) if selected_confidence else 100
-    entry_index = _as_int(session.get("entry_index"))
 
     # ---------- prefill form if editing ----------
     if not do_save and request.method in ("GET", "POST"):
@@ -1725,23 +1734,19 @@ def general_step_time(type_name, bio_id):
                 selected_confidence = str(t.get("confidence", 100))
                 conf_val = _as_int(selected_confidence, 100)
 
-    # ---------- validation ----------
+    # ---------- validation & save (unchanged logic, but respects edit mode) ----------
     error_message = ""
-
     if request.method == "POST" and do_save:
-        # Treat 'dob' exactly like 'date' for validation/saving
         valid = (
             (selected_label_type in ("date", "dob") and bool(selected_date)) or
             (selected_label_type == "range" and bool(selected_start or selected_end)) or
             (selected_label_type not in ("date", "dob", "range") and bool(selected_subvalue))
         )
-
         if not valid:
             error_message = "Please complete the selected time fields before continuing."
         else:
             raw = {"label_type": selected_label_type, "confidence": conf_val}
             label_value = ""
-
             if selected_label_type in ("date", "dob"):
                 raw["date_value"] = selected_date
                 label_value = selected_date
@@ -1753,16 +1758,13 @@ def general_step_time(type_name, bio_id):
                 raw["subvalue"] = selected_subvalue
                 label_value = selected_subvalue
 
-            # Option metadata (for decade/era bounds, etc.)
             catalog = load_time_catalog(type_name)
             opt_meta = None
             if selected_label_type in catalog.get("options", {}):
                 for o in catalog["options"][selected_label_type]:
                     if o["id"] == selected_subvalue:
-                        opt_meta = o
-                        break
+                        opt_meta = o; break
 
-            # Normalise
             try:
                 from time_utils import normalise_time_for_bio_entry
             except Exception:
@@ -1777,18 +1779,22 @@ def general_step_time(type_name, bio_id):
 
             now_iso = datetime.now(timezone.utc).isoformat()
 
-            if session.get("editing_entry"):
-                # Overwrite existing
-                if entry_index is None or not (0 <= entry_index < len(bio_data["entries"])):
-                    return "Invalid edit index", 400
-            else:
-                # Add new
+            if not session.get("editing_entry"):
+                # Add new entry only when explicitly in "new" mode
                 entry = {"created": now_iso, "updated": now_iso}
                 bio_data["entries"].append(entry)
                 entry_index = len(bio_data["entries"]) - 1
                 session["entry_index"] = entry_index
+            else:
+                # Editing existing: ensure index is valid, otherwise fall back to "new"
+                if entry_index is None or not (0 <= entry_index < len(bio_data["entries"])):
+                    entry = {"created": now_iso, "updated": now_iso}
+                    bio_data["entries"].append(entry)
+                    entry_index = len(bio_data["entries"]) - 1
+                    session["entry_index"] = entry_index
+                    session["editing_entry"] = False
 
-            # Save time data
+            # Save time block
             e = bio_data["entries"][entry_index]
             e["time"] = raw
             if normalised:
@@ -1796,11 +1802,9 @@ def general_step_time(type_name, bio_id):
             e["updated"] = now_iso
             bio_data["updated"] = now_iso
 
-            # If this is a Date of Birth, also copy to the biography root for easy querying
             if selected_label_type == "dob" and selected_date:
                 bio_data["dob"] = selected_date
 
-            # Compact selection for the Labels page header
             session["time_selection"] = {
                 "label": label_value,
                 "confidence": conf_val,
@@ -1814,11 +1818,10 @@ def general_step_time(type_name, bio_id):
             save_dict_as_json(bio_file, bio_data)
             return redirect(url_for("general_iframe_wizard", type=type_name, bio_id=bio_id, step="labels"))
 
-    # ---------- build template data ----------
+    # ---------- build template data (unchanged) ----------
     catalog = load_time_catalog(type_name)
     label_files = [{"key": c["key"], "desc": c.get("description", "")} for c in catalog["categories"]]
 
-    # Build sublabels for current selection (exclude date/range/dob from subvalue UI)
     subfolder_labels = []
     if selected_label_type and selected_label_type not in ("date", "dob", "range"):
         for o in catalog.get("options", {}).get(selected_label_type, []):
@@ -1829,7 +1832,6 @@ def general_step_time(type_name, bio_id):
             })
         subfolder_labels.sort(key=lambda x: (x.get("order", 999), x["name"]))
 
-    # Existing time display list
     display_list = []
     for entry in bio_data.get("entries", []):
         t = entry.get("time", {}) or {}

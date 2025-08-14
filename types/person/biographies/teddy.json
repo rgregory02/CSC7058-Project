@@ -1,30 +1,52 @@
 {
     "id": "teddy",
-    "uid": "6a5647979de64752ae9849c2617fca0e",
+    "uid": "f9517d966aaa49af90b8d1ce3873ddd6",
     "name": "Teddy",
     "type": "person",
-    "created": "2025-08-12T18:21:19.041970+00:00",
-    "updated": "2025-08-12T18:21:30.089952+00:00",
+    "created": "2025-08-14T22:51:21.705653+00:00",
+    "updated": "2025-08-14T22:52:50.978711+00:00",
     "entries": [
         {
-            "created": "2025-08-12T18:21:25.570174+00:00",
-            "updated": "2025-08-12T18:21:30.089952+00:00",
+            "created": "2025-08-14T22:51:31.122637+00:00",
+            "updated": "2025-08-14T22:52:50.978711+00:00",
             "time": {
-                "label_type": "date",
-                "confidence": 100,
-                "date_value": "2025-08-01"
+                "label_type": "life_stage",
+                "confidence": 67,
+                "subvalue": "teens"
             },
             "time_normalised": {
-                "kind": "date",
-                "start_iso": "2025-08-01",
-                "end_iso": "2025-08-01",
-                "start_ts": 1754006400,
-                "end_ts": 1754006400,
-                "precision": "exact",
-                "age_years": null,
-                "notes": "Direct date entry"
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 15,
+                "notes": "Life stage 'teens' (no reference date — absolute bounds unknown)"
             },
-            "person": []
+            "person": [
+                {
+                    "label_type": "first_name",
+                    "id": "Rebecca",
+                    "confidence": 100,
+                    "source": "input"
+                },
+                {
+                    "label_type": "hair_colour",
+                    "confidence": 100,
+                    "id": "brown_hair"
+                },
+                {
+                    "label_type": "relationship",
+                    "confidence": 100,
+                    "id": "parent"
+                },
+                {
+                    "label_type": "work_place",
+                    "confidence": 100,
+                    "id": "hospital"
+                }
+            ]
         }
     ]
 }
