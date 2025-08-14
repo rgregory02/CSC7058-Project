@@ -191,6 +191,26 @@
       wireTimeVisibility(row);
     }
 
+    // ---- NEW: prevent auto-post; save only on explicit buttons ----
+    function onGroupChange(sel){
+      const params = new URLSearchParams(window.location.search);
+      params.set('group_key', sel.value || '');
+      params.set('start', '1');
+      window.location.search = params.toString();
+    }
+    function markSaveIntent(val){
+      const el = document.getElementById('do_save');
+      if (el) el.value = val ? '1' : '';
+    }
+    function guardSubmit(e){
+      const el = document.getElementById('do_save');
+      if (!el || el.value !== '1'){
+        e.preventDefault();
+        return false;
+      }
+      return true;
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
       // Load payloads NOW that the script tags exist
       TIME_OPTIONS_BY_KEY = parseJSONFromScript('time_options_payload');
@@ -242,12 +262,14 @@
     <div class="grid">
       <div class="card">
         <h3>Build Events</h3>
-        <form method="POST">
-          <input type="hidden" name="do_save" value="1">
+        <!-- Guard submit; only save buttons set do_save=1 -->
+        <form method="POST" onsubmit="return guardSubmit(event)">
+          <input type="hidden" name="do_save" id="do_save" value="">
 
           <div class="row">
             <label>Group</label>
-            <select id="group_key" name="group_key" onchange="this.form.submit()">
+            <!-- No auto-submit; navigate with GET -->
+            <select id="group_key" name="group_key" onchange="onGroupChange(this)">
               {% for g in groups %}
                 <option value="{{ g.key }}" {% if g.key==chosen_group %}selected{% endif %}>{{ g.label }}</option>
               {% endfor %}
@@ -287,8 +309,10 @@
           <div id="rows"></div>
 
           <div style="display:flex; gap:8px; margin-top:12px;">
-            <button type="submit" class="btn outline" name="next_action" value="stay">💾 Save & Add More</button>
-            <button type="submit" class="btn primary" name="next_action" value="review">✅ Save Events & Continue</button>
+            <button type="submit" class="btn outline" name="next_action" value="stay"
+                    onclick="markSaveIntent(true)">💾 Save & Add More</button>
+            <button type="submit" class="btn primary" name="next_action" value="review"
+                    onclick="markSaveIntent(true)">✅ Save Events & Continue</button>
           </div>
         </form>
       </div>

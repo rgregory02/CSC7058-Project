@@ -2265,10 +2265,6 @@ def _resolve_group_options(scope_t: str, meta: dict) -> list:
     return (meta or {}).get("options", []) or []
 
 
-# -----------------------------
-# Route
-# -----------------------------
-
 @app.route("/general_step/events/<type_name>/<bio_id>", methods=["GET", "POST"])
 def general_step_events(type_name, bio_id):
     bio_path = os.path.join("types", type_name, "biographies", f"{bio_id}.json")
@@ -2288,17 +2284,17 @@ def general_step_events(type_name, bio_id):
     scope_type = (request.form.get("scope_type") or request.args.get("scope_type") or type_name).strip()
 
     groups = _list_event_groups()
-    incoming_group = (request.form.get("group_key") or request.args.get("group_key") or "").strip()
+    incoming_group = (request.values.get("group_key") or "").strip()
     if not incoming_group and groups:
         incoming_group = groups[0]["key"]
 
-    group_key = incoming_group
+    group_key  = incoming_group
     group_meta = next((g["meta"] for g in groups if g["key"] == group_key), {}) if group_key else {}
 
     # Resolve group options for the option/child pickers
     options_raw = _resolve_group_options(scope_type, group_meta)
 
-    # Compute default link target (option-level refer_to beats group-level link_biography)
+    # Compute default link target
     chosen_option_id = (request.form.get("option_id") or "").strip()
     refer_to_type = ""
     if chosen_option_id:
@@ -2309,11 +2305,12 @@ def general_step_events(type_name, bio_id):
         lb = (group_meta or {}).get("link_biography") or {}
         refer_to_type = (lb.get("type") or "").strip()
 
-    # 🔴 IMPORTANT: Load time kinds/options BEFORE handling POST (used in save loop)
+    # Load time kinds/options BEFORE handling POST
     time_kinds, time_options_by_key = _load_time_kinds_and_options()
 
     # ---------- save multiple rows ----------
-    if request.method == "POST" and request.form.get("do_save") == "1":
+    is_save = (request.method == "POST" and (request.form.get("do_save") == "1"))
+    if is_save:
         row_option_ids       = request.form.getlist("row_option_id[]")
         row_option_displays  = request.form.getlist("row_option_display[]")
         row_child_ids        = request.form.getlist("row_child_option_id[]")
@@ -2363,14 +2360,13 @@ def general_step_events(type_name, bio_id):
                     raw_time["start_date"] = (row_start_dates[i] or "").strip() if i < len(row_start_dates) else ""
                     raw_time["end_date"]   = (row_end_dates[i] or "").strip() if i < len(row_end_dates) else ""
                 else:
-                    # Folder‑backed kinds → label + optional free text; otherwise fallback to subvalue
                     if t_kind in time_options_by_key:
                         raw_time["label_id"]   = (row_time_labels[i] or "").strip() if i < len(row_time_labels) else ""
                         raw_time["label_free"] = (row_time_label_free[i] or "").strip() if i < len(row_time_label_free) else ""
                     else:
                         raw_time["subvalue"]   = (row_time_subvalues[i] or "").strip() if i < len(row_time_subvalues) else ""
 
-            # normalise time if your util exists (safe)
+            # normalise time (best effort)
             normalised = {}
             if raw_time:
                 try:
@@ -2391,10 +2387,7 @@ def general_step_events(type_name, bio_id):
                 "time_normalised": normalised or None,
                 "created": now_iso_utc(),
             }
-            # Strip None/blank
             event = {k: v for k, v in event.items() if v not in (None, "")}
-
-            # Skip empty rows
             if not event.get("option_id") and not event.get("option_display"):
                 continue
 
@@ -2412,7 +2405,8 @@ def general_step_events(type_name, bio_id):
         next_action = (request.form.get("next_action") or "stay").strip().lower()
         if next_action == "review":
             return redirect(url_for("general_iframe_wizard", type=type_name, bio_id=bio_id, step="review"))
-        return redirect(url_for("general_step_events", type_name=type_name, bio_id=bio_id))
+        # Stay on builder; keep the same group key in URL
+        return redirect(url_for("general_step_events", type_name=type_name, bio_id=bio_id, group_key=group_key, start=1))
 
     # ---------- data for template ----------
     options = options_raw

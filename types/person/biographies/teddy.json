@@ -4,11 +4,11 @@
     "name": "Teddy",
     "type": "person",
     "created": "2025-08-14T22:51:21.705653+00:00",
-    "updated": "2025-08-14T22:52:50.978711+00:00",
+    "updated": "2025-08-14T23:10:30.332793+00:00",
     "entries": [
         {
             "created": "2025-08-14T22:51:31.122637+00:00",
-            "updated": "2025-08-14T22:52:50.978711+00:00",
+            "updated": "2025-08-14T23:10:30.332793+00:00",
             "time": {
                 "label_type": "life_stage",
                 "confidence": 67,
@@ -45,6 +45,32 @@
                     "label_type": "work_place",
                     "confidence": 100,
                     "id": "hospital"
+                }
+            ],
+            "events": [
+                {
+                    "group_key": "relationship",
+                    "option_id": "child",
+                    "option_display": "Child",
+                    "link_type": "pet",
+                    "linked_bio": "teddy_2",
+                    "confidence": 100,
+                    "time": {
+                        "label_type": "date",
+                        "confidence": 100,
+                        "date_value": "2025-07-31"
+                    },
+                    "time_normalised": {
+                        "kind": "date",
+                        "start_iso": "2025-07-31",
+                        "end_iso": "2025-07-31",
+                        "start_ts": 1753920000,
+                        "end_ts": 1753920000,
+                        "precision": "exact",
+                        "age_years": null,
+                        "notes": "Direct date entry"
+                    },
+                    "created": "2025-08-14T23:10:30.332770+00:00"
                 }
             ]
         }
