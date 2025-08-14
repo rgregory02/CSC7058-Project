@@ -1,0 +1,10 @@
+{
+  "id": "testing",
+  "display": "Testing",
+  "label_type": "small_events",
+  "description": "Test",
+  "confidence": 100,
+  "source": "user",
+  "created": "2025-08-14T22:10:10.026940+00:00",
+  "properties": {}
+}

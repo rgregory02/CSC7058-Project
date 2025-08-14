@@ -51,6 +51,13 @@
     <label><input type="checkbox" name="also_make_bio_root"> Also create matching biographies base folder</label>
   </div>
 
+  <!-- NEW: make_property toggle -->
+  <div class="section">
+    <label><input type="checkbox" name="make_property">
+      Also create a top‑level property JSON (points to this folder)</label>
+    <div class="small">Unchecked → just make the folder (no duplicate tile on the labels page).</div>
+  </div>
+
   <div class="section">
     <label for="populate_mode">Populate labels</label>
     <select id="populate_mode" name="populate_mode" onchange="togglePopulate()">

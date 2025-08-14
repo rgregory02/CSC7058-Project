@@ -1,0 +1,10 @@
+{
+  "id": "nightclub",
+  "display": "Nightclub",
+  "label_type": "car",
+  "description": "Test",
+  "confidence": 100,
+  "source": "user",
+  "created": "2025-08-14T21:51:42.063755+00:00",
+  "properties": {}
+}

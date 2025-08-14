@@ -1861,12 +1861,11 @@ def general_step_time(type_name, bio_id):
         error_message=error_message
     )
 
-
 @app.route("/general_step/labels/<type_name>/<bio_id>", methods=["GET", "POST"])
 def general_step_labels(type_name, bio_id):
     """
     Type-agnostic labels step with:
-      - property-first groups
+      - property-first groups (including input groups: text/textarea/date/number/select)
       - nested child expansion (saved + preview)
       - biography suggestions
       - GPT label ingestion (works even if GPT returns only an {id})
@@ -1888,7 +1887,7 @@ def general_step_labels(type_name, bio_id):
         except (TypeError, ValueError):
             return default
 
-    # --- helper: build id -> group_key index
+    # --- helper: build id -> group_key index for option groups
     def _build_option_index(groups: List[Dict]) -> Dict[str, str]:
         idx: Dict[str, str] = {}
         for g in groups or []:
@@ -1899,22 +1898,57 @@ def general_step_labels(type_name, bio_id):
                     idx[str(oid)] = gkey
         return idx
 
+    # --- helper: validate an input-group value according to its meta (all optional)
+    def _validate_input_group(g: dict, value: str) -> Optional[str]:
+        """
+        Return None if ok; otherwise return an error message string.
+        Uses g.get('required') and g['input'] constraints if present:
+          - min_length, max_length, pattern (regex)
+        """
+        inp = (g or {}).get("input") or {}
+        val = (value or "").strip()
+
+        if g.get("required") and not val:
+            return f"'{g.get('label') or g.get('key')}' is required."
+
+        # Length checks
+        try:
+            mn = int(inp.get("min_length")) if inp.get("min_length") is not None else None
+            mx = int(inp.get("max_length")) if inp.get("max_length") is not None else None
+        except Exception:
+            mn = mx = None
+
+        if mn is not None and len(val) < mn:
+            return f"Must be at least {mn} characters."
+        if mx is not None and len(val) > mx:
+            return f"Must be at most {mx} characters."
+
+        # Pattern check (full match)
+        patt = (inp.get("pattern") or "").strip()
+        if patt:
+            try:
+                import re
+                if not re.fullmatch(patt, val or ""):
+                    return "Format is invalid."
+            except re.error:
+                # ignore invalid regex in config, but don't block the user
+                pass
+
+        return None
+
     # ===== current entry (create if needed, bring across time selection) =====
     entry_index = _as_int(session.get("entry_index"))
     if entry_index is None or not (0 <= entry_index < len(bio_data["entries"])):
         now = datetime.now(timezone.utc).isoformat()
         new_entry = {"created": now, "updated": now}
-        # carry over time selection if present
         if session.get("time_selection"):
             new_entry["time"] = session["time_selection"]
-        # initialise an empty labels list for this type
         new_entry[type_name] = []
         bio_data["entries"].append(new_entry)
         entry_index = len(bio_data["entries"]) - 1
         session["entry_index"] = entry_index
         save_dict_as_json(bio_file_path, bio_data)
 
-    # Ensure the current entry has a bucket for this type
     bio_data["entries"][entry_index].setdefault(type_name, [])
 
     # -------- build base groups --------
@@ -1933,7 +1967,8 @@ def general_step_labels(type_name, bio_id):
             payload["id"]    = lid
         # Prefer exact group via id → group map; else fall back to label_type
         key = base_index.get(lid) or lt
-        existing_labels[key] = payload
+        if key:
+            existing_labels[key] = payload
 
     # -------- preview overlay (so a click can reveal children without saving) --------
     preview_key = (request.args.get("preview_key") or "").strip()
@@ -1974,9 +2009,9 @@ def general_step_labels(type_name, bio_id):
             payload["label"] = lid
             payload["id"]    = lid
         key = expanded_index.get(lid) or lt
-        rebuilt_existing[key] = payload
+        if key:
+            rebuilt_existing[key] = payload
 
-    # Preserve preview on top
     if preview_key and preview_val:
         rebuilt_existing[preview_key] = {
             "label": preview_val, "id": preview_val, "confidence": 100, "source": "preview"
@@ -1993,10 +2028,6 @@ def general_step_labels(type_name, bio_id):
         new_entries: List[dict] = []
 
         # ---- (A) GPT suggestions ----
-        # Accepts a list of objects, minimal shape:
-        #   {"id": "<option_id>"}                   -> we'll resolve its label_type
-        # Optional fields we respect:
-        #   label_type, confidence, source
         gpt_raw = (request.form.get("gpt_selected_labels_json") or "").strip()
         if gpt_raw:
             try:
@@ -2012,16 +2043,16 @@ def general_step_labels(type_name, bio_id):
                         if not lt:
                             maybe = find_group_key_for_id(lid)
                             if maybe:
-                                lt = maybe.split("/")[-1]     # store last segment
+                                lt = maybe.split("/")[-1]
                             else:
-                                lt = type_name                # fallback (keeps schema tolerant)
+                                lt = type_name
                         try:
                             conf = int(lab.get("confidence", 100))
                         except Exception:
                             conf = 100
                         new_entries.append({
                             "id": lid,
-                            "label_type": lt.split("/")[-1],  # always last segment in stored data
+                            "label_type": lt.split("/")[-1],
                             "confidence": conf,
                             "source": lab.get("source", "gpt"),
                         })
@@ -2030,12 +2061,40 @@ def general_step_labels(type_name, bio_id):
             except Exception as e:
                 print("[GPT] parse error:", e)
 
-        # ---- (B) Manual selections from each group (including children) ----
+        # ---- (B) Manual groups (inputs first, then option/bio groups) ----
         for g in expanded_groups:
-            key = g["key"]                           # e.g. "work_place" or "work_place/hospital"
+            key = g.get("key", "").strip()
+            if not key:
+                continue
+
+            # shared confidence slider name
             conf_raw = (request.form.get(f"confidence_{key}") or "").strip()
             conf = int(conf_raw) if conf_raw.isdigit() else 100
 
+            # (B1) Input groups
+            if g.get("input"):
+                val = (request.form.get(f"input_{key}") or "").strip()
+
+                # Validate if constraints exist; if invalid, flash + return to page
+                err = _validate_input_group(g, val)
+                if err:
+                    try:
+                        flash(err, "error")
+                    except Exception:
+                        print("[WARN] flash not available:", err)
+                    return redirect(request.url)
+
+                # If optional and empty → treat as cleared (do not add to new_entries)
+                if val:
+                    new_entries.append({
+                        "label_type": key.split("/")[-1],  # stays group-suffix to map back
+                        "id": val,                          # store the free-text in id for prefill
+                        "confidence": conf,
+                        "source": "input",
+                    })
+                continue  # skip option handling for input groups
+
+            # (B2) Option / biography groups (existing behaviour)
             sel_id   = (request.form.get(f"selected_id_{key}") or "").strip()
             sel_bio  = (request.form.get(f"selected_id_{key}_bio") or "").strip()
             bio_conf_raw = (request.form.get(f"confidence_{key}_bio") or "").strip()
@@ -2051,7 +2110,7 @@ def general_step_labels(type_name, bio_id):
                 new_entries.append(entry)
 
         # Overwrite this entry’s labels for the current type and bump updated timestamp
-        bio_data["entries"][entry_index][type_name] = new_entries  # overwrite even if empty (supports deselect)
+        bio_data["entries"][entry_index][type_name] = new_entries
         bio_data["entries"][entry_index]["updated"] = datetime.now(timezone.utc).isoformat()
         bio_data["updated"] = bio_data["entries"][entry_index]["updated"]
         save_dict_as_json(bio_file_path, bio_data)
@@ -3168,14 +3227,17 @@ def create_subfolder(type_name):
         subfolder_group_meta = os.path.join(subfolder_path, "_group.json")
         bios_base_path       = os.path.join(bios_root, internal_name)
 
-        # Make group folders & meta
+        # Make group folder & meta (folder-only definition)
         os.makedirs(subfolder_path, exist_ok=True)
         if not os.path.exists(subfolder_group_meta):
-            with open(subfolder_group_meta, "w") as f:
-                json.dump({"name": display_label, "description": group_desc}, f, indent=2)
+            save_dict_as_json(subfolder_group_meta, {"name": display_label, "description": group_desc})
 
-        # Ensure the property JSON exists and points to this folder
-        _ensure_property_self_labels(type_name, internal_name, display_label, group_desc)
+        # ---- NEW: property JSON is OPTIONAL ---------------------------------
+        make_property = (request.form.get("make_property") in ("on", "1", "true", "True"))
+        if make_property:
+            # Ensure a top-level {key}.json that points to this folder (preferred 'property' definition)
+            _ensure_property_self_labels(type_name, internal_name, display_label, group_desc)
+        # ---------------------------------------------------------------------
 
         # Optionally make biographies root
         if request.form.get("also_make_bio_root") == "on":
@@ -3243,31 +3305,32 @@ def create_subfolder(type_name):
                         "confidence": int(request.form.get("first_label_conf") or "100"),
                         "source": "user"
                     }
-                    # write main label (and child folders)
                     _write_label_json(subfolder_path, internal_name, item)
 
-                    # optional stub bio
                     if request.form.get("make_stub_bio") == "on":
                         child_bio_dir = os.path.join(bios_base_path, _slugify_key(raw_label_name))
                         os.makedirs(child_bio_dir, exist_ok=True)
                         stub = os.path.join(child_bio_dir, f"{_slugify_key(raw_label_name)}.json")
                         if not os.path.exists(stub):
-                            with open(stub, "w") as f:
-                                json.dump({
-                                    "id": _slugify_key(raw_label_name),
-                                    "name": item["display"],
-                                    "description": f"Auto-generated biography stub for label: {item['display']}",
-                                    "source": "auto",
-                                    "entries": []
-                                }, f, indent=2)
+                            save_dict_as_json(stub, {
+                                "id": _slugify_key(raw_label_name),
+                                "name": item["display"],
+                                "description": f"Auto-generated biography stub for label: {item['display']}",
+                                "source": "auto",
+                                "entries": []
+                            })
                     flash(f"✅ Created first label “{item['display']}”.", "success")
 
-        flash(f"📂 Subfolder “{display_label}” created.", "success")
+        # UX nudge: let the user know whether a property JSON was created
+        if make_property:
+            flash("🧩 Property JSON created (points to this folder).", "success")
+        else:
+            flash("📂 Folder created (no property JSON).", "success")
+
         return redirect(return_url)
 
     # GET
     return render_template("create_subfolder.html", type_name=type_name, return_url=return_url)
-
 
 @app.route('/iframe_select/<string:type_name>')
 def iframe_select_type(type_name):

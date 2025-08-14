@@ -84,6 +84,37 @@ def prettify(name):
     base = os.path.splitext(name)[0]  # Remove .json, .jpg etc.
     return base.replace('_', ' ').replace('-', ' ').strip().title()
 
+def _normalise_input_meta(meta: dict):
+    """Return {"kind": ..., "name": "value", "placeholder": ..., "help": ...} or None."""
+    if not isinstance(meta, dict):
+        return None
+
+    # Explicit "input" block wins
+    if isinstance(meta.get("input"), dict):
+        inp = dict(meta["input"])  # shallow copy
+        if "name" not in inp:
+            inp["name"] = "value"
+        return inp
+
+    # Fallback to simple "type" mapping
+    t = (meta.get("type") or "").strip().lower()
+    if not t:
+        return None
+    mapping = {
+        "string": "text",
+        "text": "textarea",
+        "date": "date",
+        "number": "number",
+        "email": "email",
+        "tel": "tel",
+        "month": "month",
+        "datetime-local": "datetime-local",
+    }
+    kind = mapping.get(t)
+    if not kind:
+        return None
+    return {"kind": kind, "name": "value"}
+
 def get_label_description(labels_dir, label_name):
     """Attempts to load a label description from a .txt file"""
     desc_path = os.path.join(labels_dir, f"{label_name}.txt")
@@ -942,6 +973,18 @@ def collect_label_groups(label_base_path: str, current_type: str):
         "key": "work_place",
         "label": "Work place",
         "description": "...",
+        "required": bool,
+        "allow_multiple": bool,
+        "order": int?,
+        # EITHER an input-driven group:
+        "input": {
+          "kind": "text|textarea|date|number|email|tel|month|datetime-local|select",
+          "name": "value",
+          "placeholder": "...",
+          "help": "...",
+          "options": [ { "id": "...", "display": "..." } ]   # only for kind=="select"
+        },
+        # OR a choice-driven group (labels/biographies):
         "options": [ { id, display, description?, image? } ... ],
         "refer_to": { "type": "...", "source": "labels"|"biographies", "path": "...", "allow_children": bool }?,
         "link_biography": { "type": "...", "path": "...", "mode": "child_only|parent_only|child_or_parent" }?
@@ -994,6 +1037,57 @@ def collect_label_groups(label_base_path: str, current_type: str):
             "mode": (lb.get("mode") or "child_or_parent"),
         }
 
+    def _bool_meta(meta: dict, key: str) -> bool:
+        return bool((meta or {}).get(key) or (meta or {}).get("properties", {}).get(key))
+
+    def _int_meta(meta: dict, key: str):
+        raw = (meta or {}).get(key) or (meta or {}).get("properties", {}).get(key)
+        try:
+            return int(raw) if raw is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def _normalise_input_meta(meta: dict):
+        """
+        If the property/folder meta declares an input, normalise it to:
+          {"kind": "...", "name": "value", "placeholder": "...", "help": "...", "options": [...]}
+        Returns None if it's not an input-style property.
+        Priority:
+          1) explicit "input" block wins
+          2) fallback to simple "type" mapping (String/Text/Date/Number/Email/Tel/Month/Datetime-local)
+        """
+        if not isinstance(meta, dict):
+            return None
+
+        # 1) Explicit "input" block
+        if isinstance(meta.get("input"), dict):
+            inp = dict(meta["input"])  # shallow copy
+            if "name" not in inp or not inp.get("name"):
+                inp["name"] = "value"
+            if inp.get("kind"):
+                inp["kind"] = str(inp["kind"]).strip().lower()
+            return inp
+
+        # 2) Fallback "type" mapping
+        t = (meta.get("type") or meta.get("properties", {}).get("type") or "").strip().lower()
+        if not t:
+            return None
+        mapping = {
+            "string": "text",
+            "text": "textarea",
+            "date": "date",
+            "number": "number",
+            "email": "email",
+            "tel": "tel",
+            "month": "month",
+            "datetime-local": "datetime-local",
+            "datetime": "datetime-local",  # alias
+        }
+        kind = mapping.get(t)
+        if not kind:
+            return None
+        return {"kind": kind, "name": "value"}
+
     # ---------- 1) Property‑JSON groups (top level files in labels/) ----------
     top_level_jsons = [
         f for f in os.listdir(label_base_path)
@@ -1019,13 +1113,17 @@ def collect_label_groups(label_base_path: str, current_type: str):
                             o = {"id": iid, "display": name or iid}
                             if item.get("description"): o["description"] = item["description"]
                             img = item.get("image") or item.get("image_url")
-                            if img: o["image"] = o["image_url"] = img
+                            if img:
+                                o["image"] = o["image_url"] = img
                             opts.append(o)
                 if opts:
                     groups.append({
                         "key": prop_key,
                         "label": prop_key.replace("_"," ").title(),
                         "description": "",
+                        "required": False,
+                        "allow_multiple": False,
+                        "order": None,
                         "options": opts
                     })
             continue
@@ -1042,6 +1140,32 @@ def collect_label_groups(label_base_path: str, current_type: str):
             meta.get("description")
             or meta.get("properties", {}).get("description", "")
         )
+        required = _bool_meta(meta, "required")
+        allow_multiple = _bool_meta(meta, "allow_multiple")
+        order = _int_meta(meta, "order")
+
+        # (NEW) Input-style property? Build an input group and skip options.
+        inp = _normalise_input_meta(meta)
+        if inp:
+            g = {
+                "key": prop_key,
+                "label": prop_name,
+                "description": prop_desc,
+                "required": required,
+                "allow_multiple": allow_multiple,
+                "order": order,
+                "input": inp,       # drives an input in the template
+                "options": [],      # not used for inputs
+            }
+            # pass through link_biography/refer_to if provided
+            refer_to = extract_source(meta)
+            link_bio = extract_link_bio(meta)
+            if refer_to:
+                g["refer_to"] = refer_to
+            if link_bio:
+                g["link_biography"] = link_bio
+            groups.append(g)
+            continue  # do NOT attempt options resolution for input groups
 
         # 1a) Try resolver (supports cross-type, local, etc.)
         try:
@@ -1056,7 +1180,6 @@ def collect_label_groups(label_base_path: str, current_type: str):
             options = []
 
         # 1b) Fallback: if resolver yielded no options, list local folder options
-        #     This keeps the wizard consistent with /type/<type>/labels browsing.
         if not options:
             options = collect_label_options_from_folder(
                 os.path.join(label_base_path, prop_key)
@@ -1069,6 +1192,9 @@ def collect_label_groups(label_base_path: str, current_type: str):
             "key": prop_key,
             "label": prop_name,
             "description": prop_desc,
+            "required": required,
+            "allow_multiple": allow_multiple,
+            "order": order,
             "options": options,
         }
         if refer_to:
@@ -1091,42 +1217,73 @@ def collect_label_groups(label_base_path: str, current_type: str):
         group_desc  = ""
         refer_to    = None
         link_bio    = None
+        required    = False
+        allow_multiple = False
+        order = None
 
         meta_path = os.path.join(full, "_group.json")
-        if os.path.exists(meta_path):
-            m = load_json_safe_defensive(meta_path)
-            if isinstance(m, dict):
-                # Normalise any self_labels hint in folder meta too
-                m = normalise_source_meta(m, entry, current_type)
-                group_label = (
-                    m.get("name")
-                    or m.get("properties", {}).get("name")
-                    or group_label
-                )
-                group_desc = (
-                    m.get("description")
-                    or m.get("properties", {}).get("description", "")
-                    or ""
-                )
-                # If author used 'self_labels' here, normaliser above rewrites it,
-                # but in case it didn't, map it to current-type labels with children.
-                src_hint = extract_source(m)
-                if not src_hint and (m.get("source", {}) or {}).get("kind") == "self_labels":
-                    src_hint = {
-                        "type": current_type,
-                        "source": "labels",
-                        "path": entry,
-                        "allow_children": True,
-                    }
-                refer_to = src_hint
-                link_bio = extract_link_bio(m)
+        meta = load_json_safe_defensive(meta_path) if os.path.exists(meta_path) else {}
 
+        if isinstance(meta, dict) and meta:
+            # Normalise any self_labels hint in folder meta too
+            meta = normalise_source_meta(meta, entry, current_type)
+            group_label = (
+                meta.get("name")
+                or meta.get("properties", {}).get("name")
+                or group_label
+            )
+            group_desc = (
+                meta.get("description")
+                or meta.get("properties", {}).get("description", "")
+                or ""
+            )
+            required = _bool_meta(meta, "required")
+            allow_multiple = _bool_meta(meta, "allow_multiple")
+            order = _int_meta(meta, "order")
+
+            # If author used 'self_labels' here, normaliser above rewrites it,
+            # but in case it didn't, map it to current-type labels with children.
+            src_hint = extract_source(meta)
+            if not src_hint and (meta.get("source", {}) or {}).get("kind") == "self_labels":
+                src_hint = {
+                    "type": current_type,
+                    "source": "labels",
+                    "path": entry,
+                    "allow_children": True,
+                }
+            refer_to = src_hint
+            link_bio = extract_link_bio(meta)
+
+            # (NEW) Allow legacy folder _group.json to declare an input too
+            inp = _normalise_input_meta(meta)
+            if inp:
+                g = {
+                    "key": entry,
+                    "label": group_label,
+                    "description": group_desc,
+                    "required": required,
+                    "allow_multiple": allow_multiple,
+                    "order": order,
+                    "input": inp,
+                    "options": [],
+                }
+                if refer_to:
+                    g["refer_to"] = refer_to
+                if link_bio:
+                    g["link_biography"] = link_bio
+                groups.append(g)
+                continue  # skip listing folder options; input-only
+
+        # default legacy behaviour: list folder options
         options = collect_label_options_from_folder(full)
 
         g = {
             "key": entry,
             "label": group_label,
             "description": group_desc,
+            "required": required,
+            "allow_multiple": allow_multiple,
+            "order": order,
             "options": options,
         }
         if refer_to:
@@ -1136,10 +1293,9 @@ def collect_label_groups(label_base_path: str, current_type: str):
 
         groups.append(g)
 
-    # Stable-ish order: by key
+    # Stable-ish order: by key (you can sort by 'order' elsewhere if preferred)
     groups.sort(key=lambda g: g.get("key", ""))
     return groups
-
 
 def expand_child_groups(*, base_groups, current_type, label_base_path, existing_labels):
     """

@@ -78,12 +78,66 @@
             data-group="{{ group.key }}">
         {% endif %}
 
-        <!-- Hidden selected value for this group -->
-        <input type="hidden"
-               name="selected_id_{{ group.key }}"
-               id="input_{{ safe_key }}"
-               class="group-selection-tracker"
-               value="{{ selected_id or '' }}">
+        {% if not group.input %}
+          <!-- Hidden selected value (only for option-based groups) -->
+          <input type="hidden"
+                 name="selected_id_{{ group.key }}"
+                 id="input_{{ safe_key }}"
+                 class="group-selection-tracker"
+                 value="{{ selected_id or '' }}">
+        {% endif %}
+
+        {% if group.input %}
+          {# ---------- Free text / date / number / textarea / select ---------- #}
+          {% set field = group.input %}
+          {% set field_name = field.name or 'value' %}
+          {% set existing_val = existing.get(field_name) or existing.get('id') or '' %}
+
+          <div class="field" style="margin-top:10px">
+            <label for="fld_{{ safe_key }}" class="muted">{{ field.label or group.label }}</label>
+            {% if field.kind in ['text','email','tel','date','month','datetime-local','number'] %}
+              <input id="fld_{{ safe_key }}"
+                     type="{{ field.kind }}"
+                     name="input_{{ group.key }}"
+                     placeholder="{{ field.placeholder or '' }}"
+                     value="{{ existing_val }}"
+                     {% if group.required %}required{% endif %}>
+            {% elif field.kind == 'textarea' %}
+              <textarea id="fld_{{ safe_key }}"
+                        name="input_{{ group.key }}"
+                        placeholder="{{ field.placeholder or '' }}"
+                        {% if group.required %}required{% endif %}>{{ existing_val }}</textarea>
+            {% elif field.kind == 'select' %}
+              <select id="fld_{{ safe_key }}" name="input_{{ group.key }}" {% if group.required %}required{% endif %}>
+                {% if field.placeholder %}<option value="">{{ field.placeholder }}</option>{% endif %}
+                {% for opt in field.options or [] %}
+                  <option value="{{ opt.id }}"{% if existing_val == opt.id %} selected="selected"{% endif %}>
+                    {{ opt.display or opt.id }}
+                  </option>
+                {% endfor %}
+              </select>
+            {% endif %}
+            {% if field.help %}<div class="muted" style="margin-top:6px">{{ field.help }}</div>{% endif %}
+          </div>
+
+          {# Optional: confidence for input fields too (uses same name pattern) #}
+          <div class="confidence-slider">
+            <label class="muted">Confidence:</label><br>
+            <input type="range"
+                   name="confidence_{{ group.key }}"
+                   id="confidence_{{ safe_key }}"
+                   min="0" max="100"
+                   value="{{ matched_conf }}"
+                   oninput="updateConfidence('{{ group.key }}')">
+            <div class="confidence-display">
+              <span id="confidence_display_{{ safe_key }}">{{ matched_conf }}%</span>
+              <span id="confidence_level_{{ safe_key }}"></span>
+            </div>
+          </div>
+
+          {# Skip the label cards for input groups #}
+          {% continue %}
+        {% endif %}
 
         {% set is_cross_bio = group.refer_to and group.refer_to.source == 'biographies' %}
         {% if group.options and not is_cross_bio %}
@@ -183,129 +237,128 @@
         <div id="children_for_{{ safe_key }}"></div>
         <div id="bios_for_{{ safe_key }}"></div>
 
-        {% if (not group.options) and (not is_child) and (not bio_list) %}
+        {% if (not group.options) and (not is_child) and (not bio_list) and (not group.input) %}
           <div class="muted">No labels available yet for this group.</div>
         {% endif %}
       </div>
     {% endfor %}
 
-<div class="label-group-box" style="border-style:dashed">
-  <h3>🛠️ Add Labels Inline</h3>
-  <p class="muted">
-    Writes to <code>types/{{ current_type }}/labels/...</code> and appears immediately after a short reload.
-  </p>
+    <div class="label-group-box" style="border-style:dashed">
+      <h3>🛠️ Add Labels Inline</h3>
+      <p class="muted">
+        Writes to <code>types/{{ current_type }}/labels/...</code> and appears immediately after a short reload.
+      </p>
 
-  <details style="margin:8px 0" open>
-    <summary><strong>➕ New Property (group)</strong></summary>
-    <div style="margin-top:10px; display:grid; gap:8px;">
-      <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr;">
-        <div>
-          <label class="muted">From template</label>
-          <select id="tmpl_group_key" style="width:100%"></select>
-        </div>
-        <div>
-          <label class="muted">…or custom key</label>
-          <input id="new_group_key" placeholder="key (e.g. hair_color)" />
-        </div>
-      </div>
-      <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr;">
-        <input id="new_group_label" placeholder="Label (e.g. Hair color)">
-        <input id="new_group_desc" placeholder="Description">
-      </div>
+      <details style="margin:8px 0" open>
+        <summary><strong>➕ New Property (group)</strong></summary>
+        <div style="margin-top:10px; display:grid; gap:8px;">
+          <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr;">
+            <div>
+              <label class="muted">From template</label>
+              <select id="tmpl_group_key" style="width:100%"></select>
+            </div>
+            <div>
+              <label class="muted">…or custom key</label>
+              <input id="new_group_key" placeholder="key (e.g. hair_color)" />
+            </div>
+          </div>
+          <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr;">
+            <input id="new_group_label" placeholder="Label (e.g. Hair color)">
+            <input id="new_group_desc" placeholder="Description">
+          </div>
 
-      <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr 1fr;">
-        <div>
-          <label class="muted">Source</label>
-          <select id="new_group_source" style="width:100%">
-            <option value="options" selected>Options in folder</option>
-            <option value="biographies">Link to biographies</option>
-          </select>
-        </div>
-        <div>
-          <label class="muted">Biography type</label>
-          <select id="new_group_refer_type" style="width:100%" disabled></select>
-          <small class="muted">“Self” will select {{ current_type }}</small>
-        </div>
-        <div>
-          <label class="muted">Order</label>
-          <input id="new_group_order" type="number" value="999" placeholder="Order">
-        </div>
-      </div>
+          <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr 1fr;">
+            <div>
+              <label class="muted">Source</label>
+              <select id="new_group_source" style="width:100%">
+                <option value="options" selected>Options in folder</option>
+                <option value="biographies">Link to biographies</option>
+              </select>
+            </div>
+            <div>
+              <label class="muted">Biography type</label>
+              <select id="new_group_refer_type" style="width:100%" disabled></select>
+              <small class="muted">“Self” will select {{ current_type }}</small>
+            </div>
+            <div>
+              <label class="muted">Order</label>
+              <input id="new_group_order" type="number" value="999" placeholder="Order">
+            </div>
+          </div>
 
-      <div style="display:flex; gap:10px; align-items:center;">
-        <button type="button" class="primary-button" onclick="adminCreateGroupSmart()">Create Group</button>
-        <button type="button" onclick="adminUseSelfType()" class="clear-btn">Use self type</button>
-      </div>
-      <div id="adminStatus_group" class="muted"></div>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <button type="button" class="primary-button" onclick="adminCreateGroupSmart()">Create Group</button>
+            <button type="button" onclick="adminUseSelfType()" class="clear-btn">Use self type</button>
+          </div>
+          <div id="adminStatus_group" class="muted"></div>
+        </div>
+      </details>
+
+      <details style="margin:8px 0">
+        <summary><strong>➕ New Option in Existing Group</strong></summary>
+        <div style="margin-top:10px; display:grid; gap:8px;">
+          <div>
+            <label class="muted">Group</label>
+            <select id="opt_group_key" style="width:100%"></select>
+          </div>
+          <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr;">
+            <input id="opt_id" placeholder="option id (e.g. brown_hair)">
+            <input id="opt_display" placeholder="Display (Brown hair)">
+          </div>
+          <input id="opt_desc" placeholder="Description">
+          <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr;">
+            <input id="opt_image" placeholder="Image URL (optional)">
+            <input id="opt_order" type="number" value="999" placeholder="Order">
+          </div>
+          <button type="button" class="primary-button" onclick="adminCreateOption()">Create Option</button>
+          <div id="adminStatus_option" class="muted"></div>
+        </div>
+      </details>
+
+      <details style="margin:8px 0">
+        <summary><strong>🪜 New Child Group under Parent</strong></summary>
+        <div style="margin-top:10px; display:grid; gap:8px;">
+          <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr;">
+            <div>
+              <label class="muted">Parent (top-level)</label>
+              <select id="child_parent_key" style="width:100%"></select>
+            </div>
+            <div>
+              <label class="muted">Child key</label>
+              <input id="child_key" placeholder="child key (e.g. hospital)">
+            </div>
+          </div>
+          <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr;">
+            <input id="child_label" placeholder="Child Label">
+            <input id="child_desc" placeholder="Description">
+          </div>
+
+          <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr 1fr;">
+            <div>
+              <label class="muted">Source</label>
+              <select id="child_source" style="width:100%">
+                <option value="options" selected>Options in folder</option>
+                <option value="biographies">Link to biographies</option>
+              </select>
+            </div>
+            <div>
+              <label class="muted">Biography type</label>
+              <select id="child_refer_type" style="width:100%" disabled></select>
+            </div>
+            <div>
+              <label class="muted">Order</label>
+              <input id="child_order" type="number" value="999" placeholder="Order">
+            </div>
+          </div>
+
+          <div style="display:flex; gap:10px; align-items:center;">
+            <button type="button" class="primary-button" onclick="adminCreateChildSmart()">Create Child Group</button>
+            <button type="button" onclick="adminUseSelfTypeChild()" class="clear-btn">Use self type</button>
+          </div>
+          <div id="adminStatus_child" class="muted"></div>
+        </div>
+      </details>
     </div>
-  </details>
-
-  <details style="margin:8px 0">
-    <summary><strong>➕ New Option in Existing Group</strong></summary>
-    <div style="margin-top:10px; display:grid; gap:8px;">
-      <div>
-        <label class="muted">Group</label>
-        <select id="opt_group_key" style="width:100%"></select>
-      </div>
-      <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr;">
-        <input id="opt_id" placeholder="option id (e.g. brown_hair)">
-        <input id="opt_display" placeholder="Display (Brown hair)">
-      </div>
-      <input id="opt_desc" placeholder="Description">
-      <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr;">
-        <input id="opt_image" placeholder="Image URL (optional)">
-        <input id="opt_order" type="number" value="999" placeholder="Order">
-      </div>
-      <button type="button" class="primary-button" onclick="adminCreateOption()">Create Option</button>
-      <div id="adminStatus_option" class="muted"></div>
-    </div>
-  </details>
-
-  <details style="margin:8px 0">
-    <summary><strong>🪜 New Child Group under Parent</strong></summary>
-    <div style="margin-top:10px; display:grid; gap:8px;">
-      <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr;">
-        <div>
-          <label class="muted">Parent (top-level)</label>
-          <select id="child_parent_key" style="width:100%"></select>
-        </div>
-        <div>
-          <label class="muted">Child key</label>
-          <input id="child_key" placeholder="child key (e.g. hospital)">
-        </div>
-      </div>
-      <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr;">
-        <input id="child_label" placeholder="Child Label">
-        <input id="child_desc" placeholder="Description">
-      </div>
-
-      <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr 1fr;">
-        <div>
-          <label class="muted">Source</label>
-          <select id="child_source" style="width:100%">
-            <option value="options" selected>Options in folder</option>
-            <option value="biographies">Link to biographies</option>
-          </select>
-        </div>
-        <div>
-          <label class="muted">Biography type</label>
-          <select id="child_refer_type" style="width:100%" disabled></select>
-        </div>
-        <div>
-          <label class="muted">Order</label>
-          <input id="child_order" type="number" value="999" placeholder="Order">
-        </div>
-      </div>
-
-      <div style="display:flex; gap:10px; align-items:center;">
-        <button type="button" class="primary-button" onclick="adminCreateChildSmart()">Create Child Group</button>
-        <button type="button" onclick="adminUseSelfTypeChild()" class="clear-btn">Use self type</button>
-      </div>
-      <div id="adminStatus_child" class="muted"></div>
-    </div>
-  </details>
-</div>
-
 
     <!-- GPT assist -->
     <div class="label-group-box">
@@ -345,7 +398,6 @@
 </div>
 
 <script>
-  /* ----------------------------- small helpers ----------------------------- */
   const CURRENT_TYPE = "{{ current_type }}";
   const qs  = sel => document.querySelector(sel);
   const qsa = sel => Array.from(document.querySelectorAll(sel));
@@ -354,7 +406,6 @@
   const cssEscape = (s) => (window.CSS && CSS.escape ? CSS.escape(s) : String(s).replace(/[^a-zA-Z0-9_-]/g,'\\$&'));
   function titleCase(s){ return (s||"").replace(/_/g," ").replace(/\b\w/g,m=>m.toUpperCase()); }
 
-  /* --------------------------- confidence display -------------------------- */
   function updateConfidence(rawKey){
     const sk = safe(rawKey);
     const slider  = qs("#confidence_" + sk);
@@ -375,7 +426,7 @@
     if (el) el.addEventListener("input", () => updateConfidence(key));
   }
 
-let BOOT = { types: [], groups: [], top_level_groups: [], property_templates: [] };
+  let BOOT = { types: [], groups: [], top_level_groups: [], property_templates: [] };
 
   async function loadAdminBootstrap(){
     try{
@@ -384,20 +435,16 @@ let BOOT = { types: [], groups: [], top_level_groups: [], property_templates: []
       if(!data.ok) throw new Error(data.error || 'bootstrap failed');
       BOOT = data;
 
-      // property templates
       const tmplSel = document.getElementById('tmpl_group_key');
       tmplSel.innerHTML = `<option value="">(choose a template)</option>` +
         (data.property_templates || []).map(k => `<option value="${k}">${k}</option>`).join('');
 
-      // existing groups (all) for options
       const optGroupSel = document.getElementById('opt_group_key');
       optGroupSel.innerHTML = (data.groups || []).map(k => `<option value="${k}">${k}</option>`).join('');
 
-      // top-level parents for child creation
       const parentSel = document.getElementById('child_parent_key');
       parentSel.innerHTML = (data.top_level_groups || []).map(k => `<option value="${k}">${k}</option>`).join('');
 
-      // all types into refer_to <select>
       const referTypeSel = document.getElementById('new_group_refer_type');
       referTypeSel.innerHTML = data.types.map(t => `<option value="${t}">${t}</option>`).join('');
       const referTypeChildSel = document.getElementById('child_refer_type');
@@ -407,7 +454,6 @@ let BOOT = { types: [], groups: [], top_level_groups: [], property_templates: []
     }
   }
 
-  // Toggle enable for refer_to type when biographies is chosen
   function wireSourceToggles(){
     const srcSel = document.getElementById('new_group_source');
     const rSel  = document.getElementById('new_group_refer_type');
@@ -423,7 +469,6 @@ let BOOT = { types: [], groups: [], top_level_groups: [], property_templates: []
     refresh();
   }
 
-  // Convenience: set refer_to type to self
   function adminUseSelfType(){
     const rSel  = document.getElementById('new_group_refer_type');
     const srcSel = document.getElementById('new_group_source');
@@ -439,7 +484,6 @@ let BOOT = { types: [], groups: [], top_level_groups: [], property_templates: []
     rSel.value = "{{ current_type }}";
   }
 
-  // Status helpers
   function _msgAt(id, s, ok=true){
     const el = document.getElementById(id);
     if(!el) return;
@@ -447,7 +491,6 @@ let BOOT = { types: [], groups: [], top_level_groups: [], property_templates: []
     el.style.color = ok ? "green" : "crimson";
   }
 
-  // Create group using template/custom + optional refer_to
   async function adminCreateGroupSmart(){
     const key = (document.getElementById('new_group_key').value || '').trim() ||
                 (document.getElementById('tmpl_group_key').value || '').trim();
@@ -475,7 +518,6 @@ let BOOT = { types: [], groups: [], top_level_groups: [], property_templates: []
     }
   }
 
-  // Create option (unchanged except group is a dropdown)
   async function adminCreateOption(){
     const group_key = document.getElementById('opt_group_key').value;
     const id        = document.getElementById('opt_id').value.trim();
@@ -500,7 +542,6 @@ let BOOT = { types: [], groups: [], top_level_groups: [], property_templates: []
     }
   }
 
-  // Create child group with parent dropdown + optional refer_to
   async function adminCreateChildSmart(){
     const parent_key = document.getElementById('child_parent_key').value;
     const child_key  = document.getElementById('child_key').value.trim();
@@ -528,8 +569,22 @@ let BOOT = { types: [], groups: [], top_level_groups: [], property_templates: []
     }
   }
 
-  // Kick off the bootstrap on load
   document.addEventListener("DOMContentLoaded", () => {
+    qsa("[id^='confidence_']").forEach(el=>{
+      const id = el.id.replace("confidence_","");
+      updateConfidence(uns(id));
+    });
+    updateSaveButtonState();
+
+    qsa(".label-card[data-group]").forEach(el=>{
+      el.setAttribute("tabindex","0");
+      if(!el.getAttribute("onkeydown")){
+        el.addEventListener("keydown", e=>{
+          if(e.key==="Enter"||e.key===" "){ e.preventDefault(); el.click(); }
+        });
+      }
+    });
+
     loadAdminBootstrap();
     wireSourceToggles();
   });
@@ -697,7 +752,6 @@ let BOOT = { types: [], groups: [], top_level_groups: [], property_templates: []
     fetchBiosFor(groupKey);
   }
 
-  /* -------------------------- server interactions -------------------------- */
   function fetchBiosFor(groupKey){
     fetch("/api/labels/suggest_biographies", {
       method: "POST",
@@ -709,7 +763,6 @@ let BOOT = { types: [], groups: [], top_level_groups: [], property_templates: []
     .catch(()=>{});
   }
 
-  /* ----------------------- read current hidden selections ------------------ */
   function collectSelectionsMap() {
     const map = {};
     qsa("input.group-selection-tracker[id^='input_']").forEach(inp => {
@@ -732,7 +785,6 @@ let BOOT = { types: [], groups: [], top_level_groups: [], property_templates: []
     return arr;
   }
 
-  /* ------------------------ search & bio tile interactions ----------------- */
   function filterLabels(input, groupKey){
     const q = (input.value||"").toLowerCase();
     let shown = 0;
@@ -762,7 +814,6 @@ let BOOT = { types: [], groups: [], top_level_groups: [], property_templates: []
     updateSaveButtonState();
   }
 
-  /* ------------------------------ save button UX --------------------------- */
   function updateSaveButtonState(){
     const trackers = document.querySelectorAll('.group-selection-tracker');
     const gptEl = document.getElementById('gpt_selected_labels_json');
@@ -785,7 +836,6 @@ let BOOT = { types: [], groups: [], top_level_groups: [], property_templates: []
     }
   }
 
-  /* ---------------------------- GPT suggestions UI ------------------------- */
   function renderGptSuggestions(items) {
     const wrap = document.getElementById('gptSuggestions');
     if (!wrap) return;
@@ -825,7 +875,7 @@ let BOOT = { types: [], groups: [], top_level_groups: [], property_templates: []
         } else {
           chosen.set(key, sug);
           card.classList.add('selected');
-          await applySuggestionToGroups(sug); // try to click the real option
+          await applySuggestionToGroups(sug);
         }
         syncHidden();
       };
@@ -872,7 +922,6 @@ let BOOT = { types: [], groups: [], top_level_groups: [], property_templates: []
   }
   window.suggestLabels = suggestLabels;
 
-  /* ------------------------- apply suggestion to UI ------------------------ */
   async function applySuggestionToGroups(sug) {
     if (!sug || !sug.id) return false;
 
@@ -913,7 +962,6 @@ let BOOT = { types: [], groups: [], top_level_groups: [], property_templates: []
     return false;
   }
 
-  /* ------------------------------- admin API JS ---------------------------- */
   async function _postJSON(url, body){
     const res = await fetch(url, {
       method: "POST",
@@ -931,69 +979,7 @@ let BOOT = { types: [], groups: [], top_level_groups: [], property_templates: []
     el.textContent = s;
     el.style.color = ok ? "green" : "crimson";
   }
-  async function adminCreateGroup(){
-    const key   = document.getElementById("new_group_key").value.trim();
-    const label = document.getElementById("new_group_label").value.trim();
-    const desc  = document.getElementById("new_group_desc").value.trim();
-    const order = parseInt(document.getElementById("new_group_order").value || "999", 10);
-    try{
-      await _postJSON("/api/labels/admin/create_group", {
-        type_name: "{{ current_type }}", key, label, description: desc, order
-      });
-      _msg("Group created. Reloading…", true);
-      setTimeout(()=>location.reload(), 600);
-    }catch(e){ _msg("Create group failed: " + e.message, false); }
-  }
-  async function adminCreateOption(){
-    const group_key = document.getElementById("opt_group_key").value.trim();
-    const id        = document.getElementById("opt_id").value.trim();
-    const display   = document.getElementById("opt_display").value.trim();
-    const desc      = document.getElementById("opt_desc").value.trim();
-    const order     = parseInt(document.getElementById("opt_order").value || "999", 10);
-    const image     = document.getElementById("opt_image").value.trim();
-    try{
-      await _postJSON("/api/labels/admin/create_option", {
-        type_name: "{{ current_type }}", group_key, id, display, description: desc, order, image
-      });
-      _msg("Option created. Reloading…", true);
-      setTimeout(()=>location.reload(), 600);
-    }catch(e){ _msg("Create option failed: " + e.message, false); }
-  }
-  async function adminCreateChild(){
-    const parent_key = document.getElementById("child_parent_key").value.trim();
-    const child_key  = document.getElementById("child_key").value.trim();
-    const label      = document.getElementById("child_label").value.trim();
-    const desc       = document.getElementById("child_desc").value.trim();
-    const order      = parseInt(document.getElementById("child_order").value || "999", 10);
-    try{
-      await _postJSON("/api/labels/admin/create_child_group", {
-        type_name: "{{ current_type }}", parent_key, child_key, label, description: desc, order
-      });
-      _msg("Child group created. Reloading…", true);
-      setTimeout(()=>location.reload(), 600);
-    }catch(e){ _msg("Create child failed: " + e.message, false); }
-  }
-
-  /* ------------------------------- bootstrapping --------------------------- */
-  document.addEventListener("DOMContentLoaded", () => {
-    qsa("[id^='confidence_']").forEach(el=>{
-      const id = el.id.replace("confidence_","");
-      updateConfidence(uns(id));
-    });
-    updateSaveButtonState();
-
-    qsa(".label-card[data-group]").forEach(el=>{
-      el.setAttribute("tabindex","0");
-      if(!el.getAttribute("onkeydown")){
-        el.addEventListener("keydown", e=>{
-          if(e.key==="Enter"||e.key===" "){ e.preventDefault(); el.click(); }
-        });
-      }
-    });
-  });
 </script>
 
 </body>
 </html>
-
-
