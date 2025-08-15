@@ -2244,26 +2244,121 @@ def _options_from_file(t: str, k: str) -> list:
     return data.get("options", []) or []
 
 
-def _resolve_group_options(scope_t: str, meta: dict) -> list:
+def _merge_option_lists(*lists: list) -> list:
     """
-    Resolve the options for an event group using its 'source' or embedded 'options'.
-    """
-    src = (meta or {}).get("source") or {}
-    kind = (src.get("kind") or "").strip()
-    if kind in ("type_labels", "self_labels"):
-        t = (src.get("type") or (scope_t if kind == "self_labels" else "")).strip()
-        k = (src.get("path") or "").strip()
-        if t and k:
-            dir_opts = _options_from_dir(t, k)
-            file_opts = _options_from_file(t, k)
-            if dir_opts and file_opts:
-                seen = {o.get("id") for o in dir_opts}
-                merged = list(dir_opts)
-                merged.extend([o for o in file_opts if o.get("id") not in seen])
-                return merged
-            return dir_opts or file_opts
-    return (meta or {}).get("options", []) or []
+    Merge multiple lists of options:
+      [ {id, display, children?, refer_to?, description?}, ... ]
 
+    - De‑dupes by id.
+    - Prefers richer records (with children / refer_to / description / display).
+    - Merges children arrays (unique by child.id) when present in either.
+    - Returns list sorted by display then id (case‑insensitive).
+    """
+    out = {}
+
+    def better(a: dict, b: dict) -> dict:
+        if not a:
+            return dict(b)
+        c = dict(a)
+        # Prefer richer text
+        if not c.get("display") and b.get("display"):
+            c["display"] = b["display"]
+        if not c.get("description") and b.get("description"):
+            c["description"] = b["description"]
+        # Prefer refer_to when missing
+        if not c.get("refer_to") and b.get("refer_to"):
+            c["refer_to"] = b["refer_to"]
+        # Merge children
+        ach = a.get("children") or []
+        bch = b.get("children") or []
+        if ach or bch:
+            seen = set()
+            merged = []
+            for src in (ach, bch):
+                for ch in src:
+                    cid = ch.get("id") or ch.get("key")
+                    if cid and cid not in seen:
+                        seen.add(cid)
+                        merged.append(ch)
+            c["children"] = merged
+        return c
+
+    for lst in lists:
+        if not isinstance(lst, list):
+            continue
+        for o in lst:
+            oid = o.get("id") or o.get("key")
+            if not oid:
+                continue
+            out[oid] = better(out.get(oid), o)
+
+    items = list(out.values())
+    items.sort(key=lambda x: ((x.get("display") or x.get("id") or "").lower(),
+                              (x.get("id") or "").lower()))
+    return items
+
+
+def _options_from_both(t: str, k: str) -> list:
+    """Merge directory + file options for a (type, key) pair."""
+    if not t or not k:
+        return []
+    return _merge_option_lists(_options_from_dir(t, k), _options_from_file(t, k))
+
+
+def _resolve_group_options(scope_t: str, meta: dict, *, group_key: str, collection_type: str = "events") -> list:
+    """
+    Resolve options for a group by MERGING all applicable sources:
+
+      • meta["options"] (literal list)
+      • meta["source"] (kind: 'type_labels' | 'self_labels' | {source:'labels'})
+      • meta["refer_to"] / meta["link_biography"] when they point to labels
+      • SAFETY NET A: types/<collection_type>/labels/<group_key>/
+      • SAFETY NET B: types/<scope_t>/labels/<group_key>/
+
+    Returns one merged list, preserving 'children' (so the UI can show the Child dropdown).
+    """
+    if not isinstance(meta, dict):
+        meta = {}
+
+    candidate_lists = []
+
+    # 1) literal
+    lit = meta.get("options")
+    if isinstance(lit, list) and lit:
+        candidate_lists.append(lit)
+
+    # 2) explicit source
+    src = meta.get("source") or {}
+    if isinstance(src, dict):
+        kind = (src.get("kind") or "").strip()
+        plain = (src.get("source") or "").strip()
+
+        if kind in ("type_labels", "self_labels"):
+            t = (src.get("type") or (scope_t if kind == "self_labels" else "")).strip()
+            k = (src.get("path") or "").strip()
+            candidate_lists.append(_options_from_both(t, k))
+
+        if plain == "labels":
+            t = (src.get("type") or "").strip()
+            k = (src.get("path") or "").strip()
+            candidate_lists.append(_options_from_both(t, k))
+
+    # 3) labels hinted under refer_to / link_biography
+    ref = meta.get("refer_to") or meta.get("link_biography") or {}
+    if isinstance(ref, dict) and (ref.get("source") == "labels"):
+        t = (ref.get("type") or "").strip()
+        k = (ref.get("path") or "").strip()
+        candidate_lists.append(_options_from_both(t, k))
+
+    # 4) SAFETY NET A — this collection’s own labels/<group_key>
+    if group_key:
+        candidate_lists.append(_options_from_both(collection_type, group_key))
+
+    # 5) SAFETY NET B — the biography scope type’s labels/<group_key>
+    if group_key:
+        candidate_lists.append(_options_from_both(scope_t, group_key))
+
+    return _merge_option_lists(*candidate_lists)
 
 @app.route("/general_step/events/<type_name>/<bio_id>", methods=["GET", "POST"])
 def general_step_events(type_name, bio_id):
@@ -2274,7 +2369,6 @@ def general_step_events(type_name, bio_id):
     bio = load_json_as_dict(bio_path) or {}
     bio.setdefault("entries", [])
 
-    # Ensure active entry index (created earlier in wizard; else create)
     idx = session.get("entry_index")
     if not isinstance(idx, int) or not (0 <= idx < len(bio["entries"])):
         bio["entries"].append({"created": now_iso_utc(), "updated": now_iso_utc()})
@@ -2291,10 +2385,15 @@ def general_step_events(type_name, bio_id):
     group_key  = incoming_group
     group_meta = next((g["meta"] for g in groups if g["key"] == group_key), {}) if group_key else {}
 
-    # Resolve group options for the option/child pickers
-    options_raw = _resolve_group_options(scope_type, group_meta)
+    # ---- Build options_raw EARLY (merged from all sources) ----
+    options_raw = _resolve_group_options(
+        scope_t=scope_type,
+        meta=group_meta,
+        group_key=group_key,
+        collection_type="events",
+    )
 
-    # Compute default link target
+    # ---- Default link target type (from chosen option or group) ----
     chosen_option_id = (request.form.get("option_id") or "").strip()
     refer_to_type = ""
     if chosen_option_id:
@@ -2305,10 +2404,10 @@ def general_step_events(type_name, bio_id):
         lb = (group_meta or {}).get("link_biography") or {}
         refer_to_type = (lb.get("type") or "").strip()
 
-    # Load time kinds/options BEFORE handling POST
+    # Time kinds/options BEFORE save
     time_kinds, time_options_by_key = _load_time_kinds_and_options()
 
-    # ---------- save multiple rows ----------
+    # ---------- Save ----------
     is_save = (request.method == "POST" and (request.form.get("do_save") == "1"))
     if is_save:
         row_option_ids       = request.form.getlist("row_option_id[]")
@@ -2339,17 +2438,12 @@ def general_step_events(type_name, bio_id):
             link_type   = (row_link_types[i] or "").strip() if i < len(row_link_types) else ""
             link_bio    = (row_link_bios[i] or "").strip() if i < len(row_link_bios) else ""
 
-            try:
-                conf_val = int(row_confidences[i]) if i < len(row_confidences) else 100
-            except Exception:
-                conf_val = 100
+            try:    conf_val = int(row_confidences[i]) if i < len(row_confidences) else 100
+            except: conf_val = 100
 
-            # time per row
             t_kind = (row_time_kinds[i] or "").strip() if i < len(row_time_kinds) else ""
-            try:
-                t_conf = int(row_time_conf[i]) if i < len(row_time_conf) else 100
-            except Exception:
-                t_conf = 100
+            try:    t_conf = int(row_time_conf[i]) if i < len(row_time_conf) else 100
+            except: t_conf = 100
 
             raw_time = None
             if t_kind:
@@ -2366,7 +2460,6 @@ def general_step_events(type_name, bio_id):
                     else:
                         raw_time["subvalue"]   = (row_time_subvalues[i] or "").strip() if i < len(row_time_subvalues) else ""
 
-            # normalise time (best effort)
             normalised = {}
             if raw_time:
                 try:
@@ -2395,8 +2488,7 @@ def general_step_events(type_name, bio_id):
             added += 1
 
         if added:
-            entry["updated"] = now_iso_utc()
-            bio["updated"]   = entry["updated"]
+            entry["updated"] = now_iso_utc(); bio["updated"] = entry["updated"]
             save_dict_as_json(bio_path, bio)
             flash(f"Added {added} event{'s' if added != 1 else ''}.", "success")
         else:
@@ -2405,20 +2497,17 @@ def general_step_events(type_name, bio_id):
         next_action = (request.form.get("next_action") or "stay").strip().lower()
         if next_action == "review":
             return redirect(url_for("general_iframe_wizard", type=type_name, bio_id=bio_id, step="review"))
-        # Stay on builder; keep the same group key in URL
         return redirect(url_for("general_step_events", type_name=type_name, bio_id=bio_id, group_key=group_key, start=1))
 
-    # ---------- data for template ----------
+    # ---------- render ----------
     options = options_raw
 
-    try:
-        type_list = list_types()
-    except Exception:
-        type_list = []
+    try:    type_list = list_types()
+    except Exception: type_list = []
 
     linkable = {t: list_biographies(t) for t in type_list}
     current_events = (bio["entries"][idx] or {}).get("events", [])
-    show_builder = bool(request.args.get("start") == "1" or current_events)
+    show_builder   = bool(request.args.get("start") == "1" or current_events)
 
     return render_template(
         "events_step.html",
