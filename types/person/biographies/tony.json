@@ -1,0 +1,29 @@
+{
+    "id": "tony",
+    "uid": "342b5e3feed7478ba980ca86ca37d3de",
+    "name": "Tony",
+    "type": "person",
+    "created": "2025-08-14T23:46:16.712760+00:00",
+    "updated": "2025-08-14T23:46:26.111841+00:00",
+    "entries": [
+        {
+            "created": "2025-08-14T23:46:26.111841+00:00",
+            "updated": "2025-08-14T23:46:26.111841+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 57,
+                "subvalue": "preteen"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 11.5,
+                "notes": "Life stage 'preteen' (no reference date — absolute bounds unknown)"
+            }
+        }
+    ]
+}

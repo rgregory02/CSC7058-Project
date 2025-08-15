@@ -1,0 +1,46 @@
+{
+    "id": "tony_2",
+    "uid": "b21f6a20e5384569b1f284fa399141eb",
+    "name": "Tony",
+    "type": "person",
+    "created": "2025-08-14T23:58:54.786934+00:00",
+    "updated": "2025-08-14T23:59:20.892249+00:00",
+    "entries": [
+        {
+            "created": "2025-08-14T23:59:01.888422+00:00",
+            "updated": "2025-08-14T23:59:20.892249+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 54,
+                "subvalue": "childhood"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 6.5,
+                "notes": "Life stage 'childhood' (no reference date — absolute bounds unknown)"
+            },
+            "person": [
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 58,
+                    "id": "1"
+                },
+                {
+                    "label_type": "eye_colour",
+                    "confidence": 100,
+                    "id": "blue"
+                },
+                {
+                    "label_type": "onet_occupation",
+                    "confidence": 54,
+                    "id": "detective"
+                }
+            ]
+        }
+    ]
+}
