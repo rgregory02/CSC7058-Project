@@ -988,6 +988,248 @@ def api_suggest_biographies():
         return jsonify({"ok": False, "reason": "Server error"}), 500
 
 
+# --- Helpers ---------------------------------------------------------------
+
+def _group_storage(type_name: str, group_key: str):
+    """
+    Return ('folder', dir_path) if options live as files in a folder,
+           ('file',   json_path) if options live inside a single <group>.json,
+           or (None, None) if neither exists.
+    """
+    base = os.path.join("types", type_name, "labels")
+    dir_path  = os.path.join(base, group_key)
+    json_path = os.path.join(base, f"{group_key}.json")
+    if os.path.isdir(dir_path):
+        return "folder", dir_path
+    if os.path.isfile(json_path):
+        return "file", json_path
+    return None, None
+
+
+def _write_json_safely(path: str, payload: dict) -> bool:
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print("ERROR writing", path, "->", e)
+        return False
+
+
+def _archive_in_folder(dir_path: str, option_id: str, child_id: str, archive: bool) -> bool:
+    """
+    Edit types/<T>/labels/<group>/<option_id>.json
+    If child_id provided, toggle that child entry's 'archived'.
+    """
+    jf = os.path.join(dir_path, f"{option_id}.json")
+    if not os.path.isfile(jf):
+        return False
+    data = load_json_as_dict(jf) or {}
+    changed = False
+
+    if child_id:
+        kids = data.get("children") or []
+        for k in kids:
+            if (k.get("id") or "").strip() == child_id:
+                if archive and not k.get("archived"):
+                    k["archived"] = True; changed = True
+                elif not archive and k.get("archived"):
+                    k.pop("archived", None); changed = True
+                break
+    else:
+        if archive and not data.get("archived"):
+            data["archived"] = True; changed = True
+        elif not archive and data.get("archived"):
+            data.pop("archived", None); changed = True
+
+    return _write_json_safely(jf, data) if changed else False
+
+
+def _archive_in_file(json_path: str, option_id: str, child_id: str, archive: bool) -> bool:
+    """
+    Edit types/<T>/labels/<group>.json within {"options":[...]}.
+    Supports children inside an option dict.
+    """
+    if not os.path.isfile(json_path):
+        return False
+    doc = load_json_as_dict(json_path) or {}
+    opts = doc.get("options") or []
+    changed = False
+
+    for o in opts:
+        if (o.get("id") or "").strip() == option_id:
+            if child_id:
+                kids = o.get("children") or []
+                for k in kids:
+                    if (k.get("id") or "").strip() == child_id:
+                        if archive and not k.get("archived"):
+                            k["archived"] = True; changed = True
+                        elif not archive and k.get("archived"):
+                            k.pop("archived", None); changed = True
+                        break
+            else:
+                if archive and not o.get("archived"):
+                    o["archived"] = True; changed = True
+                elif not archive and o.get("archived"):
+                    o.pop("archived", None); changed = True
+            break
+
+    return _write_json_safely(json_path, {"options": opts}) if changed else False
+
+
+def _do_archive_label(*, target_type: str, group_key: str, option_id: str, child_id: str, archive: bool) -> bool:
+    """
+    Locate the storage for the (target_type, group_key) and archive/unarchive
+    the option (or its child) regardless of folder/file storage.
+    """
+    storage, path = _group_storage(target_type, group_key)
+    if storage == "folder":
+        return _archive_in_folder(path, option_id, child_id, archive)
+    if storage == "file":
+        return _archive_in_file(path, option_id, child_id, archive)
+    return False
+
+
+# --- API endpoints ---------------------------------------------------------
+
+@app.post("/api/archive_label/<type_name>")
+def api_archive_label(type_name):
+    # From the form in type_labels.html
+    group_key   = (request.form.get("group_key") or "").strip()
+    option_id   = (request.form.get("option_id") or "").strip()
+    child_id    = (request.form.get("child_id") or "").strip()
+    # For property-link groups, these override where we write:
+    target_type = (request.form.get("target_type") or type_name).strip()
+    target_path = (request.form.get("target_path") or group_key).strip()
+
+    ok = _do_archive_label(
+        target_type=target_type,
+        group_key=target_path,
+        option_id=option_id,
+        child_id=child_id,
+        archive=True,
+    )
+    flash("Label archived." if ok else "Couldn’t archive label (not found?).", "success" if ok else "error")
+    return redirect(request.form.get("next") or request.referrer or url_for("type_labels", type_name=type_name))
+
+
+@app.post("/api/unarchive_label/<type_name>")
+def api_unarchive_label(type_name):
+    group_key   = (request.form.get("group_key") or "").strip()
+    option_id   = (request.form.get("option_id") or "").strip()
+    child_id    = (request.form.get("child_id") or "").strip()
+    target_type = (request.form.get("target_type") or type_name).strip()
+    target_path = (request.form.get("target_path") or group_key).strip()
+
+    ok = _do_archive_label(
+        target_type=target_type,
+        group_key=target_path,
+        option_id=option_id,
+        child_id=child_id,
+        archive=False,
+    )
+    flash("Label unarchived." if ok else "Couldn’t unarchive label (not found?).", "success" if ok else "error")
+    return redirect(request.form.get("next") or request.referrer or url_for("type_labels", type_name=type_name))
+
+
+def _group_storage(type_name: str, group_key: str):
+    base = os.path.join("types", type_name, "labels")
+    dir_path  = os.path.join(base, group_key)
+    json_path = os.path.join(base, f"{group_key}.json")
+    if os.path.isdir(dir_path):
+        return "folder", dir_path
+    if os.path.isfile(json_path):
+        return "file", json_path
+    return None, None
+
+
+def _read_json(path: str) -> dict:
+    try:
+        return load_json_as_dict(path) or {}
+    except Exception:
+        return {}
+
+
+def _write_json(path: str, payload: dict) -> bool:
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print("Write error:", path, e)
+        return False
+
+
+def _set_group_archived(type_name: str, group_key: str, archive: bool, cascade: bool = False) -> bool:
+    """
+    For folder groups -> write types/<T>/labels/<GROUP>/_group.json with {"archived": true/false}
+    For file groups   -> set {"archived": true/false} at top of types/<T>/labels/<GROUP>.json
+    If cascade=True, also toggle every option's archived flag.
+    """
+    storage, path = _group_storage(type_name, group_key)
+    if storage is None:
+        return False
+
+    changed = False
+
+    if storage == "folder":
+        meta_path = os.path.join(path, "_group.json")
+        meta = _read_json(meta_path)
+        if archive and not meta.get("archived"):
+            meta["archived"] = True; changed = True
+        elif not archive and meta.get("archived"):
+            meta.pop("archived", None); changed = True
+        if changed:
+            if not _write_json(meta_path, meta):
+                return False
+
+        if cascade:
+            for fn in sorted(os.listdir(path)):
+                if not fn.endswith(".json") or fn == "_group.json":
+                    continue
+                jf = os.path.join(path, fn)
+                data = _read_json(jf)
+                # option itself
+                if archive and not data.get("archived"):
+                    data["archived"] = True; changed = True
+                elif not archive and data.get("archived"):
+                    data.pop("archived", None); changed = True
+                # children
+                kids = data.get("children") or []
+                for k in kids:
+                    if archive and not k.get("archived"):
+                        k["archived"] = True; changed = True
+                    elif not archive and k.get("archived"):
+                        k.pop("archived", None); changed = True
+                _write_json(jf, data)
+
+        return True
+
+    # storage == "file"
+    doc = _read_json(path)
+    if archive and not doc.get("archived"):
+        doc["archived"] = True; changed = True
+    elif not archive and doc.get("archived"):
+        doc.pop("archived", None); changed = True
+
+    if cascade:
+        opts = doc.get("options") or []
+        for o in opts:
+            if archive and not o.get("archived"):
+                o["archived"] = True; changed = True
+            elif not archive and o.get("archived"):
+                o.pop("archived", None); changed = True
+            for k in (o.get("children") or []):
+                if archive and not k.get("archived"):
+                    k["archived"] = True; changed = True
+                elif not archive and k.get("archived"):
+                    k.pop("archived", None); changed = True
+        doc["options"] = opts
+
+    return _write_json(path, doc)
+
 @app.route("/api/bio/<type_name>/<bio_id>/archive", methods=["POST"])
 def api_archive_bio(type_name, bio_id):
     nxt = request.form.get("next") or request.args.get("next") or request.referrer \
@@ -1184,6 +1426,8 @@ def time_step(type_name, bio_id):
     )
 
 # /type/<type_name>/labels – folder-first label browser
+from flask import request, redirect, url_for, flash
+
 @app.route("/type/<type_name>/labels")
 def type_labels(type_name):
     label_dir = os.path.join("types", type_name, "labels")
@@ -1196,10 +1440,19 @@ def type_labels(type_name):
 
     def _load_json(p):
         try:
-            return load_json_as_dict(p)
+            return load_json_as_dict(p) or {}
         except Exception as e:
             print(f"[labels view] bad json {p}: {e}")
             return {}
+
+    def _save_json(p, data: dict):
+        try:
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            save_dict_as_json(p, data)
+            return True
+        except Exception as e:
+            print(f"[labels view] save error {p}: {e}")
+            return False
 
     def _sibling_image(folder, base):
         for ext in IMAGE_EXTS:
@@ -1224,43 +1477,66 @@ def type_labels(type_name):
             lid = os.path.splitext(f)[0]
             jp = os.path.join(base, f)
             data = _load_json(jp)
-            name = (data.get("properties", {}) or {}).get("name") or data.get("name") or lid
+            name = (data.get("properties", {}) or {}).get("name") or data.get("display") or data.get("name") or lid
             desc = data.get("description") or (data.get("properties", {}) or {}).get("description", "") or ""
             img = _sibling_image(os.path.dirname(jp), lid)
-            out.append({"id": lid, "display": name, "description": desc, "image_url": img})
+            opt = {
+                "id": lid,
+                "display": name,
+                "description": desc,
+                "image_url": img,
+                "archived": bool(data.get("archived")),
+            }
+            # attach children if present in file format (optional)
+            kids = []
+            for k in (data.get("children") or []):
+                cid = (k.get("id") or "").strip()
+                if not cid:
+                    continue
+                kids.append({
+                    "id": cid,
+                    "display": (k.get("display") or k.get("label") or cid.replace("_", " ").title()),
+                    "description": k.get("description", ""),
+                    "image_url": k.get("image_url", ""),
+                    "archived": bool(k.get("archived")),
+                })
+            if kids:
+                opt["children"] = kids
+                opt["child_count"] = len(kids)
+            out.append(opt)
         return out
 
     def _child_options_here(group_key, option_id):
         # types/<this>/labels/<group_key>/<option_id>/*.json
         child_dir = os.path.join(label_dir, *group_key.split("/"), option_id)
-        return _folder_options_for(type_name, os.path.relpath(child_dir, os.path.join("types", type_name, "labels")).replace("\\", "/")) if os.path.isdir(child_dir) else []
+        rel = os.path.relpath(child_dir, os.path.join("types", type_name, "labels")).replace("\\", "/")
+        return _folder_options_for(type_name, rel) if os.path.isdir(child_dir) else []
 
     groups = []
 
-    # ---------- 1) Show FOLDERS FIRST ----------
+    # Cache list of top-level jsons
     top_level_jsons = {
         f for f in os.listdir(label_dir)
         if f.endswith(".json") and os.path.isfile(os.path.join(label_dir, f))
     }
 
+    # ---------- 1) FOLDER GROUPS ----------
     for entry in sorted(os.listdir(label_dir)):
         full = os.path.join(label_dir, entry)
         if not os.path.isdir(full):
             continue
 
-        # If there's a property JSON with the same name, we'll still show the folder
-        # as the main card (your requested behavior).
-        gname = entry.replace("_", " ").title()
-        gdesc = ""
+        # metadata from _group.json
         meta_path = os.path.join(full, "_group.json")
         meta = _load_json(meta_path) if os.path.exists(meta_path) else {}
-        if _is_mapping(meta):
-            gname = meta.get("name") or (meta.get("properties", {}) or {}).get("name") or gname
-            gdesc = meta.get("description") or (meta.get("properties", {}) or {}).get("description", "") or ""
+        gname = meta.get("name") or (meta.get("properties", {}) or {}).get("name") or entry.replace("_", " ").title()
+        gdesc = meta.get("description") or (meta.get("properties", {}) or {}).get("description", "") or ""
+        garch = bool(meta.get("archived"))
 
-        # options = files directly under this folder
+        # options directly under this folder
         options = _folder_options_for(type_name, entry)
-        # attach children one level deeper for each option
+
+        # attach children one level deeper for each option (folder style)
         enhanced = []
         for opt in options:
             kids = _child_options_here(entry, opt["id"])
@@ -1274,50 +1550,56 @@ def type_labels(type_name):
             "key": entry,
             "label": gname,
             "description": gdesc,
+            "archived": garch,
             "options": enhanced,
             "count": len(enhanced),
             "kind": "folder"
         })
 
-    # ---------- 2) Also surface PROPERTY JSONS that point to LABELS ----------
-    # (useful when a property points to another type/path; we’ll render those options here too)
+    # ---------- 2) PROPERTY/FILE GROUPS ----------
     for jf in sorted(top_level_jsons):
         prop_key = os.path.splitext(jf)[0]
         prop_path = os.path.join(label_dir, jf)
         meta = _load_json(prop_path)
-
         if not _is_mapping(meta):
             continue
 
-        # source.kind can be "self_labels", "type_labels", "type_biographies", or None
         src = meta.get("source") or (meta.get("properties", {}) or {}).get("source") or {}
-        if not _is_mapping(src):
+        is_mapping_source = _is_mapping(src)
+        kind = src.get("kind") if is_mapping_source else None
+
+        # Only label sources here (ignore biographies)
+        if is_mapping_source and kind not in ("self_labels", "type_labels") and src.get("source") != "labels":
             continue
 
-        kind = src.get("kind")
-        if kind not in ("self_labels", "type_labels"):
-            # ignore type_biographies here (this page is for labels)
-            continue
-
-        # Resolve where to read options from
-        if kind == "self_labels":
-            target_type = type_name
-            target_path = src.get("path") or prop_key  # default to property key
-        else:  # type_labels
-            target_type = src.get("type")
+        # Resolve target for property links
+        target_type, target_path = None, None
+        if is_mapping_source and kind in ("self_labels", "type_labels"):
+            if kind == "self_labels":
+                target_type = type_name
+                target_path = src.get("path") or prop_key
+            else:
+                target_type = src.get("type")
+                target_path = src.get("path") or prop_key
+                if not target_type:
+                    continue
+        elif is_mapping_source and src.get("source") == "labels":
+            target_type = src.get("type") or ""
             target_path = src.get("path") or prop_key
-            if not target_type:
-                continue  # malformed
 
         prop_name = meta.get("name") or (meta.get("properties", {}) or {}).get("name") or prop_key.replace("_", " ").title()
         prop_desc = meta.get("description") or (meta.get("properties", {}) or {}).get("description", "") or ""
+        parch = bool(meta.get("archived"))
 
-        options = _folder_options_for(target_type, target_path)
-        # If the property points to a different type/path, annotate so the template can show a hint/link.
+        options = []
+        if target_path:
+            options = _folder_options_for(target_type or type_name, target_path)
+
         groups.append({
             "key": prop_key,
             "label": prop_name,
-            "description": prop_desc if target_type == type_name else f"{prop_desc} (from {target_type} / {target_path})",
+            "description": prop_desc if (not target_type or target_type == type_name) else f"{prop_desc} (from {target_type} / {target_path})",
+            "archived": parch,
             "options": options,
             "count": len(options),
             "kind": "property_link",
@@ -1325,10 +1607,72 @@ def type_labels(type_name):
             "target_path": target_path
         })
 
-    # stable order: folders first, then property links (keep name order within each)
+    # sort: folders first, then property links
     groups.sort(key=lambda g: (0 if g["kind"] == "folder" else 1, g["key"]))
 
     return render_template("type_labels.html", type_name=type_name, groups=groups)
+
+
+def _set_group_archived(type_name: str, group_key: str, *, archived: bool) -> bool:
+    """
+    For a folder group: write types/<type>/labels/<group_key>/_group.json {archived: bool}
+    For a file/property group: write types/<type>/labels/<group_key>.json {archived: bool}
+    """
+    label_dir = os.path.join("types", type_name, "labels")
+    folder = os.path.join(label_dir, group_key)
+    filep  = os.path.join(label_dir, f"{group_key}.json")
+
+    if os.path.isdir(folder):
+        meta_path = os.path.join(folder, "_group.json")
+        meta = load_json_as_dict(meta_path) if os.path.exists(meta_path) else {}
+        if not isinstance(meta, dict):
+            meta = {}
+        meta["archived"] = bool(archived)
+        try:
+            save_dict_as_json(meta_path, meta)
+            return True
+        except Exception as e:
+            print("Archive folder group error:", e)
+            return False
+
+    if os.path.isfile(filep):
+        doc = load_json_as_dict(filep) or {}
+        if not isinstance(doc, dict):
+            doc = {}
+        doc["archived"] = bool(archived)
+        try:
+            save_dict_as_json(filep, doc)
+            return True
+        except Exception as e:
+            print("Archive file group error:", e)
+            return False
+
+    return False
+
+
+@app.post("/api/archive_label_group/<type_name>")
+def api_archive_label_group(type_name):
+    group_key = (request.form.get("group_key") or "").strip()
+    next_url  = request.form.get("next") or url_for("type_labels", type_name=type_name, focus=group_key)
+    ok = _set_group_archived(type_name, group_key, archived=True)
+    if ok:
+        flash(f"Archived group “{group_key}”.", "success")
+    else:
+        flash(f"Could not archive group “{group_key}”.", "error")
+    # keep focus and reveal archived in UI
+    return redirect(f"{next_url}{'&' if '?' in next_url else '?'}focus={group_key}&show_archived=1")
+
+
+@app.post("/api/unarchive_label_group/<type_name>")
+def api_unarchive_label_group(type_name):
+    group_key = (request.form.get("group_key") or "").strip()
+    next_url  = request.form.get("next") or url_for("type_labels", type_name=type_name, focus=group_key)
+    ok = _set_group_archived(type_name, group_key, archived=False)
+    if ok:
+        flash(f"Unarchived group “{group_key}”.", "success")
+    else:
+        flash(f"Could not unarchive group “{group_key}”.", "error")
+    return redirect(f"{next_url}{'&' if '?' in next_url else '?'}focus={group_key}&show_archived=1")
 
 
 @app.route("/api/type/<type_name>/label_paths")
@@ -1679,29 +2023,21 @@ def general_step_time(type_name, bio_id):
         except (TypeError, ValueError):
             return default
 
-    # ---------- edit/add mode detection (UPDATED) ----------
-    # Priority:
-    #  1) ?edit_entry_index=i  -> edit that specific entry
-    #  2) ?new=1               -> force "add new" mode
-    #  3) otherwise, if there's a valid session entry_index, DEFAULT TO EDIT that entry
-    #     (so changing Time mid-wizard overwrites the existing entry)
-    entry_index = _as_int(session.get("entry_index"))
-    if request.args.get("edit_entry_index") is not None:
-        idx = _as_int(request.args.get("edit_entry_index"))
-        if idx is not None and 0 <= idx < len(bio_data["entries"]):
-            entry_index = idx
-            session["entry_index"] = idx
-            session["editing_entry"] = True
-        else:
-            session["editing_entry"] = False
-    elif request.args.get("new") in ("1", "true", "True"):
-        session["editing_entry"] = False
-    else:
-        session["editing_entry"] = bool(
-            entry_index is not None and 0 <= entry_index < len(bio_data["entries"])
-        )
+    # ---------- edit/add mode detection (FINAL) ----------
+    # Rules:
+    #   • If ?edit_entry_index=i is present and valid -> EDIT that entry (overwrite).
+    #   • Else -> ADD mode (append a new entry on save).
+    #   • A POST with force_new=1 ALWAYS adds (even if editing).
+    edit_idx_qs = request.args.get("edit_entry_index")
+    editing_entry = False
+    edit_index = None
+    if edit_idx_qs is not None:
+        maybe = _as_int(edit_idx_qs)
+        if maybe is not None and 0 <= maybe < len(bio_data["entries"]):
+            editing_entry = True
+            edit_index = maybe
 
-    # Optional preset (e.g. ?preset=dob)
+    # Optional preset (e.g., ?preset=dob)
     preset_kind = (request.args.get("preset") or "").strip()
 
     # ---------- read form values ----------
@@ -1712,29 +2048,29 @@ def general_step_time(type_name, bio_id):
     selected_end        = (request.form.get("end_date") or "").strip()
     selected_confidence = (request.form.get("confidence") or "").strip()
     do_save             = (request.form.get("do_save") == "1")
+    force_new           = (request.form.get("force_new") == "1")  # <-- NEW
 
     conf_val = _as_int(selected_confidence, 100) if selected_confidence else 100
 
     # ---------- prefill form if editing ----------
-    if not do_save and request.method in ("GET", "POST"):
-        if session.get("editing_entry") and entry_index is not None and 0 <= entry_index < len(bio_data["entries"]):
-            cur = bio_data["entries"][entry_index] or {}
-            t = cur.get("time") or {}
-            if not selected_label_type:
-                selected_label_type = (t.get("label_type") or "").strip()
-            if not selected_subvalue:
-                selected_subvalue = (t.get("subvalue") or "").strip()
-            if not selected_date:
-                selected_date = (t.get("date_value") or "").strip()
-            if not selected_start:
-                selected_start = (t.get("start_date") or "").strip()
-            if not selected_end:
-                selected_end = (t.get("end_date") or "").strip()
-            if not selected_confidence:
-                selected_confidence = str(t.get("confidence", 100))
-                conf_val = _as_int(selected_confidence, 100)
+    if not do_save and request.method in ("GET", "POST") and editing_entry:
+        cur = bio_data["entries"][edit_index] or {}
+        t = cur.get("time") or {}
+        if not selected_label_type:
+            selected_label_type = (t.get("label_type") or "").strip()
+        if not selected_subvalue:
+            selected_subvalue = (t.get("subvalue") or "").strip()
+        if not selected_date:
+            selected_date = (t.get("date_value") or "").strip()
+        if not selected_start:
+            selected_start = (t.get("start_date") or "").strip()
+        if not selected_end:
+            selected_end = (t.get("end_date") or "").strip()
+        if not selected_confidence:
+            selected_confidence = str(t.get("confidence", 100))
+            conf_val = _as_int(selected_confidence, 100)
 
-    # ---------- validation & save (unchanged logic, but respects edit mode) ----------
+    # ---------- validation & save ----------
     error_message = ""
     if request.method == "POST" and do_save:
         valid = (
@@ -1758,12 +2094,14 @@ def general_step_time(type_name, bio_id):
                 raw["subvalue"] = selected_subvalue
                 label_value = selected_subvalue
 
+            # Option metadata for normaliser
             catalog = load_time_catalog(type_name)
             opt_meta = None
             if selected_label_type in catalog.get("options", {}):
                 for o in catalog["options"][selected_label_type]:
                     if o["id"] == selected_subvalue:
-                        opt_meta = o; break
+                        opt_meta = o
+                        break
 
             try:
                 from time_utils import normalise_time_for_bio_entry
@@ -1779,32 +2117,29 @@ def general_step_time(type_name, bio_id):
 
             now_iso = datetime.now(timezone.utc).isoformat()
 
-            if not session.get("editing_entry"):
-                # Add new entry only when explicitly in "new" mode
+            # === decisive save target ===
+            if force_new or not editing_entry:
+                # APPEND a fresh entry
                 entry = {"created": now_iso, "updated": now_iso}
                 bio_data["entries"].append(entry)
-                entry_index = len(bio_data["entries"]) - 1
-                session["entry_index"] = entry_index
+                # update session pointer to this new entry so labels step picks it up
+                session["entry_index"] = len(bio_data["entries"]) - 1
             else:
-                # Editing existing: ensure index is valid, otherwise fall back to "new"
-                if entry_index is None or not (0 <= entry_index < len(bio_data["entries"])):
-                    entry = {"created": now_iso, "updated": now_iso}
-                    bio_data["entries"].append(entry)
-                    entry_index = len(bio_data["entries"]) - 1
-                    session["entry_index"] = entry_index
-                    session["editing_entry"] = False
+                # OVERWRITE the specific entry in explicit edit mode
+                entry = bio_data["entries"][edit_index]
+                entry["updated"] = now_iso
 
             # Save time block
-            e = bio_data["entries"][entry_index]
-            e["time"] = raw
+            entry["time"] = raw
             if normalised:
-                e["time_normalised"] = normalised
-            e["updated"] = now_iso
+                entry["time_normalised"] = normalised
             bio_data["updated"] = now_iso
 
+            # convenience copy for DOB
             if selected_label_type == "dob" and selected_date:
                 bio_data["dob"] = selected_date
 
+            # compact selection for Labels header
             session["time_selection"] = {
                 "label": label_value,
                 "confidence": conf_val,
@@ -1818,7 +2153,7 @@ def general_step_time(type_name, bio_id):
             save_dict_as_json(bio_file, bio_data)
             return redirect(url_for("general_iframe_wizard", type=type_name, bio_id=bio_id, step="labels"))
 
-    # ---------- build template data (unchanged) ----------
+    # ---------- build template data ----------
     catalog = load_time_catalog(type_name)
     label_files = [{"key": c["key"], "desc": c.get("description", "")} for c in catalog["categories"]]
 
@@ -1833,8 +2168,8 @@ def general_step_time(type_name, bio_id):
         subfolder_labels.sort(key=lambda x: (x.get("order", 999), x["name"]))
 
     display_list = []
-    for entry in bio_data.get("entries", []):
-        t = entry.get("time", {}) or {}
+    for ent in bio_data.get("entries", []):
+        t = ent.get("time", {}) or {}
         tag = (
             ("DOB: " + t.get("date_value")) if (t.get("label_type") == "dob" and t.get("date_value"))
             else t.get("subvalue")
@@ -1860,7 +2195,10 @@ def general_step_time(type_name, bio_id):
         selected_confidence=selected_confidence,
         subfolder_labels=subfolder_labels,
         existing_entries=display_list,
-        error_message=error_message
+        error_message=error_message,
+        # helpful for the template if you want to switch button labels when editing
+        editing_entry=editing_entry,
+        edit_index=edit_index if editing_entry else None,
     )
 
 @app.route("/general_step/labels/<type_name>/<bio_id>", methods=["GET", "POST"])
@@ -1933,7 +2271,6 @@ def general_step_labels(type_name, bio_id):
                 if not re.fullmatch(patt, val or ""):
                     return "Format is invalid."
             except re.error:
-                # ignore invalid regex in config, but don't block the user
                 pass
 
         return None
@@ -1967,7 +2304,6 @@ def general_step_labels(type_name, bio_id):
         if lid:
             payload["label"] = lid
             payload["id"]    = lid
-        # Prefer exact group via id → group map; else fall back to label_type
         key = base_index.get(lid) or lt
         if key:
             existing_labels[key] = payload
@@ -2069,15 +2405,12 @@ def general_step_labels(type_name, bio_id):
             if not key:
                 continue
 
-            # shared confidence slider name
             conf_raw = (request.form.get(f"confidence_{key}") or "").strip()
             conf = int(conf_raw) if conf_raw.isdigit() else 100
 
             # (B1) Input groups
             if g.get("input"):
                 val = (request.form.get(f"input_{key}") or "").strip()
-
-                # Validate if constraints exist; if invalid, flash + return to page
                 err = _validate_input_group(g, val)
                 if err:
                     try:
@@ -2086,17 +2419,16 @@ def general_step_labels(type_name, bio_id):
                         print("[WARN] flash not available:", err)
                     return redirect(request.url)
 
-                # If optional and empty → treat as cleared (do not add to new_entries)
                 if val:
                     new_entries.append({
-                        "label_type": key.split("/")[-1],  # stays group-suffix to map back
-                        "id": val,                          # store the free-text in id for prefill
+                        "label_type": key.split("/")[-1],
+                        "id": val,
                         "confidence": conf,
                         "source": "input",
                     })
-                continue  # skip option handling for input groups
+                continue
 
-            # (B2) Option / biography groups (existing behaviour)
+            # (B2) Option / biography groups
             sel_id   = (request.form.get(f"selected_id_{key}") or "").strip()
             sel_bio  = (request.form.get(f"selected_id_{key}_bio") or "").strip()
             bio_conf_raw = (request.form.get(f"confidence_{key}_bio") or "").strip()
@@ -2111,7 +2443,7 @@ def general_step_labels(type_name, bio_id):
                     entry["biography_confidence"] = bio_conf
                 new_entries.append(entry)
 
-        # Overwrite this entry’s labels for the current type and bump updated timestamp
+        # Overwrite this entry’s labels and bump updated timestamp
         bio_data["entries"][entry_index][type_name] = new_entries
         bio_data["entries"][entry_index]["updated"] = datetime.now(timezone.utc).isoformat()
         bio_data["updated"] = bio_data["entries"][entry_index]["updated"]
@@ -2131,7 +2463,7 @@ def general_step_labels(type_name, bio_id):
         print(f"[WARN] build_suggested_biographies failed: {e}")
         suggested_biographies = {}
 
-    # Map existing biography picks so the template can preselect them
+    # Map existing biography picks for preselects
     try:
         existing_bio_selections = map_existing_bio_selections(
             expanded_groups,
@@ -2140,6 +2472,22 @@ def general_step_labels(type_name, bio_id):
     except Exception:
         existing_bio_selections = {}
 
+    # -------- NEW: build fallback lists of bios for any group that links to biographies
+    refer_types = set()
+    for g in expanded_groups:
+        ref = (g.get("refer_to") or {})
+        if isinstance(ref, dict) and (ref.get("source") == "biographies"):
+            rtype = (ref.get("type") or type_name).strip()
+            if rtype:
+                refer_types.add(rtype)
+
+    linkable_bios = {}
+    for rtype in sorted(refer_types):
+        try:
+            linkable_bios[rtype] = list_biographies(rtype) or []
+        except Exception:
+            linkable_bios[rtype] = []
+
     return render_template(
         "label_step.html",
         current_type=type_name,
@@ -2147,6 +2495,7 @@ def general_step_labels(type_name, bio_id):
         existing_labels=display_labels,             # saved + preview
         existing_bio_selections=existing_bio_selections,
         suggested_biographies=suggested_biographies,
+        linkable_bios=linkable_bios,                # <-- NEW
         step=0,
         next_step=1,
         prev_step=None,
@@ -2532,119 +2881,58 @@ def general_step_events(type_name, bio_id):
 
 
 # ---------- 6) Step: Review ----------
-@app.route("/general_step/review/<type_name>/<bio_id>")
+@app.route("/general_step/review/<type_name>/<bio_id>", methods=["GET"])
 def general_step_review(type_name, bio_id):
-    bio_file = os.path.join("types", type_name, "biographies", f"{bio_id}.json")
-    if not os.path.exists(bio_file):
-        return f"Biography {bio_id} not found.", 404
+    """
+    Review screen for the active entry. Supports a 'new_time=1' flag that
+    clears the current edit index and forwards to the Time step so a *new*
+    entry will be created (instead of overwriting the existing one).
+    """
+    # --- guard / load biography ---
+    bio_path = os.path.join("types", type_name, "biographies", f"{bio_id}.json")
+    if not os.path.exists(bio_path):
+        return f"Biography {bio_id} not found for {type_name}.", 404
 
-    bio = load_json_as_dict(bio_file) or {}
-    entries = bio.get("entries", []) or []
+    bio = load_json_as_dict(bio_path) or {}
+    bio.setdefault("entries", [])
 
-    # Helpers
-    from datetime import date
+    # --- NEW: intercept "Add Another Time Period" intent ---
+    if request.args.get("new_time") == "1":
+        # Clear any edit context so the Time step appends a NEW entry.
+        session.pop("entry_index", None)
+        session["editing_entry"] = False  # explicit for safety
+        # Also set a hint the Time step already understands (your current time route
+        # checks ?new=1 to force add mode).
+        return redirect(url_for("general_iframe_wizard",
+                                type=type_name, bio_id=bio_id, step="time", new=1))
 
-    def _to_date(iso_str):
-        """Parse 'YYYY', 'YYYY-MM', or 'YYYY-MM-DD' to python date (best effort)."""
-        if not iso_str:
-            return None
-        s = str(iso_str)
-        try:
-            if len(s) == 4:                 # YYYY
-                return date(int(s), 1, 1)
-            if len(s) == 7:                 # YYYY-MM
-                y, m = s.split("-")
-                return date(int(y), int(m), 1)
-            if len(s) == 10:                # YYYY-MM-DD
-                y, m, d = s.split("-")
-                return date(int(y), int(m), int(d))
-        except Exception:
-            return None
-        return None
-
-    def _age_years(d_birth, d_ref):
-        """Whole-year age at d_ref."""
-        if not d_birth or not d_ref:
-            return None
-        years = d_ref.year - d_birth.year
-        # did birthday occur yet this year?
-        before_bday = (d_ref.month, d_ref.day) < (d_birth.month, d_birth.day)
-        return years - (1 if before_bday else 0)
-
-    # Find a DOB in any entry (time.label_type == "dob" with date_value, or best hint)
-    dob_iso = None
-    for e in entries:
-        t = (e or {}).get("time", {}) or {}
-        if (t.get("label_type") or "").lower() in ("dob", "date_of_birth"):
-            dob_iso = t.get("date_value") or t.get("start_date") or t.get("end_date")
-            if dob_iso:
-                break
-
-    dob_date = _to_date(dob_iso)
-    age_now = _age_years(dob_date, date.today()) if dob_date else None
-
-    # Current/last entry (same logic template uses)
+    # --- pick the entry to show (keep existing behaviour) ---
     entry_index = session.get("entry_index")
-    try:
-        entry_index = int(entry_index) if entry_index is not None else None
-    except Exception:
-        entry_index = None
-    entry = entries[entry_index] if (entry_index is not None and 0 <= entry_index < len(entries)) else (entries[-1] if entries else {})
+    entries = bio.get("entries", [])
+    if isinstance(entry_index, int) and 0 <= entry_index < len(entries):
+        entry = entries[entry_index]
+    else:
+        entry = entries[-1] if entries else {}
 
-    # Derive a reference date for the entry (start of range/date_value if present)
-    ref_iso = None
-    t = (entry or {}).get("time", {}) or {}
-    if t.get("date_value"):
-        ref_iso = t.get("date_value")
-    elif t.get("start_date"):
-        ref_iso = t.get("start_date")
-    elif t.get("end_date"):
-        ref_iso = t.get("end_date")
-    # Else, if time_normalised has start_iso/end_iso, prefer start
-    tn = (entry or {}).get("time_normalised") or {}
-    ref_iso = ref_iso or tn.get("start_iso") or tn.get("end_iso")
+    # --- light derived values (keep simple / non-breaking) ---
+    dob_iso = (bio.get("dob") or "").strip() or None
+    # If you had a custom util for ages, keep using it; otherwise leave None
+    age_now = None
+    age_at_entry = None
 
-    age_at_entry = _age_years(dob_date, _to_date(ref_iso)) if dob_date and ref_iso else None
+    # Events (if any) for this entry
+    events = entry.get("events", []) if isinstance(entry, dict) else []
 
-    # Prepare events display: enrich linked biography names (if possible)
-    def _load_bio_name(_type, _id):
-        if not _type or not _id:
-            return None
-        path = os.path.join("types", _type, "biographies", f"{_id}.json")
-        try:
-            if os.path.exists(path):
-                d = load_json_as_dict(path) or {}
-                return d.get("name") or _id
-        except Exception:
-            pass
-        return _id
-
-    events = []
-    for ev in (entry or {}).get("events", []) or []:
-        pretty = dict(ev)
-        if ev.get("link_type") and ev.get("linked_bio"):
-            pretty["linked_bio_name"] = _load_bio_name(ev.get("link_type"), ev.get("linked_bio"))
-        # Try to create a single human string for time
-        et = ev.get("time") or {}
-        if et.get("label_type") == "date" and et.get("date_value"):
-            pretty["time_text"] = et["date_value"]
-        elif et.get("label_type") == "range":
-            pretty["time_text"] = f"{et.get('start_date','?')} … {et.get('end_date','')}".strip()
-        elif et.get("subvalue"):
-            pretty["time_text"] = et["subvalue"]
-        else:
-            pretty["time_text"] = ""
-        events.append(pretty)
-
+    # Render unchanged template (below)
     return render_template(
         "general_step_review.html",
         type_name=type_name,
         bio_id=bio_id,
         bio=bio,
+        events=events,
         dob_iso=dob_iso,
         age_now=age_now,
         age_at_entry=age_at_entry,
-        events=events,
     )
 
 
@@ -2688,14 +2976,70 @@ def restore_archived_type(archived_folder):
 @app.route("/type/<type_name>/bio/<bio_id>")
 def biography_view(type_name, bio_id):
     bio_path = os.path.join("types", type_name, "biographies", f"{bio_id}.json")
-    if not os.path.exists(bio_path):
+    if not os.path.isfile(bio_path):
         return f"Biography '{bio_id}' not found for type '{type_name}'.", 404
-    bio = load_json_as_dict(bio_path)
+
+    bio = load_json_as_dict(bio_path) or {}
+    bio.setdefault("entries", [])
+
+    # Optional: build a compact, display-ready view of events per entry
+    def _time_text(t: dict) -> str:
+        if not isinstance(t, dict):
+            return ""
+        kind = (t.get("label_type") or "").strip()
+        if kind in ("date", "dob") and t.get("date_value"):
+            return t["date_value"]
+        if kind == "range" and (t.get("start_date") or t.get("end_date")):
+            s = t.get("start_date") or ""
+            e = t.get("end_date") or ""
+            return f"{s} – {e}".strip()
+        if t.get("label_id") or t.get("label_free"):
+            base = t.get("label_id") or ""
+            if t.get("label_free"):
+                base = (base + f" ({t['label_free']})").strip()
+            return base
+        return (t.get("subvalue") or "").strip()
+
+    def _linked_bio_name(link_type: str, linked_bio: str) -> str:
+        if not link_type or not linked_bio:
+            return ""
+        try:
+            bios = list_biographies(link_type)
+        except Exception:
+            bios = []
+        hit = next((b for b in bios if b.get("id") == linked_bio), None)
+        return (hit or {}).get("name", "") or linked_bio
+
+    def _pretty_events(ev_list):
+        out = []
+        if isinstance(ev_list, list):
+            for ev in ev_list:
+                if not isinstance(ev, dict):
+                    continue
+                title = ev.get("option_display") or ev.get("option_id") or "Event"
+                tt = _time_text(ev.get("time") or {})
+                conf = ev.get("confidence")
+                link_type = ev.get("link_type") or ev.get("link_kind")
+                linked_bio = ev.get("linked_bio")
+                out.append({
+                    "title": title,
+                    "time_text": tt,
+                    "confidence": conf,
+                    "link_type": link_type,
+                    "linked_bio": linked_bio,
+                    "linked_bio_name": _linked_bio_name(link_type, linked_bio) if (link_type and linked_bio) else "",
+                    "group_key": ev.get("group_key"),
+                })
+        return out
+
+    events_by_entry = [_pretty_events(e.get("events", [])) for e in bio["entries"]]
+
     return render_template(
         "biography_view.html",
         type_name=type_name,
         bio_id=bio_id,
-        bio=bio
+        bio=bio,
+        events_by_entry=events_by_entry,  # optional if you want to render them
     )
 
 

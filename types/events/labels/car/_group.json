@@ -1,4 +1,5 @@
 {
-  "name": "Car",
-  "description": "Test"
+    "name": "Car",
+    "description": "Test",
+    "archived": true
 }

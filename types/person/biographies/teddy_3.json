@@ -4,28 +4,137 @@
     "name": "Teddy",
     "type": "person",
     "created": "2025-08-15T00:16:55.513079+00:00",
-    "updated": "2025-08-15T00:17:05.785678+00:00",
+    "updated": "2025-08-15T01:05:51.489002+00:00",
     "entries": [
         {
             "created": "2025-08-15T00:17:02.676382+00:00",
-            "updated": "2025-08-15T00:17:05.785678+00:00",
+            "updated": "2025-08-15T00:38:47.336723+00:00",
             "time": {
-                "label_type": "dob",
+                "label_type": "life_stage",
                 "confidence": 100,
-                "date_value": "2025-08-01"
+                "subvalue": "preteen"
             },
             "time_normalised": {
-                "kind": "dob",
-                "start_iso": "2025-08-01",
-                "end_iso": "2025-08-01",
-                "start_ts": 1754006400,
-                "end_ts": 1754006400,
-                "precision": "exact",
-                "age_years": null,
-                "notes": "Fallback date parsing from date_value"
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 11.5,
+                "notes": "Life stage 'preteen' (no reference date — absolute bounds unknown)"
             },
-            "person": []
+            "person": [
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 100,
+                    "id": "1"
+                },
+                {
+                    "label_type": "educational_place",
+                    "confidence": 100,
+                    "id": "2_story_flat"
+                },
+                {
+                    "label_type": "hair_colour",
+                    "confidence": 100,
+                    "id": "brown_hair"
+                }
+            ],
+            "events": [
+                {
+                    "group_key": "relationship",
+                    "option_id": "child",
+                    "option_display": "Child",
+                    "link_type": "buildings",
+                    "linked_bio": "teddy",
+                    "confidence": 77,
+                    "time": {
+                        "label_type": "date",
+                        "confidence": 64,
+                        "date_value": "2025-08-12"
+                    },
+                    "time_normalised": {
+                        "kind": "date",
+                        "start_iso": "2025-08-12",
+                        "end_iso": "2025-08-12",
+                        "start_ts": 1754956800,
+                        "end_ts": 1754956800,
+                        "precision": "approx",
+                        "age_years": null,
+                        "notes": "Direct date entry"
+                    },
+                    "created": "2025-08-15T00:37:20.804257+00:00"
+                },
+                {
+                    "group_key": "doggie",
+                    "option_id": "labrador",
+                    "option_display": "Labrador",
+                    "link_type": "pet",
+                    "linked_bio": "teddy_2",
+                    "confidence": 100,
+                    "created": "2025-08-15T00:38:09.801348+00:00"
+                }
+            ]
+        },
+        {
+            "created": "2025-08-15T00:56:29.346623+00:00",
+            "updated": "2025-08-15T00:57:31.102296+00:00",
+            "time": {
+                "label_type": "date",
+                "confidence": 57,
+                "date_value": "2025-08-04"
+            },
+            "time_normalised": {
+                "kind": "date",
+                "start_iso": "2025-08-04",
+                "end_iso": "2025-08-04",
+                "start_ts": 1754265600,
+                "end_ts": 1754265600,
+                "precision": "approx",
+                "age_years": null,
+                "notes": "Direct date entry"
+            },
+            "person": [
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 100,
+                    "id": "1"
+                },
+                {
+                    "label_type": "educational_place",
+                    "confidence": 100,
+                    "id": "school"
+                }
+            ]
+        },
+        {
+            "created": "2025-08-15T01:05:46.147077+00:00",
+            "updated": "2025-08-15T01:05:51.489002+00:00",
+            "time": {
+                "label_type": "date",
+                "confidence": 50,
+                "date_value": "2025-08-07"
+            },
+            "time_normalised": {
+                "kind": "date",
+                "start_iso": "2025-08-07",
+                "end_iso": "2025-08-07",
+                "start_ts": 1754524800,
+                "end_ts": 1754524800,
+                "precision": "approx",
+                "age_years": null,
+                "notes": "Direct date entry"
+            },
+            "person": [
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 34,
+                    "id": "1"
+                }
+            ]
         }
     ],
-    "dob": "2025-08-01"
+    "dob": "2025-08-01",
+    "archived": false
 }

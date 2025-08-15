@@ -1,0 +1,29 @@
+{
+    "id": "teddy_4",
+    "uid": "7449f61090254d29ac75bd36dee06e41",
+    "name": "Teddy",
+    "type": "person",
+    "created": "2025-08-15T01:42:03.437474+00:00",
+    "updated": "2025-08-15T01:42:23.421200+00:00",
+    "entries": [
+        {
+            "created": "2025-08-15T01:42:23.421200+00:00",
+            "updated": "2025-08-15T01:42:23.421200+00:00",
+            "time": {
+                "label_type": "date",
+                "confidence": 100,
+                "date_value": "2025-08-04"
+            },
+            "time_normalised": {
+                "kind": "date",
+                "start_iso": "2025-08-04",
+                "end_iso": "2025-08-04",
+                "start_ts": 1754265600,
+                "end_ts": 1754265600,
+                "precision": "exact",
+                "age_years": null,
+                "notes": "Direct date entry"
+            }
+        }
+    ]
+}

@@ -37,7 +37,7 @@
     .actions a.tertiary { background:#6c63ff; color:#fff; }
     .actions a.neutral { background:#2d7ff9; color:#fff; }
     .actions a:hover { opacity:.92; transform:translateY(-2px); }
-    .monosmall { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size:.92em; color:#333; }
+    .monosmall { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; font-size:.92em; color:#333; }
 
     .events-list { list-style: none; padding-left: 0; }
     .event-item { border-left:4px solid #e0e7e4; background:#fafdfb; padding:10px 12px; border-radius:8px; margin-bottom:10px; }
@@ -207,14 +207,15 @@
          href="{{ url_for('biography_view', type_name=type_name, bio_id=bio_id) }}">📄 Biography View</a>
       <a class="primary"   target="_top"
          href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='labels') }}">✏️ Edit Labels</a>
+
+      <!-- UPDATED: route via review with new_time=1 so server clears edit state -->
       <a class="tertiary"  target="_top"
-         href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='time') }}">⏱️ Add Another Time Period</a>
+         href="{{ url_for('general_step_review', type_name=type_name, bio_id=bio_id) }}?new_time=1">⏱️ Add Another Time Period</a>
+
       <a class="secondary" target="_top"
          href="{{ url_for('type_browse', type_name=type_name) }}">📚 Back to {{ type_name|replace('_',' ')|title }} List</a>
     </div>
   </div>
 </body>
 </html>
-
-
 

@@ -173,63 +173,68 @@
 {% endif %}
 
         {# ---------- Linked biographies (server-rendered) ---------- #}
-        {% set sugg_key = group.key.replace('/', '__') %}
-        {% set bio_list = suggested_biographies.get(sugg_key) %}
-        {% if is_child and bio_list and bio_list|length > 0 %}
-          {% set bio_input_name   = 'selected_id_' ~ group.key ~ '_bio' %}
-          {% set bio_hidden_id    = 'input_' ~ sugg_key ~ '_bio' %}
-          {% set bio_selected_id  = (existing_bio_selections.get(group.key ~ '_bio','') if existing_bio_selections else '') %}
-          {% set bio_conf_val     = (existing_bio_selections.get(group.key ~ '_bio_conf', 100) if existing_bio_selections else 100) %}
+{# ---------- Linked biographies (now for top-level AND child groups) ---------- #}
+{% set is_bio_link = group.refer_to and group.refer_to.source == 'biographies' %}
+{% if is_bio_link %}
+  {% set sugg_key = group.key.replace('/', '__') %}
+  {% set bio_list = suggested_biographies.get(sugg_key) %}
+  {% set rtype    = group.refer_to.type or current_type %}
+  {% set fallback = (linkable_bios.get(rtype) if linkable_bios else []) %}
 
-          <div class="bio-suggestions" id="bio_suggestions_{{ sugg_key }}">
-            <div class="label-title">📖 Linked Biographies</div>
+  {% set bio_input_name   = 'selected_id_' ~ group.key ~ '_bio' %}
+  {% set bio_hidden_id    = 'input_' ~ sugg_key ~ '_bio' %}
+  {% set bio_selected_id  = (existing_bio_selections.get(group.key ~ '_bio','') if existing_bio_selections else '') %}
+  {% set bio_conf_val     = (existing_bio_selections.get(group.key ~ '_bio_conf', 100) if existing_bio_selections else 100) %}
 
-            <input type="hidden"
-                   name="{{ bio_input_name }}"
-                   id="{{ bio_hidden_id }}"
-                   class="group-selection-tracker"
-                   value="{{ bio_selected_id }}">
+  <div class="bio-suggestions" id="bio_suggestions_{{ sugg_key }}" style="margin-top:8px;">
+    <div class="label-title">📖 Linked Biographies ({{ rtype|replace('_',' ')|title }})</div>
 
-            <input type="text"
-                   class="label-search"
-                   placeholder="Search biographies…"
-                   oninput="filterLabels(this, '{{ sugg_key }}_bio')"
-                   data-group="{{ sugg_key }}_bio">
+    <input type="hidden"
+           name="{{ bio_input_name }}"
+           id="{{ bio_hidden_id }}"
+           class="group-selection-tracker"
+           value="{{ bio_selected_id }}">
 
-            <div class="label-options">
-              {% for option in bio_list %}
-                {% set bio_selected = (option.id == bio_selected_id) %}
-                <div class="label-card{% if bio_selected %} selected{% endif %}"
-                     data-group="{{ sugg_key }}_bio"
-                     data-value="{{ option.id }}"
-                     tabindex="0"
-                     onclick="toggleBioSelection(this, '{{ bio_hidden_id }}')"
-                     onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); this.click();}">
-                  <div><strong>{{ option.display or option.id }}</strong></div>
-                  {% if option.description %}<div class="label-description">{{ option.description }}</div>{% endif %}
-                </div>
-              {% endfor %}
-            </div>
+    <input type="text"
+           class="label-search"
+           placeholder="Search biographies…"
+           oninput="filterLabels(this, '{{ sugg_key }}_bio')"
+           data-group="{{ sugg_key }}_bio">
 
-            <div class="confidence-slider" style="margin-top:10px;">
-              <label for="confidence_{{ safe_key }}_bio">🎯 Biography Match Confidence:</label><br>
-              <input type="range"
-                     name="confidence_{{ group.key }}_bio"
-                     id="confidence_{{ safe_key }}_bio"
-                     min="0" max="100"
-                     value="{{ bio_conf_val }}"
-                     oninput="updateConfidence('{{ group.key }}_bio')">
-              <div class="confidence-display">
-                <span id="confidence_display_{{ safe_key }}_bio">{{ bio_conf_val }}%</span>
-                <span id="confidence_level_{{ safe_key }}_bio"></span>
-              </div>
-            </div>
-          </div>
-        {% elif (not is_child) and bio_list %}
-          <div class="muted" style="margin-top:8px">
-            Select a child option to see matching biographies.
-          </div>
-        {% endif %}
+    {% set listing = (bio_list if (bio_list and bio_list|length>0) else fallback) %}
+    <div class="label-options">
+      {% for option in listing %}
+        {% set bio_selected = (option.id == bio_selected_id) %}
+        <div class="label-card{% if bio_selected %} selected{% endif %}"
+             data-group="{{ sugg_key }}_bio"
+             data-value="{{ option.id }}"
+             tabindex="0"
+             onclick="toggleBioSelection(this, '{{ bio_hidden_id }}')"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); this.click();}">
+          <div><strong>{{ option.display or option.id }}</strong></div>
+          {% if option.description %}<div class="label-description">{{ option.description }}</div>{% endif %}
+        </div>
+      {% endfor %}
+      {% if listing|length == 0 %}
+        <div class="muted">No biographies to show for {{ rtype|replace('_',' ')|title }}.</div>
+      {% endif %}
+    </div>
+
+    <div class="confidence-slider" style="margin-top:10px;">
+      <label for="confidence_{{ safe_key }}_bio">🎯 Biography Match Confidence:</label><br>
+      <input type="range"
+             name="confidence_{% raw %}{{{% endraw %} group.key {% raw %}}}{% endraw %}_bio"
+             id="confidence_{{ safe_key }}_bio"
+             min="0" max="100"
+             value="{{ bio_conf_val }}"
+             oninput="updateConfidence('{{ group.key }}_bio')">
+      <div class="confidence-display">
+        <span id="confidence_display_{{ safe_key }}_bio">{{ bio_conf_val }}%</span>
+        <span id="confidence_level_{{ safe_key }}_bio"></span>
+      </div>
+    </div>
+  </div>
+{% endif %}
 
         {# ---------- AJAX injection targets (for live children + bios) ---------- #}
         <div id="children_for_{{ safe_key }}"></div>

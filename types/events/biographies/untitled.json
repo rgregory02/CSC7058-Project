@@ -1,0 +1,29 @@
+{
+    "id": "untitled",
+    "uid": "d9c8f71e575840bbbacfb56d2325fec0",
+    "name": "Untitled",
+    "type": "events",
+    "created": "2025-08-15T01:45:00.737274+00:00",
+    "updated": "2025-08-15T01:45:07.071714+00:00",
+    "entries": [
+        {
+            "created": "2025-08-15T01:45:07.071714+00:00",
+            "updated": "2025-08-15T01:45:07.071714+00:00",
+            "time": {
+                "label_type": "date",
+                "confidence": 100,
+                "date_value": "2025-08-12"
+            },
+            "time_normalised": {
+                "kind": "date",
+                "start_iso": "2025-08-12",
+                "end_iso": "2025-08-12",
+                "start_ts": 1754956800,
+                "end_ts": 1754956800,
+                "precision": "exact",
+                "age_years": null,
+                "notes": "Direct date entry"
+            }
+        }
+    ]
+}

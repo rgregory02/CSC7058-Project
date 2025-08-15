@@ -1,0 +1,83 @@
+{
+    "id": "teddy_6",
+    "uid": "aaa58619013b4e4eae1b3eb19275c393",
+    "name": "Teddy",
+    "type": "person",
+    "created": "2025-08-15T02:09:30.378887+00:00",
+    "updated": "2025-08-15T02:11:48.156794+00:00",
+    "entries": [
+        {
+            "created": "2025-08-15T02:09:41.727228+00:00",
+            "updated": "2025-08-15T02:09:55.550256+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 100,
+                "subvalue": "twenties"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 25,
+                "notes": "Life stage 'twenties' (no reference date — absolute bounds unknown)"
+            },
+            "person": [
+                {
+                    "label_type": "relationship",
+                    "confidence": 100,
+                    "id": "parent"
+                },
+                {
+                    "label_type": "work_place",
+                    "confidence": 100,
+                    "id": "hospital"
+                }
+            ]
+        },
+        {
+            "created": "2025-08-15T02:11:25.701199+00:00",
+            "updated": "2025-08-15T02:11:48.156794+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 100,
+                "subvalue": "sixties"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 65,
+                "notes": "Life stage 'sixties' (no reference date — absolute bounds unknown)"
+            },
+            "person": [
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 36,
+                    "id": "1"
+                },
+                {
+                    "label_type": "educational_place",
+                    "confidence": 100,
+                    "id": "school"
+                },
+                {
+                    "label_type": "eye_colour",
+                    "confidence": 100,
+                    "id": "blue"
+                },
+                {
+                    "label_type": "first_name",
+                    "id": "Becca",
+                    "confidence": 27,
+                    "source": "input"
+                }
+            ]
+        }
+    ]
+}

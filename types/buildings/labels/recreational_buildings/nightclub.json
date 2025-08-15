@@ -9,5 +9,7 @@
   "created": "2025-08-10T20:23:00.997831+00:00",
   "properties": {
     "suggests_biographies_from": "buildings/recreational_buildings/nightclub"
-  }
+  },
+  "archived": true,
+  "archived_at": "2025-08-15T01:22:15.735914+00:00"
 }

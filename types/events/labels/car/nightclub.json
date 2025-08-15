@@ -6,5 +6,7 @@
   "confidence": 100,
   "source": "user",
   "created": "2025-08-14T21:51:42.063755+00:00",
-  "properties": {}
+  "properties": {},
+  "archived": true,
+  "archived_at": "2025-08-15T01:23:26.940486+00:00"
 }

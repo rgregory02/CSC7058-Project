@@ -8,65 +8,122 @@
     body{background:#f6f7fb;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
     .box{max-width:1100px;margin:40px auto;background:#fff;padding:24px;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.06)}
     h1{margin:0 0 10px}
-    .search{width:100%;padding:10px;border:1px solid #dfe3ee;border-radius:10px;margin:10px 0 18px;background:#fff}
+    .search{width:100%;padding:10px;border:1px solid #dfe3ee;border-radius:10px;margin:10px 0 8px;background:#fff}
     .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
     .card{border:1px solid #e3e5ee;border-radius:12px;padding:14px;background:#fff;position:relative}
     .card.focused{outline:2px solid #6c63ff}
+    .card.archived{opacity:.78}
     .muted{color:#657085}
     .tag{font-size:12px;background:#eef0f7;border-radius:999px;padding:3px 8px;margin-left:8px}
     .badge{font-size:11px;border-radius:6px;padding:2px 6px;margin-left:8px;border:1px solid #e3e5ee;background:#fafbff;color:#495}
+    .badge.arch{border-color:#f5ccd8;background:#fff0f5;color:#a11}
     details{border:1px dashed #e4e6f1;border-radius:8px;padding:10px;margin-top:8px;background:#fafbff}
     summary{cursor:pointer;font-weight:600}
     .option{border:1px solid #e7e9f2;border-radius:10px;padding:10px;margin:8px 0;background:#fff}
+    .option.is-archived{opacity:.6}
     .children{margin:8px 0 0 14px;border-left:3px solid #e7e9f2;padding-left:10px}
     .thumb{max-height:40px;max-width:80px;vertical-align:middle;margin-left:8px;border-radius:6px}
     .header-row{display:flex;align-items:center;gap:8px}
     .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
     .btn{display:inline-block;padding:8px 12px;border-radius:10px;background:#eef0f7;color:#333;text-decoration:none;font-weight:600;border:1px solid #e3e5ee}
+    .btn.danger{background:#c62828;color:#fff;border-color:#c62828}
+    .btn.success{background:#2e7d32;color:#fff;border-color:#2e7d32}
     .empty{color:#657085;font-size:13px;margin-top:6px}
   </style>
 </head>
 <body>
   <div class="box">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div style="margin-bottom:10px">
+          {% for cat, msg in messages %}
+            <div class="badge" style="display:inline-block;margin-right:6px">{{ msg }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
     <h1>🏷️ Labels — {{ type_name|replace('_',' ')|title }}</h1>
     <input class="search" placeholder="Filter label groups…" oninput="filterGroups(this.value)">
 
+    <!-- show/hide archived toggle -->
+    <div class="row" style="margin:8px 0 18px">
+      <label style="font-size:13px;color:#4b5563;">
+        <input id="show_archived" type="checkbox" onchange="toggleArchived(this.checked)">
+        Show archived labels & groups
+      </label>
+    </div>
+
     <div class="grid" id="groups">
       {% for g in groups %}
-        {# key used for filtering and optional focus highlight #}
-        <div class="card group" id="group_{{ g.key|replace('/','__') }}" data-key="{{ (g.key ~ ' ' ~ g.label)|lower }}">
-          <div class="header-row">
-            <h3 style="margin:0">{{ g.label }}</h3>
-            <span class="tag">{{ g.count }} options</span>
-            {% if g.kind == 'folder' %}
-              <span class="badge">Folder</span>
-            {% elif g.kind == 'property_link' %}
-              <span class="badge">Property link</span>
-            {% endif %}
+        {# card gets data-archived so JS can hide when needed #}
+        <div class="card group {% if g.archived %}archived{% endif %}"
+             id="group_{{ g.key|replace('/','__') }}"
+             data-archived="{{ '1' if g.archived else '0' }}"
+             data-key="{{ (g.key ~ ' ' ~ g.label)|lower }}">
+          <div class="header-row" style="justify-content:space-between;align-items:flex-start">
+            <div>
+              <h3 style="margin:0;display:inline">{{ g.label }}</h3>
+              <span class="tag">{{ g.count }} options</span>
+              {% if g.kind == 'folder' %}
+                <span class="badge">Folder</span>
+              {% elif g.kind == 'property_link' %}
+                <span class="badge">Property link</span>
+              {% endif %}
+              {% if g.archived %}
+                <span class="badge arch">Archived</span>
+              {% endif %}
+              {% if g.description %}<div class="muted" style="margin-top:4px">{{ g.description }}</div>{% endif %}
+
+              {% if g.kind == 'property_link' and g.target_type and g.target_type != type_name %}
+                <div class="muted" style="margin-top:6px">
+                  From <a href="{{ url_for('type_labels', type_name=g.target_type) }}?focus={{ g.target_path|urlencode }}">{{ g.target_type }}</a>
+                  <span class="badge">{{ g.target_path }}</span>
+                </div>
+              {% elif g.kind == 'property_link' and g.target_path %}
+                <div class="muted" style="margin-top:6px">
+                  Path <span class="badge">{{ g.target_path }}</span>
+                </div>
+              {% endif %}
+            </div>
+
+            <div class="row" style="gap:6px">
+              {% set grp_action = 'api_unarchive_label_group' if g.archived else 'api_archive_label_group' %}
+              <form method="post" action="{{ url_for(grp_action, type_name=type_name) }}" style="display:inline">
+                <input type="hidden" name="group_key" value="{{ g.key }}">
+                <input type="hidden" name="next" value="{{ request.url }}">
+                <button class="btn {% if g.archived %}success{% else %}danger{% endif %}" type="submit">
+                  {% if g.archived %}♻️ Unarchive Group{% else %}🗄️ Archive Group{% endif %}
+                </button>
+              </form>
+            </div>
           </div>
-
-          {% if g.description %}<div class="muted" style="margin-top:4px">{{ g.description }}</div>{% endif %}
-
-          {% if g.kind == 'property_link' and g.target_type and g.target_type != type_name %}
-            <div class="muted" style="margin-top:6px">
-              From <a href="{{ url_for('type_labels', type_name=g.target_type) }}?focus={{ g.target_path|urlencode }}">{{ g.target_type }}</a>
-              <span class="badge">{{ g.target_path }}</span>
-            </div>
-          {% elif g.kind == 'property_link' and g.target_path %}
-            <div class="muted" style="margin-top:6px">
-              Path <span class="badge">{{ g.target_path }}</span>
-            </div>
-          {% endif %}
 
           {% if g.options and g.options|length > 0 %}
             <details {% if request.args.get('focus') and (g.key == request.args.get('focus') or g.target_path == request.args.get('focus')) %} open {% endif %}>
               <summary>Show options</summary>
               <div>
                 {% for o in g.options %}
-                  <div class="option">
-                    <div class="header-row">
-                      <div><strong>{{ o.display or o.id }}</strong></div>
-                      {% if o.image_url %}<img class="thumb" src="{{ o.image_url }}" alt="">{% endif %}
+                  <div class="option {% if o.archived %}is-archived{% endif %}" data-archived="{{ '1' if o.archived else '0' }}">
+                    <div class="header-row" style="justify-content:space-between;align-items:center">
+                      <div>
+                        <strong>{{ o.display or o.id }}</strong>
+                        {% if o.archived %}
+                          <span class="badge arch">Archived</span>
+                        {% endif %}
+                        {% if o.image_url %}<img class="thumb" src="{{ o.image_url }}" alt="">{% endif %}
+                      </div>
+                      <div>
+                        {% set archive_action = 'api_unarchive_label' if o.archived else 'api_archive_label' %}
+                        <form method="post" action="{{ url_for(archive_action, type_name=type_name) }}" style="display:inline">
+                          <input type="hidden" name="group_key" value="{{ g.key }}">
+                          <input type="hidden" name="option_id" value="{{ o.id }}">
+                          <input type="hidden" name="next" value="{{ request.url }}">
+                          <button class="btn" type="submit">
+                            {% if o.archived %}♻️ Unarchive{% else %}🗄️ Archive{% endif %}
+                          </button>
+                        </form>
+                      </div>
                     </div>
                     {% if o.description %}<div class="muted">{{ o.description }}</div>{% endif %}
 
@@ -75,10 +132,27 @@
                         <summary>{{ o.child_count }} child option{{ 's' if o.child_count != 1 else '' }}</summary>
                         <div>
                           {% for c in o.children %}
-                            <div class="option">
-                              <div class="header-row">
-                                <div>{{ c.display or c.id }}</div>
-                                {% if c.image_url %}<img class="thumb" src="{{ c.image_url }}" alt="">{% endif %}
+                            <div class="option {% if c.archived %}is-archived{% endif %}" data-archived="{{ '1' if c.archived else '0' }}">
+                              <div class="header-row" style="justify-content:space-between;align-items:center">
+                                <div>
+                                  <div>{{ c.display or c.id }}</div>
+                                  {% if c.archived %}
+                                    <span class="badge arch">Archived</span>
+                                  {% endif %}
+                                  {% if c.image_url %}<img class="thumb" src="{{ c.image_url }}" alt="">{% endif %}
+                                </div>
+                                <div>
+                                  {% set child_action = 'api_unarchive_label' if c.archived else 'api_archive_label' %}
+                                  <form method="post" action="{{ url_for(child_action, type_name=type_name) }}" style="display:inline">
+                                    <input type="hidden" name="group_key" value="{{ g.key }}">
+                                    <input type="hidden" name="option_id" value="{{ o.id }}">
+                                    <input type="hidden" name="child_id"  value="{{ c.id }}">
+                                    <input type="hidden" name="next" value="{{ request.url }}">
+                                    <button class="btn" type="submit">
+                                      {% if c.archived %}♻️ Unarchive{% else %}🗄️ Archive{% endif %}
+                                    </button>
+                                  </form>
+                                </div>
                               </div>
                               {% if c.description %}<div class="muted">{{ c.description }}</div>{% endif %}
                             </div>
@@ -112,24 +186,49 @@
       });
     }
 
+    // Show/hide archived groups + options/children
+    function toggleArchived(show){
+      document.querySelectorAll('.group[data-archived="1"]').forEach(el=>{
+        el.style.display = show ? "" : "none";
+      });
+      document.querySelectorAll('.option[data-archived="1"]').forEach(el=>{
+        el.style.display = show ? "" : "none";
+      });
+    }
+
     // Optional focus support: ?focus=<path or key>
     (function(){
       const params = new URLSearchParams(location.search);
       const focus = params.get('focus');
-      if(!focus) return;
-      // try key id
-      let el = document.getElementById('group_' + focus.replace(/\//g,'__'));
-      if(!el){
-        // fallback: find by data-key substring
-        document.querySelectorAll('#groups .group').forEach(card=>{
-          if(!el && (card.getAttribute('data-key')||'').includes(focus.toLowerCase())) el = card;
-        });
+      if(focus){
+        let el = document.getElementById('group_' + focus.replace(/\//g,'__'));
+        if(!el){
+          document.querySelectorAll('#groups .group').forEach(card=>{
+            if(!el && (card.getAttribute('data-key')||'').includes(focus.toLowerCase())) el = card;
+          });
+        }
+        if(el){
+          el.classList.add('focused');
+          el.scrollIntoView({behavior:'smooth', block:'center'});
+        }
       }
-      if(el){
-        el.classList.add('focused');
-        el.scrollIntoView({behavior:'smooth', block:'center'});
-      }
+
+      // initialise "show archived" from URL (?show_archived=1)
+      const showArchived = params.get('show_archived') === '1';
+      const box = document.getElementById('show_archived');
+      if (box) box.checked = showArchived;
+      toggleArchived(showArchived);
     })();
+
+      document.querySelectorAll('form[action*="archive_label_group"]').forEach(form=>{
+    form.addEventListener('submit', (e)=>{
+      const showBox = document.getElementById('show_archived');
+      if (showBox && !showBox.checked) {
+        const card = form.closest('.group');
+        if (card) card.style.display = 'none';
+      }
+    });
+  });
   </script>
 </body>
 </html>
