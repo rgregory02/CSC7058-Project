@@ -1,0 +1,56 @@
+{
+    "id": "sherlock_holmes",
+    "uid": "c4fe185a6eef4754bb41e9cc0ca44eba",
+    "name": "Sherlock Holmes",
+    "type": "person",
+    "created": "2025-08-15T12:57:19.480465+00:00",
+    "updated": "2025-08-15T12:59:31.862843+00:00",
+    "entries": [
+        {
+            "created": "2025-08-15T12:57:26.508335+00:00",
+            "updated": "2025-08-15T12:59:31.862843+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 100,
+                "subvalue": "preteen"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 11.5,
+                "notes": "Life stage 'preteen' (no reference date — absolute bounds unknown)"
+            },
+            "person": [],
+            "events": [
+                {
+                    "group_key": "relationship",
+                    "option_id": "parent",
+                    "option_display": "Parent",
+                    "link_type": "person",
+                    "linked_bio": "teddy_4",
+                    "confidence": 71,
+                    "time": {
+                        "label_type": "date",
+                        "confidence": 100,
+                        "date_value": "2025-08-11"
+                    },
+                    "time_normalised": {
+                        "kind": "date",
+                        "start_iso": "2025-08-11",
+                        "end_iso": "2025-08-11",
+                        "start_ts": 1754870400,
+                        "end_ts": 1754870400,
+                        "precision": "exact",
+                        "age_years": null,
+                        "notes": "Direct date entry"
+                    },
+                    "created": "2025-08-15T12:59:31.862809+00:00"
+                }
+            ]
+        }
+    ]
+}

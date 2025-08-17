@@ -1,9 +1,9 @@
 {
-  "name": "Car",
-  "description": "Test",
+  "name": "test",
+  "description": "Testing",
   "source": {
     "kind": "self_labels",
-    "path": "car",
+    "path": "test",
     "allow_children": true
   }
 }

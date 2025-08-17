@@ -1,9 +1,9 @@
 {
-  "name": "Doggie",
+  "name": "Milestone",
   "description": "This is a label group about various types of dogs",
   "source": {
     "kind": "self_labels",
-    "path": "doggie",
+    "path": "Milestone",
     "allow_children": true
   }
 }

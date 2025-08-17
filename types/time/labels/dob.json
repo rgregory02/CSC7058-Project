@@ -2,6 +2,7 @@
   "key": "dob",
   "name": "Date of Birth",
   "description": "The day this person was born.",
+  "type":"Date",
   "input": "date",
 
   "ui": {

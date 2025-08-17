@@ -1,0 +1,91 @@
+{
+    "id": "harry_potter",
+    "uid": "9df06b99b62145f7bb5e6b7ae5dfd8da",
+    "name": "Harry Potter",
+    "type": "person",
+    "created": "2025-08-15T13:24:51.847068+00:00",
+    "updated": "2025-08-15T13:30:20.114018+00:00",
+    "entries": [
+        {
+            "created": "2025-08-15T13:25:41.131995+00:00",
+            "updated": "2025-08-15T13:30:20.114018+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 100,
+                "subvalue": "thirties"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 35,
+                "notes": "Life stage 'thirties' (no reference date — absolute bounds unknown)"
+            },
+            "person": [
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 77,
+                    "id": "1"
+                },
+                {
+                    "label_type": "work_place",
+                    "confidence": 100,
+                    "id": "hospital"
+                }
+            ],
+            "events": [
+                {
+                    "group_key": "relationship",
+                    "option_id": "child",
+                    "option_display": "Child",
+                    "link_type": "person",
+                    "linked_bio": "sherlock_holmes",
+                    "confidence": 100,
+                    "time": {
+                        "label_type": "date",
+                        "confidence": 100,
+                        "date_value": "2025-08-05"
+                    },
+                    "time_normalised": {
+                        "kind": "date",
+                        "start_iso": "2025-08-05",
+                        "end_iso": "2025-08-05",
+                        "start_ts": 1754352000,
+                        "end_ts": 1754352000,
+                        "precision": "exact",
+                        "age_years": null,
+                        "notes": "Direct date entry"
+                    },
+                    "created": "2025-08-15T13:29:53.408664+00:00"
+                },
+                {
+                    "group_key": "milestone",
+                    "option_id": "graduation",
+                    "option_display": "Graduation",
+                    "link_type": "organisations",
+                    "linked_bio": "qub",
+                    "confidence": 100,
+                    "time": {
+                        "label_type": "date",
+                        "confidence": 100,
+                        "date_value": "2025-08-22"
+                    },
+                    "time_normalised": {
+                        "kind": "date",
+                        "start_iso": "2025-08-22",
+                        "end_iso": "2025-08-22",
+                        "start_ts": 1755820800,
+                        "end_ts": 1755820800,
+                        "precision": "exact",
+                        "age_years": null,
+                        "notes": "Direct date entry"
+                    },
+                    "created": "2025-08-15T13:30:20.114005+00:00"
+                }
+            ]
+        }
+    ]
+}
