@@ -1,5 +1,5 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <title>General Wizard — {{ type_name|replace('_',' ')|title }}</title>
@@ -28,26 +28,26 @@
     function gotoStep(step) {
       const url = new URL(window.location.href);
       url.searchParams.set('step', step);
-      window.location.href = url.toString();
+      window.location.href = url.toString(); // full-page nav (no nesting)
     }
     function setDOBPreset() {
-      // Open the Time step directly inside the iframe with the DOB preset.
-      // This does NOT change the outer step; it just loads the inner page you need.
-      const src = "{{ url_for('general_step_time', type_name=type_name, bio_id=bio_id) }}?preset=dob";
+      // Load Time step inside the iframe in EMBED mode so inner links/forms break out.
+      const src = "{{ url_for('general_step_time', type_name=type_name, bio_id=bio_id) }}?preset=dob&embed=1";
       setIframe(src);
-      // Also highlight the Time tab to reflect where we are working.
+      // Visually highlight Time tab
       const tabs = document.querySelectorAll('.nav-bar a.btn');
       tabs.forEach(t => t.classList.remove('active'));
       const timeTab = document.getElementById('tab-time');
       if (timeTab) timeTab.classList.add('active');
     }
-    function addEvents() {
-      // Quick jump to Events tab (outer routing)
-      gotoStep('events');
-    }
+    function addEvents() { gotoStep('events'); }
   </script>
 </head>
-<body>
+{% set EMBED = request.args.get('embed') in ('1','true','True') %}
+{% if EMBED %}<base target="_top">{% endif %}
+<body data-embed="{{ '1' if EMBED else '0' }}">
+  <div class="wizard-chrome">{# tabs/title #}</div>
+  <div class="wizard-body">…</div>
   <div class="box">
     <h1>🧩 General Wizard — {{ type_name|replace('_',' ')|title }}</h1>
 
@@ -69,7 +69,6 @@
 
       <span class="spacer"></span>
 
-      <!-- Quick actions (don’t change your backend; these just steer the iframe/step) -->
       <div class="quick">
         <a class="btn" href="javascript:void(0)" onclick="setDOBPreset()">🎂 Set DOB</a>
         <a class="btn" href="javascript:void(0)" onclick="addEvents()">➕ Add Events</a>
@@ -78,25 +77,24 @@
     </div>
 
     {% if step == 'start' %}
-      <iframe id="wizardFrame" src="{{ url_for('general_step_start', type_name=type_name, bio_id=bio_id) }}"></iframe>
+      <iframe id="wizardFrame" src="{{ url_for('general_step_start',  type_name=type_name, bio_id=bio_id, embed=1) }}"></iframe>
 
     {% elif step == 'time' %}
-      <iframe id="wizardFrame" src="{{ url_for('general_step_time', type_name=type_name, bio_id=bio_id) }}"></iframe>
+      <iframe id="wizardFrame" src="{{ url_for('general_step_time',   type_name=type_name, bio_id=bio_id, embed=1) }}"></iframe>
 
     {% elif step == 'labels' %}
-      <iframe id="wizardFrame" src="{{ url_for('general_step_labels', type_name=type_name, bio_id=bio_id) }}"></iframe>
+      <iframe id="wizardFrame" src="{{ url_for('general_step_labels', type_name=type_name, bio_id=bio_id, embed=1) }}"></iframe>
 
     {% elif step == 'events' %}
-      <iframe id="wizardFrame" src="{{ url_for('general_step_events', type_name=type_name, bio_id=bio_id) }}"></iframe>
+      <iframe id="wizardFrame" src="{{ url_for('general_step_events', type_name=type_name, bio_id=bio_id, embed=1) }}"></iframe>
 
     {% elif step == 'review' %}
-      <iframe id="wizardFrame" src="{{ url_for('general_step_review', type_name=type_name, bio_id=bio_id) }}"></iframe>
+      <iframe id="wizardFrame" src="{{ url_for('general_step_review', type_name=type_name, bio_id=bio_id, embed=1) }}"></iframe>
 
     {% else %}
       <div class="flash-error">Unknown step.</div>
-      <iframe id="wizardFrame" src="{{ url_for('general_step_start', type_name=type_name, bio_id=bio_id) }}"></iframe>
+      <iframe id="wizardFrame" src="{{ url_for('general_step_start',  type_name=type_name, bio_id=bio_id, embed=1) }}"></iframe>
     {% endif %}
   </div>
 </body>
 </html>
-

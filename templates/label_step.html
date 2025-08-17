@@ -32,9 +32,19 @@
     .sugg-card.selected{ background:#eaffee; border-color:#46b36a; }
     .clear-btn { background:#fff; border:1px solid #bbb; color:#444; padding:4px 10px; border-radius:6px; cursor:pointer; font-size:.85em; margin-left:auto; }
     .clear-btn:hover { background:#f6f6f6; }
+        body[data-embed="1"] .wizard-chrome {
+      display: none !important;  /* Hide tabs/header in embed */
+    }
+    body[data-embed="1"] .wizard-body {
+      margin-top: 0; /* Tighten spacing when header is hidden */
+    }
   </style>
 </head>
-<body>
+{% set EMBED = request.args.get('embed') in ('1','true','True') %}
+{% if EMBED %}<base target="_top">{% endif %}
+<body data-embed="{{ '1' if EMBED else '0' }}">
+  <div class="wizard-chrome">{# tabs/title #}</div>
+  <div class="wizard-body">…</div>
 <div class="box">
   <h1>🧩 Select {{ current_type|replace('_',' ')|title }}</h1>
   <div class="subheading">

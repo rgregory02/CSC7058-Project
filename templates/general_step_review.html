@@ -43,9 +43,20 @@
     .event-item { border-left:4px solid #e0e7e4; background:#fafdfb; padding:10px 12px; border-radius:8px; margin-bottom:10px; }
     .event-title { font-weight:700; }
     .event-meta { font-size:.9em; color:#555; }
+    body[data-embed="1"] .wizard-chrome {
+      display: none !important;  /* Hide tabs/header in embed */
+    }
+    body[data-embed="1"] .wizard-body {
+      margin-top: 0; /* Tighten spacing when header is hidden */
+    }
+
   </style>
 </head>
-<body>
+{% set EMBED = request.args.get('embed') in ('1','true','True') %}
+{% if EMBED %}<base target="_top">{% endif %}
+<body data-embed="{{ '1' if EMBED else '0' }}">
+  <div class="wizard-chrome">{# tabs/title #}</div>
+  <div class="wizard-body">…</div>
   {% set entry_index = session.get('entry_index') if session else None %}
   {% set entries = bio.get('entries', []) %}
   {% set entry =

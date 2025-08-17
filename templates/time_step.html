@@ -17,9 +17,21 @@
     details { border:1px dashed #ccd; border-radius:10px; padding:10px 12px; background:#fafaff; }
     details > summary { cursor:pointer; font-weight:700; }
     .muted { color:#666; font-size:.9em; }
+
+    body[data-embed="1"] .wizard-chrome {
+      display: none !important;  /* Hide tabs/header in embed */
+    }
+    body[data-embed="1"] .wizard-body {
+      margin-top: 0; /* Tighten spacing when header is hidden */
+    }
+
   </style>
 </head>
-<body>
+{% set EMBED = request.args.get('embed') in ('1','true','True') %}
+{% if EMBED %}<base target="_top">{% endif %}
+<body data-embed="{{ '1' if EMBED else '0' }}">
+  <div class="wizard-chrome">{# tabs/title #}</div>
+  <div class="wizard-body">…</div>
   <div class="box">
     <h1>⏳ Select Time Period</h1>
     <div class="subheading">

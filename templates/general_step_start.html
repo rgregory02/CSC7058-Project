@@ -16,9 +16,21 @@
     .row{margin:12px 0}
     .label{font-weight:600;display:block;margin-bottom:6px}
     select,input[type="text"]{width:100%;max-width:480px}
+    body[data-embed="1"] .wizard-chrome {
+      display: none !important;  /* Hide tabs/header in embed */
+    }
+    body[data-embed="1"] .wizard-body {
+      margin-top: 0; /* Tighten spacing when header is hidden */
+    }
+
   </style>
 </head>
-<body>
+{% set EMBED = request.args.get('embed') in ('1','true','True') %}
+{% if EMBED %}<base target="_top">{% endif %}
+<body data-embed="{{ '1' if EMBED else '0' }}">
+  <div class="wizard-chrome">{# tabs/title #}</div>
+  <div class="wizard-body">…</div>
+
   <div class="box">
     {% if mode == 'rename' %}
       <h2>📄 {{ bio.name }}</h2>
