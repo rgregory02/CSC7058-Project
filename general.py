@@ -1802,19 +1802,15 @@ def general_iframe_wizard():
     POST on step=start:
       - creates a new biography OR selects existing, then redirects to step=time.
     """
-    step = (request.args.get("step") or "start").strip()
+    step   = (request.args.get("step") or "start").strip()
     q_type = (request.args.get("type") or "").strip()
     bio_id = (request.args.get("bio_id") or "").strip()
 
-    # ---- Try to infer type_name from bio file if not provided ----
+    # Try to infer type from a supplied bio_id
     type_name = q_type
     if not type_name and bio_id:
-        # Try scanning known types or read the bio file by path guess
-        # (We assume standard layout: types/<type_name>/biographies/<bio_id>.json)
-        # Fast path: if caller supplied 'type' arg earlier, keep it.
         try:
-            # Search for the bio in any type folder (cheap scan)
-            for t in list_types():  # your helper that lists 'types' subfolders
+            for t in list_types():
                 candidate = os.path.join("types", t, "biographies", f"{bio_id}.json")
                 if os.path.exists(candidate):
                     data = load_json_as_dict(candidate) or {}
@@ -1823,7 +1819,7 @@ def general_iframe_wizard():
         except Exception:
             pass
 
-    # -------- Handle edit-intent flags from querystring --------
+    # (Optional) edit flags
     edit_entry = request.args.get("edit_entry_index")
     edit_bio   = request.args.get("edit_bio")
 
@@ -1833,7 +1829,6 @@ def general_iframe_wizard():
             bio = load_json_as_dict(bio_file) or {}
             entries = bio.get("entries") or []
 
-            # Entry edit (locks to an entry index → overwrite on save)
             if edit_entry is not None:
                 try:
                     idx = int(edit_entry)
@@ -1843,16 +1838,14 @@ def general_iframe_wizard():
                 except ValueError:
                     pass
 
-            # Bio-level edit (start step lets you overwrite name/description/etc.)
             if edit_bio:
                 session["editing_bio"] = True
         else:
-            # If a type/bio mismatch slips through, clear edit flags
             session.pop("entry_index", None)
             session.pop("editing_entry", None)
             session.pop("editing_bio", None)
 
-    # =========================== START STEP ===========================
+    # --------------------- START ---------------------
     if step == "start":
         if request.method == "POST":
             type_name = (request.form.get("type_name") or type_name or "").strip()
@@ -1863,11 +1856,11 @@ def general_iframe_wizard():
                 flash("Pick a type.", "error")
                 return redirect(url_for("general_iframe_wizard", step="start"))
 
-            # Prefer existing bio if both provided
+            # If both provided, prefer existing bio
             if chosen_bio and new_name:
                 new_name = ""
 
-            # Select existing biography
+            # Validate existing bio belongs to the chosen type
             if chosen_bio:
                 path = os.path.join("types", type_name, "biographies", f"{chosen_bio}.json")
                 if not os.path.exists(path):
@@ -1875,20 +1868,16 @@ def general_iframe_wizard():
                     return redirect(url_for("general_iframe_wizard", step="start", type=type_name))
                 bio_id = chosen_bio
 
-                # If user came here with edit_bio=1, allow overwriting top-level fields now
                 if session.get("editing_bio"):
                     data = load_json_as_dict(path) or {}
-                    # Overwrite basic fields from form if provided
                     if new_name:
                         data["name"] = new_name
                     data["updated"] = now_iso_utc()
                     save_dict_as_json(path, data)
-                    # Optional: clear the flag here or keep until review
-                    # session.pop("editing_bio", None)
 
                 return redirect(url_for("general_iframe_wizard", type=type_name, bio_id=bio_id, step="time"))
 
-            # Otherwise create a new biography
+            # Create new bio
             bio_dir = os.path.join("types", type_name, "biographies")
             os.makedirs(bio_dir, exist_ok=True)
 
@@ -1908,10 +1897,11 @@ def general_iframe_wizard():
                 "updated": now_iso_utc(),
                 "entries": []
             }
-            save_dict_as_json(os.path.join(bio_dir, f"{slug}.json"), data)
-            bio_id = slug
 
-            # New bios always start as add-mode (not editing an existing entry)
+            # ✅ write file correctly (no trailing comma)
+            save_dict_as_json(os.path.join(bio_dir, f"{slug}.json"), data)
+
+            bio_id = slug
             session.pop("entry_index", None)
             session["editing_entry"] = False
 
@@ -1919,18 +1909,17 @@ def general_iframe_wizard():
 
         # GET start: render the picker/creator form
         types = list_types()
-        per_type_bios = {t: list_biographies(t) for t in types}
+        # If a type is preselected, only load those bios (faster page)
+        filtered_bios = list_biographies(type_name) if type_name else []
         return render_template(
             "general_step_start.html",
             types=types,
-            per_type_bios=per_type_bios,
-            preselected_type=type_name or ""
+            preselected_type=type_name or "",
+            filtered_bios=filtered_bios
         )
 
-    # ===================== OTHER STEPS (IFRAME CONTAINER) =====================
-    # Ensure we have a type_name to pass to template for its url_for calls
+    # ------------------- other steps -------------------
     if not type_name:
-        # Last-ditch attempt: if still unknown, avoid template errors
         flash("Type is missing for this wizard session.", "error")
         return redirect(url_for("general_iframe_wizard", step="start"))
 
@@ -1940,6 +1929,20 @@ def general_iframe_wizard():
         bio_id=bio_id,
         step=step
     )
+
+
+# ---- Small JSON endpoint used by the start page to fetch bios for a type ----
+@app.route("/api/bios/list")
+def api_bios_list():
+    t = (request.args.get("type") or "").strip()
+    if not t:
+        return jsonify({"ok": False, "error": "type required"}), 400
+    try:
+        bios = list_biographies(t)  # expect list of dicts with id & name
+        # keep payload tiny
+        return jsonify({"ok": True, "items": [{"id": b["id"], "name": b.get("name", b["id"])} for b in bios]})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 def _time_labels_root_for(type_name: str) -> str:

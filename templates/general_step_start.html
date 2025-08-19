@@ -1,108 +1,174 @@
-
 <!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>
-    {% if mode == 'rename' %}
-      {{ bio.name }} — Start
-    {% else %}
-      Start General Wizard
-    {% endif %}
-  </title>
+  <title>Start General Wizard</title>
   <link rel="stylesheet" href="/static/styles.css">
   <style>
-    .box{max-width:820px;margin:40px auto}
-    .row{margin:12px 0}
-    .label{font-weight:600;display:block;margin-bottom:6px}
-    select,input[type="text"]{width:100%;max-width:480px}
-    body[data-embed="1"] .wizard-chrome {
-      display: none !important;  /* Hide tabs/header in embed */
+    :root{
+      --bg:#f6f7fb; --card:#fff; --muted:#6b7280; --line:#e5e7eb; --ink:#111827;
+      --pill:#eef0f7; --pill-ink:#374151; --accent:#6c63ff;
     }
-    body[data-embed="1"] .wizard-body {
-      margin-top: 0; /* Tighten spacing when header is hidden */
-    }
-
+    body{background:var(--bg); font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    .box{max-width:860px;margin:36px auto;background:var(--card);padding:28px;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.06)}
+    h1{margin:0 0 4px}
+    .hint{color:var(--muted);margin-bottom:16px}
+    .row{margin:14px 0}
+    .label{font-weight:700;display:block;margin-bottom:6px}
+    select,input[type="text"]{width:100%;max-width:560px;padding:10px;border:1px solid var(--line);border-radius:10px}
+    .stack{display:grid;gap:10px;max-width:560px}
+    .chips{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:.92em}
+    .chip{background:var(--pill);color:var(--pill-ink);padding:4px 10px;border-radius:999px}
+    .toolbar{display:flex;gap:8px;align-items:center}
+    .btn{display:inline-block;padding:10px 14px;border-radius:10px;background:var(--pill);color:#333;text-decoration:none;border:1px solid var(--line);font-weight:600}
+    .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+    .btn:disabled{opacity:.6;cursor:not-allowed}
+    .search{display:none}
+    .search input{width:100%;max-width:560px;padding:10px;border:1px solid var(--line);border-radius:10px}
+    .small{color:var(--muted);font-size:.9em}
+    .list{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:6px 6px 2px 6px;display:none}
+    .list button{display:block;width:100%;text-align:left;padding:8px 10px;border:0;background:#fff;border-radius:8px;margin:4px 0}
+    .list button:hover{background:#f8f9ff}
+    .muted{color:var(--muted)}
   </style>
 </head>
 {% set EMBED = request.args.get('embed') in ('1','true','True') %}
 {% if EMBED %}<base target="_top">{% endif %}
 <body data-embed="{{ '1' if EMBED else '0' }}">
-  <div class="wizard-chrome">{# tabs/title #}</div>
-  <div class="wizard-body">…</div>
 
   <div class="box">
-    {% if mode == 'rename' %}
-      <h2>📄 {{ bio.name }}</h2>
-      <p><small>Type: {{ type_name }} • ID: {{ bio_id }}</small></p>
+    <h1>🧩 Start General Wizard</h1>
+    <div class="hint">Pick a <strong>type</strong>, then either select an existing biography or create a new one.</div>
 
-      <form method="POST">
-        <label class="label">Rename (optional)</label>
-        <input type="text" name="new_name" value="{{ bio.name }}">
-        <div class="row">
-          <button class="btn" type="submit">Continue to Time</button>
-          <a class="btn secondary" href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='time') }}">Skip</a>
-        </div>
-      </form>
-
-    {% else %}
-      <h1>🧩 Start General Wizard</h1>
-      <form method="POST">
-        <div class="row">
-          <label class="label">Type</label>
+    <form method="POST" id="startForm">
+      <div class="row">
+        <label class="label">Type</label>
+        <div class="stack">
           <select id="typeSelect" name="type_name" required>
-            <option value="" disabled selected>Pick a type…</option>
+            <option value="" disabled {{ '' if preselected_type else 'selected' }}>Choose a type…</option>
             {% for t in types %}
-              <option value="{{ t }}" {{ 'selected' if request.args.get('type')==t else '' }}>
+              <option value="{{ t }}" {{ 'selected' if preselected_type==t else '' }}>
                 {{ t|replace('_',' ')|title }}
               </option>
             {% endfor %}
           </select>
+          <div class="chips small">
+            <span class="chip">Only bios for the selected type will be shown</span>
+          </div>
         </div>
+      </div>
 
-        <div class="row">
-          <label class="label">Choose existing biography (optional)</label>
-          <select id="bioSelect" name="bio_id">
+      <div class="row">
+        <label class="label">Choose existing biography (optional)</label>
+        <div class="stack">
+          <select id="bioSelect" name="bio_id" disabled>
             <option value="">— none —</option>
-            {% for t, bios in per_type_bios.items() %}
-              <optgroup label="{{ t|replace('_',' ')|title }}" data-type="{{ t }}">
-                {% for b in bios %}
-                  <option value="{{ b.id }}">[{{ t }}] {{ b.name }}</option>
-                {% endfor %}
-              </optgroup>
-            {% endfor %}
+            {% if filtered_bios %}
+              {% for b in filtered_bios %}
+                <option value="{{ b.id }}">{{ b.name }}</option>
+              {% endfor %}
+            {% endif %}
           </select>
+          <div class="search" id="bioSearchWrap">
+            <input id="bioSearch" type="text" placeholder="Search bios…">
+          </div>
+          <div class="list" id="bioQuickList"></div>
+          <div class="small muted" id="bioEmptyMsg" style="display:none">No biographies for this type yet.</div>
         </div>
+      </div>
 
-        <div class="row">
-          <label class="label">…or create new biography</label>
-          <input type="text" name="new_bio_name" placeholder="e.g., Royal Victoria Hospital">
-        </div>
+      <div class="row">
+        <label class="label">…or create new biography</label>
+        <input type="text" name="new_bio_name" id="newBioName" placeholder="e.g., Royal Victoria Hospital">
+        <div class="small muted">Leave blank if you’re selecting an existing biography above.</div>
+      </div>
 
-        <div class="row">
-          <button type="submit" class="btn">Continue</button>
-          <a class="btn secondary" href="{{ url_for('dashboard') }}">Cancel</a>
-        </div>
-      </form>
-
-      <script>
-        (function () {
-          const typeSel = document.getElementById('typeSelect');
-          const bioSel  = document.getElementById('bioSelect');
-          const groups  = Array.from(bioSel.querySelectorAll('optgroup'));
-
-          function filterGroups() {
-            const t = typeSel.value;
-            bioSel.value = "";
-            groups.forEach(g => g.style.display = (t && g.dataset.type === t) ? '' : 'none');
-          }
-          groups.forEach(g => g.style.display = 'none');
-          typeSel.addEventListener('change', filterGroups);
-          // auto-filter if type was preselected via querystring
-          if (typeSel.value) filterGroups();
-        })();
-      </script>
-    {% endif %}
+      <div class="row toolbar">
+        <button type="submit" class="btn primary">Continue</button>
+        <a class="btn" href="{{ url_for('dashboard') }}">Cancel</a>
+      </div>
+    </form>
   </div>
+
+  <script>
+    (function(){
+      const typeSel = document.getElementById('typeSelect');
+      const bioSel  = document.getElementById('bioSelect');
+      const searchWrap = document.getElementById('bioSearchWrap');
+      const searchInput= document.getElementById('bioSearch');
+      const quickList  = document.getElementById('bioQuickList');
+      const emptyMsg   = document.getElementById('bioEmptyMsg');
+
+      // Populate bios for a type from API
+      async function loadBiosForType(t){
+        bioSel.innerHTML = '<option value="">— none —</option>';
+        bioSel.disabled = true;
+        searchWrap.style.display = 'none';
+        quickList.style.display = 'none';
+        emptyMsg.style.display = 'none';
+
+        if(!t){ return; }
+
+        try{
+          const res = await fetch(`/api/bios/list?type=${encodeURIComponent(t)}`);
+          const data = await res.json();
+          if(!data.ok) throw new Error(data.error || 'Failed');
+
+          const items = data.items || [];
+          if(items.length === 0){
+            emptyMsg.style.display = 'block';
+            return;
+          }
+
+          // Fill the <select>
+          for(const it of items){
+            const opt = document.createElement('option');
+            opt.value = it.id;
+            opt.textContent = it.name || it.id;
+            bioSel.appendChild(opt);
+          }
+          bioSel.disabled = false;
+
+          // Build quick list + search
+          quickList.innerHTML = items.slice(0, 20).map(it =>
+            `<button type="button" data-id="${it.id}">${(it.name||it.id)}</button>`
+          ).join('');
+          quickList.style.display = items.length ? 'block' : 'none';
+          searchWrap.style.display = 'block';
+        }catch(e){
+          console.error(e);
+          emptyMsg.style.display = 'block';
+        }
+      }
+
+      // Quick-list selection mirrors into the <select>
+      quickList.addEventListener('click', (e)=>{
+        const btn = e.target.closest('button[data-id]');
+        if(!btn) return;
+        const id = btn.getAttribute('data-id');
+        bioSel.value = id;
+        bioSel.scrollIntoView({behavior:'smooth', block:'center'});
+      });
+
+      // Filter the <select> and quick list by search
+      function applyBioSearch(){
+        const q = (searchInput.value || '').toLowerCase();
+        [...bioSel.options].forEach((opt, i)=>{
+          if(i===0) return; // keep "none"
+          const show = (opt.textContent || '').toLowerCase().includes(q);
+          opt.hidden = !show;
+        });
+        [...quickList.querySelectorAll('button')].forEach(btn=>{
+          const show = (btn.textContent || '').toLowerCase().includes(q);
+          btn.style.display = show ? '' : 'none';
+        });
+      }
+      searchInput?.addEventListener('input', applyBioSearch);
+
+      // Load on change / initial
+      typeSel.addEventListener('change', ()=> loadBiosForType(typeSel.value));
+      if(typeSel.value){ loadBiosForType(typeSel.value); }
+    })();
+  </script>
 </body>
 </html>
