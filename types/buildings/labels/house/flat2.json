@@ -6,5 +6,6 @@
   "created": "2025-08-08T13:46:34.398320+00:00",
   "properties": {
     "suggests_biographies_from": "buildings/house/flat2"
-  }
+  },
+  "archived": true
 }

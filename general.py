@@ -3299,69 +3299,82 @@ def suggest_labels():
 @app.route("/most_like/<type_name>/<bio_id>")
 def most_like_type(type_name, bio_id):
     """
-    Compare one biography against *all other biographies of the same type*
-    using an MSE-like score over confidence vectors, grouped by time period.
-    Both LABELS (lists saved under entry keys) and EVENTS (entry['events'])
-    are included.
+    Compare one biography against all others of the same type using an MSE-like
+    score over confidence vectors, grouped by time period.
 
-    Vector element = confidence (0..100) of a thing present in a time bucket.
-    Missing things = 0. MSE is averaged over the union of keys per-time.
+    - Vectors use confidence (0..100) per item (labels + events) per time bucket.
+    - Keys are normalized to maximize intersections.
+    - "Differences by time" are also recorded to explain non-overlap.
+    - No time decay. Missing items are 0.
     """
+
     import math
 
-    # ---------- helpers ----------
-    def _uk_dob(meta):
-        # Keep whatever you already use; this just prevents KeyErrors if absent
-        return meta.get("dob") or meta.get("date_of_birth") or ""
+    # -------------------- helpers --------------------
 
-    def _time_key(entry: dict) -> str:
-        """
-        A stable, human-readable time bucket key for grouping.
-        Preference: subvalue (e.g. 'teens'), else date_value (YYYY-MM-DD),
-        else start..end (range), else 'unknown'.
-        """
-        t = (entry or {}).get("time") or {}
-        if t.get("subvalue"):
-            return str(t["subvalue"])
-        if t.get("date_value"):
-            return str(t["date_value"])        # already ISO-like (YYYY[-MM[-DD]])
-        if t.get("start_date") or t.get("end_date"):
-            s = t.get("start_date", "")
-            e = t.get("end_date", "")
-            return f"{s}..{e}".strip(".")
-        return "unknown"
+    def _norm(s: str) -> str:
+        """Looser match: lower-case + strip. None-safe."""
+        return (s or "").strip().lower()
 
     def _safe_name(x: dict, fallback: str) -> str:
         return (x or {}).get("name") or fallback
 
+    def _uk_dob(meta):
+        # Keep whatever you already use; prevent KeyErrors
+        return meta.get("dob") or meta.get("date_of_birth") or ""
+
+    def _time_key(entry: dict) -> str:
+        """
+        Stable, normalized time bucket key.
+        Priority: subvalue (e.g. 'teens'), else date_value (YYYY[-MM[-DD]]),
+        else "start..end", else 'unknown'.
+        """
+        t = (entry or {}).get("time") or {}
+        if t.get("subvalue"):
+            return _norm(str(t["subvalue"]))
+        if t.get("date_value"):
+            return _norm(str(t["date_value"]))
+        if t.get("start_date") or t.get("end_date"):
+            s = _norm(t.get("start_date"))
+            e = _norm(t.get("end_date"))
+            return f"{s}..{e}".strip(".")
+        return "unknown"
+
+    def _label_vkey(label_type: str, label_id: str) -> str:
+        """Normalized vector key for a label."""
+        return f"L::{_norm(label_type)}::{_norm(label_id)}"
+
+    def _event_vkey(ev: dict) -> str:
+        """
+        Normalized vector key for an event.
+        Uses: group_key / option_id / child_option_id / link_type / linked_bio
+        (drop empties at the end).
+        """
+        gk   = _norm(ev.get("group_key") or "event")
+        oid  = _norm(ev.get("option_id") or ev.get("option_display"))
+        cid  = _norm(ev.get("child_option_id"))
+        ltyp = _norm(ev.get("link_type"))
+        lbio = _norm(ev.get("linked_bio"))
+        parts = [p for p in (gk, oid, cid, ltyp, lbio) if p]
+        return "E::" + "/".join(parts) if parts else "E::" + gk
+
     def _extract_vectors_by_time(bio_json: dict) -> dict:
         """
-        Produce:
-            {
-              "<time_key>": {
-                  "<vector_key>": {
-                      "confidence": int 0..100,
-                      "kind": "label" | "event",
-                      "display": str,            # for rendering
-                      "meta": {...}              # extra fields for display
-                  },
-                  ...
-              },
-              ...
-            }
+        Return:
+          { "<time_key>": { "<vkey>": {confidence, kind, display, meta}, ... }, ... }
+        Capture both labels (any list field that's not reserved) and events.
         """
         out = {}
-        for entry in bio_json.get("entries", []) or []:
+        for entry in (bio_json.get("entries") or []):
             tk = _time_key(entry)
-            out.setdefault(tk, {})
+            slot = out.setdefault(tk, {})
 
-            # ----- LABELS (any list under entry that isn't time/events/created/updated/status) -----
+            # Labels: any list under entry except reserved keys
             for bucket_key, values in (entry or {}).items():
                 if bucket_key in ("time", "time_normalised", "events", "created", "updated", "status"):
                     continue
                 if not isinstance(values, list):
                     continue
-
                 for lab in values:
                     if not isinstance(lab, dict):
                         continue
@@ -3369,69 +3382,48 @@ def most_like_type(type_name, bio_id):
                     ltyp = (lab.get("label_type") or bucket_key or "").strip()
                     if not lid or not ltyp:
                         continue
-
-                    # Vector key for labels
-                    vkey = f"L::{ltyp}::{lid}"
-
-                    out[tk][vkey] = {
+                    vkey = _label_vkey(ltyp, lid)
+                    slot[vkey] = {
                         "confidence": int(lab.get("confidence", 100)),
                         "kind": "label",
                         "display": lab.get("display") or lid.replace("_", " ").title(),
-                        "meta": {
-                            "label_type": ltyp,
-                            "id": lid
-                        }
+                        "meta": {"label_type": ltyp, "id": lid}
                     }
 
-            # ----- EVENTS -----
+            # Events
             for ev in (entry.get("events") or []):
                 if not isinstance(ev, dict):
                     continue
-                gk   = (ev.get("group_key") or "event").strip()
-                oid  = (ev.get("option_id") or ev.get("option_display") or "").strip()
-                cid  = (ev.get("child_option_id") or "").strip()
-                ltyp = (ev.get("link_type") or "").strip()
-                lbio = (ev.get("linked_bio") or "").strip()
-
-                # Require *some* identity:
-                if not (gk or oid or cid or ltyp or lbio):
+                vkey = _event_vkey(ev)
+                if not vkey:
                     continue
 
-                # Vector key for events (structure is order-sensitive but stable)
-                parts = [gk, oid, cid, ltyp, lbio]
-                # compress empties at the end
-                while parts and not parts[-1]:
-                    parts.pop()
-                vkey = "E::" + "/".join(parts) if parts else "E::" + gk
-
-                # Confidence defaults like labels
-                conf = int(ev.get("confidence", 100))
-
-                # Human display
-                disp = ev.get("option_display") or oid or gk
-                if cid:
-                    disp += f" → {cid}"
-
-                # Optional: show linked type/target
+                disp = ev.get("option_display") or ev.get("option_id") or (ev.get("group_key") or "Event")
+                if ev.get("child_option_id"):
+                    disp += f" → {ev.get('child_option_id')}"
                 extra = []
-                if ltyp: extra.append(ltyp)
-                if lbio: extra.append(lbio)
+                if ev.get("link_type"):
+                    extra.append(ev["link_type"])
+                if ev.get("linked_bio"):
+                    extra.append(ev["linked_bio"])
                 if extra:
                     disp += f" ({' → '.join(extra)})"
 
-                out[tk][vkey] = {
-                    "confidence": conf,
+                slot[vkey] = {
+                    "confidence": int(ev.get("confidence", 100)),
                     "kind": "event",
                     "display": disp,
                     "meta": {
-                        "group_key": gk, "option_id": oid, "child_id": cid,
-                        "link_type": ltyp, "linked_bio": lbio
-                    }
+                        "group_key": ev.get("group_key"),
+                        "option_id": ev.get("option_id") or ev.get("option_display"),
+                        "child_id": ev.get("child_option_id"),
+                        "link_type": ev.get("link_type"),
+                        "linked_bio": ev.get("linked_bio"),
+                    },
                 }
-
         return out
 
-    # ---------- load the target biography ----------
+    # -------------------- load target --------------------
     target_path = os.path.join("types", type_name, "biographies", f"{bio_id}.json")
     if not os.path.exists(target_path):
         return f"{type_name} biography '{bio_id}' not found.", 404
@@ -3440,10 +3432,11 @@ def most_like_type(type_name, bio_id):
     target_name = _safe_name(target, bio_id)
     target_vecs = _extract_vectors_by_time(target)
 
-    # ---------- compare to all others of same type ----------
+    # -------------------- compare with others --------------------
     bio_folder = os.path.join("types", type_name, "biographies")
     candidates = []
-    for fn in os.listdir(bio_folder):
+
+    for fn in sorted(os.listdir(bio_folder)):
         if not fn.endswith(".json"):
             continue
         other_id = fn[:-5]
@@ -3453,15 +3446,17 @@ def most_like_type(type_name, bio_id):
         other = load_json_as_dict(os.path.join(bio_folder, fn)) or {}
         other_vecs = _extract_vectors_by_time(other)
 
-        # Per-time comparison on union of keys (labels + events)
+        # Compare only on overlapping time buckets
         shared_times = set(target_vecs.keys()) & set(other_vecs.keys())
         if not shared_times:
             continue
 
         total_err = 0.0
         count = 0
+
         shared_labels_by_time = {}
         shared_events_by_time = {}
+        diffs_by_time = {}  # present in one, missing in the other (per time bucket)
 
         for tk in shared_times:
             tv = target_vecs[tk]
@@ -3469,27 +3464,35 @@ def most_like_type(type_name, bio_id):
             all_keys = set(tv.keys()) | set(ov.keys())
 
             for k in all_keys:
-                t_conf = tv.get(k, {}).get("confidence", 0)
-                o_conf = ov.get(k, {}).get("confidence", 0)
-                # normalise to 0..1 first
+                t_item = tv.get(k)
+                o_item = ov.get(k)
+                t_conf = (t_item or {}).get("confidence", 0)
+                o_conf = (o_item or {}).get("confidence", 0)
+
+                # pure 0..100 difference → normalised to 0..1 for MSE term
                 err = ((t_conf - o_conf) / 100.0) ** 2
                 total_err += err
                 count += 1
 
-                # if both present, record for display
-                if k in tv and k in ov:
-                    item = {
-                        "display": tv[k]["display"],
+                if t_item and o_item:
+                    row = {
+                        "display": t_item["display"],
                         "confidence_1": t_conf,
-                        "confidence_2": o_conf
+                        "confidence_2": o_conf,
                     }
-                    if tv[k]["kind"] == "event":
-                        shared_events_by_time.setdefault(tk, []).append(item)
+                    if t_item["kind"] == "event":
+                        shared_events_by_time.setdefault(tk, []).append(row)
                     else:
-                        # label
-                        # keep label_type too for context in UI
-                        item["label_type"] = tv[k]["meta"].get("label_type", "")
-                        shared_labels_by_time.setdefault(tk, []).append(item)
+                        row["label_type"] = t_item["meta"].get("label_type", "")
+                        shared_labels_by_time.setdefault(tk, []).append(row)
+                else:
+                    present = t_item or o_item
+                    diffs_by_time.setdefault(tk, []).append({
+                        "who": "you" if t_item else "them",
+                        "display": (present.get("display") if present else k),
+                        "kind": (present.get("kind") if present else "label"),
+                        "confidence": t_conf if t_item else o_conf,
+                    })
 
         if count == 0:
             continue
@@ -3502,7 +3505,10 @@ def most_like_type(type_name, bio_id):
             "dob": _uk_dob(other),
             "mse": mse,
             "shared_labels_by_time": shared_labels_by_time,
-            "shared_events_by_time": shared_events_by_time
+            "shared_events_by_time": shared_events_by_time,
+            "diffs_by_time": diffs_by_time,              # NEW: explain non-overlap
+            "time_bucket_count": len(shared_times),      # NEW: pill in UI
+            "comparison_count": count,                   # NEW: pill in UI
         })
 
     candidates.sort(key=lambda x: x["mse"])

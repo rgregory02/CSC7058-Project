@@ -5,19 +5,24 @@
   <title>Most Like — {{ base_name }} ({{ type_name|replace('_',' ')|title }})</title>
   <link rel="stylesheet" href="/static/styles.css">
   <style>
-    body { font-family: "Segoe UI", sans-serif; background:#f5f7f8; padding:40px; }
+    body { font-family: "Segoe UI", system-ui, sans-serif; background:#f5f7f8; padding:40px; }
     .card { background:#fff; max-width:980px; margin:auto; padding:28px 34px;
             border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,.1); }
-    h1 { text-align:center; font-size:26px; margin-bottom:8px; }
-    h2 { text-align:center; color:#4b5563; margin-top:0; font-weight:500; }
+    h1 { text-align:center; font-size:26px; margin-bottom:6px; }
+    h2 { text-align:center; color:#4b5563; margin:0 0 16px; font-weight:500; }
+    .note { text-align:center; font-size:13px; color:#6b7280; margin-bottom:16px; line-height:1.45; }
     .match { border-top:1px solid #e5e7eb; padding:18px 0; }
     .muted { color:#6b7280; }
     .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:.8em; background:#eef2ff; color:#3730a3; margin-left:6px; }
+    .chip { display:inline-block; padding:2px 8px; border-radius:999px; font-size:.75em; background:#eef0f7; color:#374151; margin-left:6px; }
     .section-title { margin:12px 0 6px; color:#374151; font-weight:700; }
     .time-key { margin-top:8px; font-weight:700; color:#1f2937; }
     ul { margin:4px 0 10px 18px; padding:0; }
     li { margin:3px 0; }
-    .back { display:block; text-align:center; margin-top:26px; font-weight:700; }
+    .back { display:block; text-align:center; margin-top:26px; font-weight:700; text-decoration:none; }
+    .diff { font-style:italic; }
+    .you { color:#0f766e; }     /* teal */
+    .them { color:#7c3aed; }    /* violet */
   </style>
 </head>
 <body>
@@ -25,12 +30,25 @@
     <h1>🧠 Most Like</h1>
     <h2>{{ base_name }} • {{ type_name|replace('_',' ')|title }}</h2>
 
+    <div class="note">
+      <strong>What you’re seeing:</strong> we compare this biography with others of the same type,
+      per overlapping <em>time bucket</em> (e.g. “teens”, a date, or a date range).<br>
+      For each bucket we build vectors from the saved confidences (0–100) for both
+      <strong>labels</strong> and <strong>events</strong>. Missing items are treated as 0.
+      We then compute a mean squared error (MSE) on those confidence vectors.
+      <br><strong>No time decay</strong>, and event confidence is used as-is (no link weighting).
+      Lower MSE ⇒ more similar. Chips show how many time buckets overlapped and how many pairwise
+      comparisons were made.
+    </div>
+
     {% if matches and matches|length > 0 %}
       {% for m in matches %}
         <div class="match">
           <h3 style="margin:0 0 6px;">
             {{ m.name }}
             <span class="pill">MSE {{ "%.4f"|format(m.mse) }}</span>
+            <span class="chip">time buckets: {{ m.time_bucket_count }}</span>
+            <span class="chip">comparisons: {{ m.comparison_count }}</span>
           </h3>
           {% if m.dob %}<div class="muted">DOB: {{ m.dob | display_dob_uk if m.dob is string else m.dob }}</div>{% endif %}
 
@@ -58,6 +76,23 @@
                   <li>
                     {{ it.display }}
                     <span class="muted"> (You {{ it.confidence_1 }}% · Them {{ it.confidence_2 }}%)</span>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% endfor %}
+          {% endif %}
+
+          {% if m.diffs_by_time %}
+            <div class="section-title">🔍 Differences by Time (present in one, missing in the other)</div>
+            {% for tkey, items in m.diffs_by_time.items() %}
+              <div class="time-key">{{ tkey.replace("_"," ")|title }}</div>
+              <ul>
+                {% for it in items %}
+                  <li class="diff">
+                    <span class="{{ 'you' if it.who == 'you' else 'them' }}">
+                      {{ it.who|title }}
+                    </span>
+                    only — {{ it.display }} ({{ it.kind }}, {{ it.confidence }}%)
                   </li>
                 {% endfor %}
               </ul>
