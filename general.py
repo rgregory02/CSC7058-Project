@@ -2443,15 +2443,23 @@ def general_step_labels(type_name, bio_id):
                     entry["biography_confidence"] = bio_conf
                 new_entries.append(entry)
 
-        # Overwrite this entry’s labels and bump updated timestamp
+        # Overwrite this entry’s labels for the current type and bump updated timestamp
         bio_data["entries"][entry_index][type_name] = new_entries
         bio_data["entries"][entry_index]["updated"] = datetime.now(timezone.utc).isoformat()
         bio_data["updated"] = bio_data["entries"][entry_index]["updated"]
         save_dict_as_json(bio_file_path, bio_data)
 
-        return redirect(url_for("general_iframe_wizard", type=type_name, bio_id=bio_id, step="review"))
+        # 👇 NEW: honour caller's desired next step; default to 'events'
+        next_step = (request.form.get("next_step")
+                    or request.args.get("next")
+                    or "events").strip().lower()
+        if next_step not in {"start", "time", "labels", "events", "review"}:
+            next_step = "events"
 
-    # ======================= GET (suggest bios + render) =======================
+        return redirect(url_for("general_iframe_wizard",
+                                type=type_name, bio_id=bio_id, step=next_step))
+    
+        # ======================= GET (suggest bios + render) =======================
     try:
         suggested_biographies = build_suggested_biographies(
             current_type=type_name,
