@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from openai import OpenAI
 import glob
+from typing import List, Dict, Any, Optional  
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -436,21 +437,20 @@ def list_biographies(type_name):
 
     return bios
 
-
 def build_suggested_biographies(*args, **kwargs):
     """
-    Suggest biography options per group.
+    Returns { safe_group_key: [ {id, display, description?}, ... ] }
 
-    Preferred signature:
-        build_suggested_biographies(current_type, label_groups_list, label_base_path, existing_labels=None)
-
-    Back-compat:
-        build_suggested_biographies(current_type, label_groups_list, label_base_path)
-        build_suggested_biographies(label_groups_list, label_base_path)
-
-    Returns: { safe_group_key: [ {id, display, description?}, ... ] }
+    Behaviour:
+      • If group.link_biography exists → show bios from the selected label chain
+        (child, or parent if child empty; mode respected).
+      • If group.refer_to.source == 'biographies':
+          - If a path/chain is selected, list under that path.
+          - If NO selection and NO label options exist → list ALL bios for that type.
     """
-    # -------- arg normalization --------
+    import os
+
+    # -------- arg normalisation --------
     current_type = None
     label_groups_list = None
     label_base_path = None
@@ -473,7 +473,6 @@ def build_suggested_biographies(*args, **kwargs):
 
     if not isinstance(label_groups_list, (list, tuple)):
         raise TypeError("build_suggested_biographies: label_groups_list must be a list")
-
     if not isinstance(existing_labels, dict):
         existing_labels = {}
 
@@ -485,7 +484,6 @@ def build_suggested_biographies(*args, **kwargs):
 
     # ---- helpers ----
     def _norm_selected_map(d):
-        """Make values simple strings (selected ids)."""
         out = {}
         for k, v in (d or {}).items():
             if isinstance(v, str):
@@ -513,7 +511,8 @@ def build_suggested_biographies(*args, **kwargs):
 
     def _append_bios_from_folder(folder, bios, seen):
         if not os.path.isdir(folder):
-            return
+            return 0
+        added = 0
         for f in sorted(os.listdir(folder)):
             if not f.endswith(".json"):
                 continue
@@ -527,6 +526,30 @@ def build_suggested_biographies(*args, **kwargs):
                 "description": data.get("description", "")
             })
             seen.add(bid)
+            added += 1
+        return added
+
+    def _append_all_bios(base_dir, bios, seen):
+        """Walk the type’s biographies tree and list all .json files."""
+        if not os.path.isdir(base_dir):
+            return 0
+        added = 0
+        for root, _, files in os.walk(base_dir):
+            for f in files:
+                if not f.endswith(".json"):
+                    continue
+                bid = os.path.splitext(f)[0]
+                if bid in seen:
+                    continue
+                data = load_json_safely(os.path.join(root, f))
+                bios.append({
+                    "id": bid,
+                    "display": data.get("name", bid.replace("_", " ").title()),
+                    "description": data.get("description", "")
+                })
+                seen.add(bid)
+                added += 1
+        return added
 
     out = {}
 
@@ -538,34 +561,42 @@ def build_suggested_biographies(*args, **kwargs):
         bios = []
         seen = set()
 
-        # ---------- A) link_biography (scoped by the selected label chain) ----------
+        # ---------- A) link_biography (scoped by label chain, with fallback to ALL) ----------
         lb = g.get("link_biography")
         if isinstance(lb, dict) and lb.get("type"):
-            lb_type = lb["type"]
-            base_bios_dir = os.path.join("types", lb_type, "biographies")
-            if os.path.isdir(base_bios_dir):
-                conf_path = (lb.get("path") or "").strip("/")
-                mode = (lb.get("mode") or "child_or_parent")
+            lb_type     = lb["type"]
+            base_bios   = os.path.join("types", lb_type, "biographies")
+            conf_path   = (lb.get("path") or "").strip("/")
+            mode        = (lb.get("mode") or "child_or_parent")
 
-                chain = _selected_chain_for_key(key)  # "" or "sel1" or "sel1/sel2/..."
+            if os.path.isdir(base_bios):
+                chain = _selected_chain_for_key(key)  # "" | "sel1" | "sel1/sel2"
+                added = 0
+
                 if chain:
-                    # Deepest child and first parent folder derived from the chain
-                    root = os.path.join(base_bios_dir, conf_path) if conf_path else base_bios_dir
+                    root = os.path.join(base_bios, conf_path) if conf_path else base_bios
                     parts = chain.split("/")
-                    child_dir = os.path.join(root, *parts)               # deepest child
-                    parent_dir = os.path.join(root, parts[0])            # first-level parent
+                    child_dir  = os.path.join(root, *parts)          # deepest child
+                    parent_dir = os.path.join(root, parts[0])        # first-level parent
 
                     if mode == "child_only":
-                        _append_bios_from_folder(child_dir, bios, seen)
+                        added += _append_bios_from_folder(child_dir, bios, seen)
                     elif mode == "parent_only":
-                        _append_bios_from_folder(parent_dir, bios, seen)
+                        added += _append_bios_from_folder(parent_dir, bios, seen)
                     else:  # child_or_parent
-                        _append_bios_from_folder(child_dir, bios, seen)
-                        if not bios:
-                            _append_bios_from_folder(parent_dir, bios, seen)
+                        added += _append_bios_from_folder(child_dir, bios, seen)
+                        if added == 0:
+                            added += _append_bios_from_folder(parent_dir, bios, seen)
+
+                    # Fallback to ALL if nothing found in scoped folders
+                    if added == 0:
+                        _append_all_bios(base_bios, bios, seen)
+
                 else:
-                    # No selection yet → do NOT suggest anything (keeps UX clean)
-                    pass
+                    # No selection yet:
+                    # If there are no subfolders under the configured path, list ALL;
+                    # otherwise also list ALL (your requested behaviour).
+                    _append_all_bios(base_bios, bios, seen)
 
         # ---------- B) refer_to = biographies (unscoped list) ----------
         elif g.get("refer_to", {}).get("source") == "biographies":
@@ -574,31 +605,15 @@ def build_suggested_biographies(*args, **kwargs):
             r_path = (r.get("path") or "").strip("/")
             base = os.path.join("types", r_type, "biographies") if r_type else None
             if base and os.path.isdir(base):
-                scan = os.path.join(base, r_path) if r_path else base
-                for root, _, files in os.walk(scan):
-                    for f in files:
-                        if not f.endswith(".json"):
-                            continue
-                        bid = os.path.splitext(f)[0]
-                        if bid in seen:
-                            continue
-                        data = load_json_safely(os.path.join(root, f))
-                        bios.append({
-                            "id": bid,
-                            "display": data.get("name", bid.replace("_", " ").title()),
-                            "description": data.get("description", "")
-                        })
-                        seen.add(bid)
+                # list everything under the (optional) path, or entire tree if none
+                scan_root = os.path.join(base, r_path) if r_path else base
+                _append_all_bios(scan_root, bios, seen)
 
         if bios:
-            # Sort for stable UX
             bios.sort(key=lambda x: (x.get("display") or x.get("id") or "").lower())
             out[safe] = bios
 
     return out
-
-
-
 
 def list_label_groups_for_type(type_name: str):
     """
@@ -2018,3 +2033,51 @@ Respond ONLY as a JSON array like: ["label_id_1", "label_id_2"]
     except Exception as e:
         print(f"[❌ Error parsing GPT response] {e}")
         return []
+    
+# --- add at the very end of utils.py ---
+
+# Compatibility shims so routes can call underscored helpers
+def _collect_label_groups(label_base_path: str, type_name: str) -> List[dict]:
+    """Alias to your existing collect_label_groups."""
+    return collect_label_groups(label_base_path, type_name)
+
+def _expand_child_groups(*, base_groups: List[dict], current_type: str,
+                         label_base_path: str, selected_map: Dict[str, str]) -> List[dict]:
+    """Alias that adapts param name 'selected_map' -> 'existing_labels'."""
+    return expand_child_groups(
+        base_groups=base_groups,
+        current_type=current_type,
+        label_base_path=label_base_path,
+        existing_labels=selected_map
+    )
+
+def _build_suggested_biographies(*, current_type: str,
+                                 label_groups_list: List[dict],
+                                 label_base_path: str,
+                                 existing_labels: Dict[str, Any]) -> Dict[str, List[dict]]:
+    """Alias to your build_suggested_biographies with the named args the route uses."""
+    return build_suggested_biographies(
+        current_type=current_type,
+        label_groups_list=label_groups_list,
+        label_base_path=label_base_path,
+        existing_labels=existing_labels
+    )
+
+def _map_existing_bio_selections(groups: List[dict], saved_items: List[dict]) -> Dict[str, Any]:
+    """Alias to your map_existing_bio_selections."""
+    return map_existing_bio_selections(groups, saved_items)
+
+def _list_biographies(type_name: str) -> List[dict]:
+    """Alias to your list_biographies, but shaped the way the template expects."""
+    # Convert your richer objects to the simple {id, display, description?} cards the UI uses
+    bios = list_biographies(type_name) or []
+    out = []
+    for b in bios:
+        out.append({
+            "id": b.get("id"),
+            "display": b.get("name") or (b.get("id","").replace("_"," ").title()),
+            "description": b.get("description",""),
+        })
+    # Keep ordering stable
+    out.sort(key=lambda x: (x.get("display","").lower(), x.get("id","").lower()))
+    return out

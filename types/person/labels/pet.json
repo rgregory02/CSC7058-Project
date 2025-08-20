@@ -3,7 +3,7 @@
   "description": "A person's pet",
   "input": "select",
   "source": {
-    "kind": "type_labels",
+    "kind": "type_biographies",
     "type": "pet",
     "path": "pet",
 

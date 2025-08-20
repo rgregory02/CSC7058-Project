@@ -79,7 +79,7 @@
           </div>
         {% endif %}
 
-        {% if group.options and not (group.refer_to and group.refer_to.source == 'biographies') %}
+        {% if group.options %}
           <input
             type="text"
             class="label-search"
@@ -146,40 +146,41 @@
   </div>
 
 {% else %}
-  {% set is_cross_bio = group.refer_to and group.refer_to.source == 'biographies' %}
-  {% if group.options and not is_cross_bio %}
-    <div class="label-options">
-      {% for item in group.options %}
-        {% set is_selected = (selected_id == item.id) %}
-        {% set img = item.image or item.image_url %}
-        <div class="label-card {% if is_selected %}selected{% endif %}"
-             id="card_{{ safe_key }}_{{ item.id }}"
-             data-group="{{ group.key }}"
-             data-value="{{ item.id }}"
-             tabindex="0"
-             onclick="selectLabel('{{ group.key }}','{{ item.id }}', {{ 'true' if is_child else 'false' }})"
-             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); this.click();}">
-          {% if img %}<img src="{{ img }}" alt="{{ item.display or item.id }}">{% endif %}
-          <div><strong>{{ item.display or item.id }}</strong></div>
-          {% if item.description %}<div class="label-description">{{ item.description }}</div>{% endif %}
-        </div>
-      {% endfor %}
-    </div>
-
-    <div class="confidence-slider">
-      <label for="confidence_{{ safe_key }}">🎯 Confidence:</label><br>
-      <input type="range"
-             name="confidence_{{ group.key }}"
-             id="confidence_{{ safe_key }}"
-             min="0" max="100"
-             value="{{ matched_conf }}"
-             oninput="updateConfidence('{{ group.key }}')">
-      <div class="confidence-display">
-        <span id="confidence_display_{{ safe_key }}">{{ matched_conf }}%</span>
-        <span id="confidence_level_{{ safe_key }}"></span>
+{% if group.options %}
+  <div class="label-options">
+    {% for item in group.options %}
+      {% set is_selected = (selected_id == item.id) %}
+      {% set img = item.image or item.image_url %}
+      <div class="label-card {% if is_selected %}selected{% endif %}"
+           id="card_{{ safe_key }}_{{ item.id }}"
+           data-group="{{ group.key }}"
+           data-value="{{ item.id }}"
+           tabindex="0"
+           onclick="selectLabel('{{ group.key }}','{{ item.id }}', false)"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); selectLabel('{{ group.key }}','{{ item.id }}', false);}">
+        {% if img %}
+          <img src="{{ img }}" alt="{{ item.display or item.id }}">
+        {% endif %}
+        <div><strong>{{ item.display or item.id }}</strong></div>
+        {% if item.description %}<div class="label-description">{{ item.description }}</div>{% endif %}
       </div>
+    {% endfor %}
+  </div>
+
+  <div class="confidence-slider">
+    <label for="confidence_{{ safe_key }}">🎯 Confidence:</label><br>
+    <input type="range"
+           name="confidence_{{ group.key }}"
+           id="confidence_{{ safe_key }}"
+           min="0" max="100"
+           value="{{ matched_conf }}"
+           oninput="updateConfidence('{{ group.key }}')">
+    <div class="confidence-display">
+      <span id="confidence_display_{{ safe_key }}">{{ matched_conf }}%</span>
+      <span id="confidence_level_{{ safe_key }}"></span>
     </div>
-  {% endif %}
+  </div>
+{% endif %}
 {% endif %}
 
         {# ---------- Linked biographies (server-rendered) ---------- #}
@@ -190,6 +191,7 @@
   {% set bio_list = suggested_biographies.get(sugg_key) %}
   {% set rtype    = group.refer_to.type or current_type %}
   {% set fallback = (linkable_bios.get(rtype) if linkable_bios else []) %}
+  {% set listing  = (bio_list if (bio_list and bio_list|length>0) else fallback) %}
 
   {% set bio_input_name   = 'selected_id_' ~ group.key ~ '_bio' %}
   {% set bio_hidden_id    = 'input_' ~ sugg_key ~ '_bio' %}
@@ -211,7 +213,6 @@
            oninput="filterLabels(this, '{{ sugg_key }}_bio')"
            data-group="{{ sugg_key }}_bio">
 
-    {% set listing = (bio_list if (bio_list and bio_list|length>0) else fallback) %}
     <div class="label-options">
       {% for option in listing %}
         {% set bio_selected = (option.id == bio_selected_id) %}
@@ -233,7 +234,7 @@
     <div class="confidence-slider" style="margin-top:10px;">
       <label for="confidence_{{ safe_key }}_bio">🎯 Biography Match Confidence:</label><br>
       <input type="range"
-             name="confidence_{% raw %}{{{% endraw %} group.key {% raw %}}}{% endraw %}_bio"
+             name="confidence_{{ group.key }}_bio"
              id="confidence_{{ safe_key }}_bio"
              min="0" max="100"
              value="{{ bio_conf_val }}"
@@ -250,9 +251,9 @@
         <div id="children_for_{{ safe_key }}"></div>
         <div id="bios_for_{{ safe_key }}"></div>
 
-        {% if (not group.options) and (not is_child) and (not bio_list) and (not group.input) %}
-          <div class="muted">No labels available yet for this group.</div>
-        {% endif %}
+{% if (not group.options) and (not is_child) and (not group.input) and (not is_bio_link) %}
+  <div class="muted">No labels available yet for this group.</div>
+{% endif %}
       </div>
     {% endfor %}
 
@@ -622,7 +623,9 @@
 
     host.innerHTML = `
       <div class="bio-suggestions">
-        <div class="label-title">📖 Linked Biographies</div>
+        <div class="label-title">
+  📖 Linked Biographies ({{ (rtype or current_type)|replace('_',' ')|title }})
+</div>
         <input type="hidden"
                id="input_${safe(groupKey)}_bio"
                name="selected_id_${groupKey}_bio"

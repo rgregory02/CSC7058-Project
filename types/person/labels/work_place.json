@@ -13,9 +13,9 @@
   
   "link_biography": {
     "type": "buildings",
-    "mode": "child_or_parent",   
+    "mode": "child",   
     "lookup": "id",              
-    "path": "work_building"   
+    "path": "{{option}}"   
     },   
    "ui": {
     "allow_confidence": true,

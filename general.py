@@ -2207,13 +2207,15 @@ def general_step_time(type_name, bio_id):
 @app.route("/general_step/labels/<type_name>/<bio_id>", methods=["GET", "POST"])
 def general_step_labels(type_name, bio_id):
     """
-    Type-agnostic labels step with:
-      - property-first groups (including input groups: text/textarea/date/number/select)
-      - nested child expansion (saved + preview)
-      - biography suggestions
-      - GPT label ingestion (works even if GPT returns only an {id})
+    Labels step that supports:
+      • Input groups (text/number/date/select)
+      • Option groups (with nested children)
+      • Cross-type labels
+      • Biography suggestions with sensible fallbacks:
+          - No label subgroups? Show ALL biographies for that type.
+          - Has label subgroups? Show bios in the matching subfolder after a selection.
     """
-    # -------- paths / load bio --------
+    # ---------- paths / load ----------
     label_base_path = os.path.join("types", type_name, "labels")
     bio_file_path   = os.path.join("types", type_name, "biographies", f"{bio_id}.json")
     os.makedirs(label_base_path, exist_ok=True)
@@ -2223,16 +2225,13 @@ def general_step_labels(type_name, bio_id):
     bio_data = load_json_as_dict(bio_file_path) or {}
     bio_data.setdefault("entries", [])
 
-    # --- helper: cast to int safely ---
+    # --- helpers ---
     def _as_int(x, default=None):
-        try:
-            return int(x)
-        except (TypeError, ValueError):
-            return default
+        try: return int(x)
+        except (TypeError, ValueError): return default
 
-    # --- helper: build id -> group_key index for option groups
     def _build_option_index(groups: List[Dict]) -> Dict[str, str]:
-        idx: Dict[str, str] = {}
+        idx = {}
         for g in groups or []:
             gkey = g.get("key")
             for opt in g.get("options", []) or []:
@@ -2241,32 +2240,22 @@ def general_step_labels(type_name, bio_id):
                     idx[str(oid)] = gkey
         return idx
 
-    # --- helper: validate an input-group value according to its meta (all optional)
     def _validate_input_group(g: dict, value: str) -> Optional[str]:
-        """
-        Return None if ok; otherwise return an error message string.
-        Uses g.get('required') and g['input'] constraints if present:
-          - min_length, max_length, pattern (regex)
-        """
         inp = (g or {}).get("input") or {}
         val = (value or "").strip()
 
         if g.get("required") and not val:
             return f"'{g.get('label') or g.get('key')}' is required."
 
-        # Length checks
         try:
             mn = int(inp.get("min_length")) if inp.get("min_length") is not None else None
             mx = int(inp.get("max_length")) if inp.get("max_length") is not None else None
         except Exception:
             mn = mx = None
 
-        if mn is not None and len(val) < mn:
-            return f"Must be at least {mn} characters."
-        if mx is not None and len(val) > mx:
-            return f"Must be at most {mx} characters."
+        if mn is not None and len(val) < mn: return f"Must be at least {mn} characters."
+        if mx is not None and len(val) > mx: return f"Must be at most {mx} characters."
 
-        # Pattern check (full match)
         patt = (inp.get("pattern") or "").strip()
         if patt:
             try:
@@ -2275,10 +2264,9 @@ def general_step_labels(type_name, bio_id):
                     return "Format is invalid."
             except re.error:
                 pass
-
         return None
 
-    # ===== current entry (create if needed, bring across time selection) =====
+    # ===== ensure current entry =====
     entry_index = _as_int(session.get("entry_index"))
     if entry_index is None or not (0 <= entry_index < len(bio_data["entries"])):
         now = datetime.now(timezone.utc).isoformat()
@@ -2295,9 +2283,9 @@ def general_step_labels(type_name, bio_id):
 
     # -------- build base groups --------
     base_groups = collect_label_groups(label_base_path, type_name)
-    base_index = _build_option_index(base_groups)
+    base_index  = _build_option_index(base_groups)
 
-    # -------- map saved selections -> existing_labels (initial, using base index) --------
+    # -------- map saved selections -> existing_labels (initial) --------
     existing_labels: Dict[str, dict] = {}
     saved_items = bio_data["entries"][entry_index].get(type_name, [])
     for it in saved_items:
@@ -2305,28 +2293,23 @@ def general_step_labels(type_name, bio_id):
         lid = (it.get("id") or "").strip()
         payload = {"confidence": it.get("confidence", 100), "source": it.get("source", "")}
         if lid:
-            payload["label"] = lid
-            payload["id"]    = lid
+            payload["label"] = lid; payload["id"] = lid
         key = base_index.get(lid) or lt
-        if key:
-            existing_labels[key] = payload
+        if key: existing_labels[key] = payload
 
-    # -------- preview overlay (so a click can reveal children without saving) --------
+    # -------- preview overlay --------
     preview_key = (request.args.get("preview_key") or "").strip()
     preview_val = (request.args.get("preview_val") or "").strip()
     display_labels = dict(existing_labels)
     if preview_key and preview_val:
-        display_labels[preview_key] = {
-            "label": preview_val, "id": preview_val, "confidence": 100, "source": "preview"
-        }
+        display_labels[preview_key] = {"label": preview_val, "id": preview_val, "confidence": 100, "source": "preview"}
 
-    # -------- expand nested groups based on current display selections --------
+    # -------- expand child groups (recurses) --------
     selected_map = {}
     for k, v in display_labels.items():
         if isinstance(v, dict):
             sel = v.get("label") or v.get("id")
-            if sel:
-                selected_map[k] = sel
+            if sel: selected_map[k] = sel
 
     try:
         expanded_groups = expand_child_groups(
@@ -2339,28 +2322,21 @@ def general_step_labels(type_name, bio_id):
         print(f"[WARN] expand_child_groups failed: {e}")
         expanded_groups = base_groups
 
-    # ---- REBUILD existing_labels using expanded index so child groups preselect correctly
+    # ---- rebuild existing_labels using expanded index
     expanded_index = _build_option_index(expanded_groups)
     rebuilt_existing: Dict[str, dict] = {}
     for it in saved_items:
         lt  = (it.get("label_type") or "").strip()
         lid = (it.get("id") or "").strip()
         payload = {"confidence": it.get("confidence", 100), "source": it.get("source", "")}
-        if lid:
-            payload["label"] = lid
-            payload["id"]    = lid
+        if lid: payload["label"] = lid; payload["id"] = lid
         key = expanded_index.get(lid) or lt
-        if key:
-            rebuilt_existing[key] = payload
-
+        if key: rebuilt_existing[key] = payload
     if preview_key and preview_val:
-        rebuilt_existing[preview_key] = {
-            "label": preview_val, "id": preview_val, "confidence": 100, "source": "preview"
-        }
-
+        rebuilt_existing[preview_key] = {"label": preview_val, "id": preview_val, "confidence": 100, "source": "preview"}
     display_labels = rebuilt_existing
 
-    # -------- helper: find a group for a raw option id (used by GPT ingestion) --------
+    # helper for GPT ingestion
     def find_group_key_for_id(opt_id: str) -> Optional[str]:
         return expanded_index.get(opt_id or "")
 
@@ -2368,60 +2344,47 @@ def general_step_labels(type_name, bio_id):
     if request.method == "POST":
         new_entries: List[dict] = []
 
-        # ---- (A) GPT suggestions ----
+        # ---- GPT suggestions ----
         gpt_raw = (request.form.get("gpt_selected_labels_json") or "").strip()
         if gpt_raw:
             try:
                 gpt_items = json.loads(gpt_raw)
                 if isinstance(gpt_items, list):
                     for lab in gpt_items:
-                        if not isinstance(lab, dict):
-                            continue
+                        if not isinstance(lab, dict): continue
                         lid = (lab.get("id") or "").strip()
-                        if not lid:
-                            continue
+                        if not lid: continue
                         lt  = (lab.get("label_type") or "").strip()
                         if not lt:
                             maybe = find_group_key_for_id(lid)
-                            if maybe:
-                                lt = maybe.split("/")[-1]
-                            else:
-                                lt = type_name
-                        try:
-                            conf = int(lab.get("confidence", 100))
-                        except Exception:
-                            conf = 100
+                            lt = (maybe.split("/")[-1] if maybe else type_name)
+                        try: conf = int(lab.get("confidence", 100))
+                        except Exception: conf = 100
                         new_entries.append({
                             "id": lid,
                             "label_type": lt.split("/")[-1],
                             "confidence": conf,
                             "source": lab.get("source", "gpt"),
                         })
-                else:
-                    print("[GPT] Expected list, got:", type(gpt_items))
             except Exception as e:
                 print("[GPT] parse error:", e)
 
-        # ---- (B) Manual groups (inputs first, then option/bio groups) ----
+        # ---- Manual groups ----
         for g in expanded_groups:
-            key = g.get("key", "").strip()
-            if not key:
-                continue
+            key = (g.get("key") or "").strip()
+            if not key: continue
 
             conf_raw = (request.form.get(f"confidence_{key}") or "").strip()
             conf = int(conf_raw) if conf_raw.isdigit() else 100
 
-            # (B1) Input groups
+            # input-group
             if g.get("input"):
                 val = (request.form.get(f"input_{key}") or "").strip()
                 err = _validate_input_group(g, val)
                 if err:
-                    try:
-                        flash(err, "error")
-                    except Exception:
-                        print("[WARN] flash not available:", err)
+                    try: flash(err, "error")
+                    except Exception: print("[WARN] flash unavailable:", err)
                     return redirect(request.url)
-
                 if val:
                     new_entries.append({
                         "label_type": key.split("/")[-1],
@@ -2431,7 +2394,7 @@ def general_step_labels(type_name, bio_id):
                     })
                 continue
 
-            # (B2) Option / biography groups
+            # option / biography
             sel_id   = (request.form.get(f"selected_id_{key}") or "").strip()
             sel_bio  = (request.form.get(f"selected_id_{key}_bio") or "").strip()
             bio_conf_raw = (request.form.get(f"confidence_{key}_bio") or "").strip()
@@ -2439,30 +2402,27 @@ def general_step_labels(type_name, bio_id):
 
             if sel_id or sel_bio:
                 entry = {"label_type": key.split("/")[-1], "confidence": conf}
-                if sel_id:
-                    entry["id"] = sel_id
+                if sel_id: entry["id"] = sel_id
                 if sel_bio:
                     entry["biography"] = sel_bio
                     entry["biography_confidence"] = bio_conf
                 new_entries.append(entry)
 
-        # Overwrite this entry’s labels for the current type and bump updated timestamp
         bio_data["entries"][entry_index][type_name] = new_entries
         bio_data["entries"][entry_index]["updated"] = datetime.now(timezone.utc).isoformat()
         bio_data["updated"] = bio_data["entries"][entry_index]["updated"]
         save_dict_as_json(bio_file_path, bio_data)
 
-        # 👇 NEW: honour caller's desired next step; default to 'events'
         next_step = (request.form.get("next_step")
-                    or request.args.get("next")
-                    or "events").strip().lower()
+                     or request.args.get("next")
+                     or "events").strip().lower()
         if next_step not in {"start", "time", "labels", "events", "review"}:
             next_step = "events"
 
         return redirect(url_for("general_iframe_wizard",
                                 type=type_name, bio_id=bio_id, step=next_step))
-    
-        # ======================= GET (suggest bios + render) =======================
+
+    # ======================= GET (suggest bios + render) =======================
     try:
         suggested_biographies = build_suggested_biographies(
             current_type=type_name,
@@ -2474,7 +2434,6 @@ def general_step_labels(type_name, bio_id):
         print(f"[WARN] build_suggested_biographies failed: {e}")
         suggested_biographies = {}
 
-    # Map existing biography picks for preselects
     try:
         existing_bio_selections = map_existing_bio_selections(
             expanded_groups,
@@ -2483,14 +2442,13 @@ def general_step_labels(type_name, bio_id):
     except Exception:
         existing_bio_selections = {}
 
-    # -------- NEW: build fallback lists of bios for any group that links to biographies
+    # Fallback: for any group that links to biographies, pre-load "all" list
     refer_types = set()
     for g in expanded_groups:
         ref = (g.get("refer_to") or {})
         if isinstance(ref, dict) and (ref.get("source") == "biographies"):
             rtype = (ref.get("type") or type_name).strip()
-            if rtype:
-                refer_types.add(rtype)
+            if rtype: refer_types.add(rtype)
 
     linkable_bios = {}
     for rtype in sorted(refer_types):
@@ -2503,10 +2461,10 @@ def general_step_labels(type_name, bio_id):
         "label_step.html",
         current_type=type_name,
         label_groups_list=expanded_groups,
-        existing_labels=display_labels,             # saved + preview
+        existing_labels=display_labels,
         existing_bio_selections=existing_bio_selections,
         suggested_biographies=suggested_biographies,
-        linkable_bios=linkable_bios,                # <-- NEW
+        linkable_bios=linkable_bios,          # <— used by template fallback
         step=0,
         next_step=1,
         prev_step=None,
@@ -2515,6 +2473,204 @@ def general_step_labels(type_name, bio_id):
         bio_name=bio_data.get("name", bio_id),
         skip_allowed=(len(expanded_groups) == 0)
     )
+
+
+# ============================== HELPERS ==============================
+
+def _collect_label_groups(label_base_path: str, type_name: str) -> List[dict]:
+    """
+    Load top‑level property groups for a type from:
+      • types/<type_name>/labels/*.json (group files)
+      • Each group’s options are resolved via _resolve_group_options (merges dir + file sources)
+    Normalises old 'link_biography' into 'refer_to'.
+    """
+    groups: List[dict] = []
+    if not os.path.isdir(label_base_path):
+        return groups
+
+    for fn in sorted(os.listdir(label_base_path)):
+        if not fn.endswith(".json"):
+            continue
+        # group meta file (not per‑option)
+        if fn == "_group.json":
+            continue
+
+        path = os.path.join(label_base_path, fn)
+        meta = load_json_as_dict(path) or {}
+        key  = meta.get("key") or os.path.splitext(fn)[0]
+        label = meta.get("label") or key.replace("_", " ").title()
+
+        # bring forward any legacy 'link_biography'
+        if isinstance(meta.get("link_biography"), dict) and not meta.get("refer_to"):
+            meta["refer_to"] = dict(meta["link_biography"])
+
+        options = _resolve_group_options(type_name, meta, group_key=key, collection_type=type_name)
+
+        groups.append({
+            "key": key,
+            "label": label,
+            "description": meta.get("description", ""),
+            "options": options,
+            "input": meta.get("input"),
+            "required": meta.get("required", False),
+            "refer_to": meta.get("refer_to"),  # may be biographies or labels
+            "source": meta.get("source", {}),
+            "order": meta.get("order", 999),
+        })
+
+    groups.sort(key=lambda g: (int(g.get("order", 999)), g.get("label", "").lower()))
+    return groups
+
+
+def _expand_child_groups(*, base_groups: List[dict], current_type: str,
+                         label_base_path: str, selected_map: Dict[str, str]) -> List[dict]:
+    """
+    Given the base groups and the current selections (group.key -> selected option id),
+    append any *child* groups declared under the selected option’s 'children' meta.
+
+    Child group keys are emitted as '<parent>/<child_key>'.
+    A child group inherits/uses its own meta to resolve options (including 'refer_to').
+    """
+    out: List[dict] = list(base_groups)
+
+    # index base groups by key for quick lookup
+    base_by_key = {g.get("key"): g for g in base_groups}
+
+    for parent_key, selected_id in (selected_map or {}).items():
+        parent = base_by_key.get(parent_key) or {}
+        if not parent:
+            continue
+
+        # find the selected option record
+        picked = None
+        for opt in parent.get("options") or []:
+            if (opt.get("id") or "") == (selected_id or ""):
+                picked = opt
+                break
+        if not picked:
+            continue
+
+        for ch in (picked.get("children") or []):
+            # child can be {id,key,label,source,refer_to,description,...}
+            child_key = (ch.get("key") or ch.get("id") or "").strip()
+            if not child_key:
+                continue
+
+            # construct child meta (normalise legacy, carry description/label)
+            child_meta = {
+                "key": f"{parent_key}/{child_key}",
+                "label": ch.get("label") or child_key.replace("_", " ").title(),
+                "description": ch.get("description", ""),
+                "input": ch.get("input"),
+                "required": ch.get("required", False),
+                "source": ch.get("source") or {},
+                "refer_to": ch.get("refer_to") or ch.get("link_biography"),
+                "order": ch.get("order", 999),
+            }
+            if isinstance(child_meta["refer_to"], dict) and child_meta["refer_to"].get("source") == "biographies":
+                # keep as biographies
+                pass
+            # Resolve this child’s options (if it is an "options" type)
+            options = _resolve_group_options(current_type, child_meta, group_key=child_key, collection_type=current_type)
+
+            out.append({
+                "key": child_meta["key"],
+                "label": child_meta["label"],
+                "description": child_meta["description"],
+                "options": options,
+                "input": child_meta.get("input"),
+                "required": child_meta.get("required", False),
+                "refer_to": child_meta.get("refer_to"),
+                "source": child_meta.get("source") or {},
+                "order": child_meta.get("order", 999),
+            })
+
+    # Keep stable order (parents first; child order secondary)
+    out.sort(key=lambda g: (g.get("key").count("/"), int(g.get("order", 999)), g.get("label", "").lower()))
+    return out
+
+
+def _build_suggested_biographies(*, current_type: str, label_groups_list: List[dict],
+                                 label_base_path: str, existing_labels: Dict[str, dict]) -> Dict[str, List[dict]]:
+    """
+    For each group that links to biographies, prepare a list to show in the UI.
+    Keyed by group.key with '/' replaced by '__' to match the HTML.
+    """
+    suggestions: Dict[str, List[dict]] = {}
+
+    for g in label_groups_list or []:
+        ref = g.get("refer_to") or {}
+        if not (isinstance(ref, dict) and ref.get("source") == "biographies"):
+            continue
+        rtype = (ref.get("type") or current_type).strip()
+        # simple heuristic: if parent selection exists, bias towards bios whose id/display contains it
+        bias = ""
+        parent_key = g.get("key").split("/")[0] if "/" in g.get("key") else g.get("key")
+        maybe = (existing_labels.get(parent_key) or {}).get("id") or ""
+        if maybe:
+            bias = str(maybe).lower()
+
+        bios = _list_biographies(rtype)
+        if bias:
+            bios.sort(key=lambda b: (0 if bias in (b.get("id","")+b.get("display","")).lower() else 1,
+                                     b.get("display","").lower()))
+        key_out = g.get("key").replace("/", "__")
+        suggestions[key_out] = bios[:24]  # cap
+
+    return suggestions
+
+
+def _map_existing_bio_selections(groups: List[dict], saved_items: List[dict]) -> Dict[str, Any]:
+    """
+    Build a dict like:
+        { "<group.key>_bio": "<bio_id>", "<group.key>_bio_conf": 100, ... }
+    so the template can pre‑select linked biography cards and their confidence sliders.
+    """
+    # index by label_type (child uses the segment after '/')
+    by_lt = {}
+    for it in (saved_items or []):
+        lt = (it.get("label_type") or "").strip()
+        if lt:
+            by_lt[lt] = it
+
+    out = {}
+    for g in groups or []:
+        lt = g.get("key", "").split("/")[-1]
+        it = by_lt.get(lt)
+        if not it:
+            continue
+        bio = (it.get("biography") or "").strip()
+        if bio:
+            out[f"{g.get('key')}_bio"] = bio
+            out[f"{g.get('key')}_bio_conf"] = int(it.get("biography_confidence", 100))
+    return out
+
+
+def _list_biographies(type_name: str) -> List[dict]:
+    """
+    Return [{id, display, description?}] from types/<type_name>/biographies/*.json
+    """
+    base = os.path.join("types", type_name, "biographies")
+    out: List[dict] = []
+    if not os.path.isdir(base):
+        return out
+    for fn in sorted(os.listdir(base)):
+        if not fn.endswith(".json"):
+            continue
+        data = load_json_as_dict(os.path.join(base, fn)) or {}
+        bid = (data.get("id") or os.path.splitext(fn)[0]).strip()
+        disp = (data.get("name") or data.get("display") or bid.replace("_"," ").title()).strip()
+        desc = (data.get("description") or "").strip()
+        if bid:
+            item = {"id": bid, "display": disp}
+            if desc:
+                item["description"] = desc
+            out.append(item)
+    out.sort(key=lambda b: (b.get("display","").lower(), b.get("id","").lower()))
+    return out
+
+
+# ------------------ label/time options helpers (yours, kept) ------------------
 
 def _load_time_kinds_and_options():
     """
@@ -2609,10 +2765,10 @@ def _merge_option_lists(*lists: list) -> list:
     Merge multiple lists of options:
       [ {id, display, children?, refer_to?, description?}, ... ]
 
-    - De‑dupes by id.
-    - Prefers richer records (with children / refer_to / description / display).
-    - Merges children arrays (unique by child.id) when present in either.
-    - Returns list sorted by display then id (case‑insensitive).
+    • De‑dupes by id.
+    • Prefers richer records (display/description/refer_to).
+    • Merges children arrays uniquely by child.id when present.
+    • Returns list sorted by display then id (case‑insensitive).
     """
     out = {}
 
@@ -2620,15 +2776,12 @@ def _merge_option_lists(*lists: list) -> list:
         if not a:
             return dict(b)
         c = dict(a)
-        # Prefer richer text
         if not c.get("display") and b.get("display"):
             c["display"] = b["display"]
         if not c.get("description") and b.get("description"):
             c["description"] = b["description"]
-        # Prefer refer_to when missing
         if not c.get("refer_to") and b.get("refer_to"):
             c["refer_to"] = b["refer_to"]
-        # Merge children
         ach = a.get("children") or []
         bch = b.get("children") or []
         if ach or bch:
@@ -2671,26 +2824,26 @@ def _resolve_group_options(scope_t: str, meta: dict, *, group_key: str, collecti
 
       • meta["options"] (literal list)
       • meta["source"] (kind: 'type_labels' | 'self_labels' | {source:'labels'})
-      • meta["refer_to"] / meta["link_biography"] when they point to labels
+      • meta["refer_to"] / legacy 'link_biography' when they point to labels
       • SAFETY NET A: types/<collection_type>/labels/<group_key>/
       • SAFETY NET B: types/<scope_t>/labels/<group_key>/
 
-    Returns one merged list, preserving 'children' (so the UI can show the Child dropdown).
+    Returns one merged list, keeping 'children' (so the UI can offer the Child group).
     """
     if not isinstance(meta, dict):
         meta = {}
 
     candidate_lists = []
 
-    # 1) literal
+    # literal options
     lit = meta.get("options")
     if isinstance(lit, list) and lit:
         candidate_lists.append(lit)
 
-    # 2) explicit source
+    # explicit source
     src = meta.get("source") or {}
     if isinstance(src, dict):
-        kind = (src.get("kind") or "").strip()
+        kind  = (src.get("kind") or "").strip()
         plain = (src.get("source") or "").strip()
 
         if kind in ("type_labels", "self_labels"):
@@ -2703,19 +2856,16 @@ def _resolve_group_options(scope_t: str, meta: dict, *, group_key: str, collecti
             k = (src.get("path") or "").strip()
             candidate_lists.append(_options_from_both(t, k))
 
-    # 3) labels hinted under refer_to / link_biography
+    # refer_to / legacy link_biography that point to labels
     ref = meta.get("refer_to") or meta.get("link_biography") or {}
     if isinstance(ref, dict) and (ref.get("source") == "labels"):
         t = (ref.get("type") or "").strip()
         k = (ref.get("path") or "").strip()
         candidate_lists.append(_options_from_both(t, k))
 
-    # 4) SAFETY NET A — this collection’s own labels/<group_key>
+    # safety nets — same key under collections or the biography type itself
     if group_key:
         candidate_lists.append(_options_from_both(collection_type, group_key))
-
-    # 5) SAFETY NET B — the biography scope type’s labels/<group_key>
-    if group_key:
         candidate_lists.append(_options_from_both(scope_t, group_key))
 
     return _merge_option_lists(*candidate_lists)
