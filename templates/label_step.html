@@ -185,13 +185,19 @@
 
         {# ---------- Linked biographies (server-rendered) ---------- #}
 {# ---------- Linked biographies (now for top-level AND child groups) ---------- #}
-{% set is_bio_link = group.refer_to and group.refer_to.source == 'biographies' %}
+{% set is_bio_link = (group.refer_to and group.refer_to.source == 'biographies') or group.link_biography %}
 {% if is_bio_link %}
-  {% set sugg_key = group.key.replace('/', '__') %}
-  {% set bio_list = suggested_biographies.get(sugg_key) %}
-  {% set rtype    = group.refer_to.type or current_type %}
-  {% set fallback = (linkable_bios.get(rtype) if linkable_bios else []) %}
-  {% set listing  = (bio_list if (bio_list and bio_list|length>0) else fallback) %}
+{% set sugg_key = group.key.replace('/', '__') %}
+
+{# pick a type label to display for the header #}
+{% set _rtype_from_refer = (group.refer_to.type if (group.refer_to and group.refer_to.type) else None) %}
+{% set _rtype_from_link  = (group.link_biography.type if (group.link_biography and group.link_biography.type) else None) %}
+{% set rtype = _rtype_from_refer or _rtype_from_link or current_type %}
+
+{# make sure these are always lists #}
+{% set bio_list = (suggested_biographies.get(sugg_key) or []) %}
+{% set fallback = ((linkable_bios.get(rtype) if linkable_bios else None) or []) %}
+{% set listing = (bio_list if (bio_list|length > 0) else fallback) %}
 
   {% set bio_input_name   = 'selected_id_' ~ group.key ~ '_bio' %}
   {% set bio_hidden_id    = 'input_' ~ sugg_key ~ '_bio' %}
@@ -214,7 +220,7 @@
            data-group="{{ sugg_key }}_bio">
 
     <div class="label-options">
-      {% for option in listing %}
+      {% for option in (listing or []) %}
         {% set bio_selected = (option.id == bio_selected_id) %}
         <div class="label-card{% if bio_selected %} selected{% endif %}"
              data-group="{{ sugg_key }}_bio"

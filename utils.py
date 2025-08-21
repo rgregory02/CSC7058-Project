@@ -439,18 +439,14 @@ def list_biographies(type_name):
 
 def build_suggested_biographies(*args, **kwargs):
     """
-    Returns { safe_group_key: [ {id, display, description?}, ... ] }
+    Suggest biography options per group.
 
-    Behaviour:
-      • If group.link_biography exists → show bios from the selected label chain
-        (child, or parent if child empty; mode respected).
-      • If group.refer_to.source == 'biographies':
-          - If a path/chain is selected, list under that path.
-          - If NO selection and NO label options exist → list ALL bios for that type.
+    Preferred signature:
+        build_suggested_biographies(current_type, label_groups_list, label_base_path, existing_labels=None)
+
+    Returns: { safe_group_key: [ {id, display, description?}, ... ] }
     """
-    import os
-
-    # -------- arg normalisation --------
+    # -------- arg normalization --------
     current_type = None
     label_groups_list = None
     label_base_path = None
@@ -473,6 +469,7 @@ def build_suggested_biographies(*args, **kwargs):
 
     if not isinstance(label_groups_list, (list, tuple)):
         raise TypeError("build_suggested_biographies: label_groups_list must be a list")
+
     if not isinstance(existing_labels, dict):
         existing_labels = {}
 
@@ -484,6 +481,7 @@ def build_suggested_biographies(*args, **kwargs):
 
     # ---- helpers ----
     def _norm_selected_map(d):
+        """Make values simple strings (selected ids)."""
         out = {}
         for k, v in (d or {}).items():
             if isinstance(v, str):
@@ -511,8 +509,7 @@ def build_suggested_biographies(*args, **kwargs):
 
     def _append_bios_from_folder(folder, bios, seen):
         if not os.path.isdir(folder):
-            return 0
-        added = 0
+            return
         for f in sorted(os.listdir(folder)):
             if not f.endswith(".json"):
                 continue
@@ -526,30 +523,11 @@ def build_suggested_biographies(*args, **kwargs):
                 "description": data.get("description", "")
             })
             seen.add(bid)
-            added += 1
-        return added
 
-    def _append_all_bios(base_dir, bios, seen):
-        """Walk the type’s biographies tree and list all .json files."""
-        if not os.path.isdir(base_dir):
-            return 0
-        added = 0
-        for root, _, files in os.walk(base_dir):
-            for f in files:
-                if not f.endswith(".json"):
-                    continue
-                bid = os.path.splitext(f)[0]
-                if bid in seen:
-                    continue
-                data = load_json_safely(os.path.join(root, f))
-                bios.append({
-                    "id": bid,
-                    "display": data.get("name", bid.replace("_", " ").title()),
-                    "description": data.get("description", "")
-                })
-                seen.add(bid)
-                added += 1
-        return added
+    def _folder_has_json_files(folder) -> bool:
+        if not os.path.isdir(folder):
+            return False
+        return any(f.endswith(".json") for f in os.listdir(folder))
 
     out = {}
 
@@ -561,53 +539,61 @@ def build_suggested_biographies(*args, **kwargs):
         bios = []
         seen = set()
 
-        # ---------- A) link_biography (scoped by label chain, with fallback to ALL) ----------
+        # ---------- A) link_biography (scoped by the selected label chain) ----------
         lb = g.get("link_biography")
         if isinstance(lb, dict) and lb.get("type"):
-            lb_type     = lb["type"]
-            base_bios   = os.path.join("types", lb_type, "biographies")
-            conf_path   = (lb.get("path") or "").strip("/")
-            mode        = (lb.get("mode") or "child_or_parent")
+            lb_type = lb["type"]
+            base_bios_dir = os.path.join("types", lb_type, "biographies")
+            if os.path.isdir(base_bios_dir):
+                conf_path = (lb.get("path") or "").strip("/")
+                mode = (lb.get("mode") or "child_or_parent")
 
-            if os.path.isdir(base_bios):
-                chain = _selected_chain_for_key(key)  # "" | "sel1" | "sel1/sel2"
-                added = 0
+                chain = _selected_chain_for_key(key)  # "" or "sel1" or "sel1/sel2/..."
+                root = os.path.join(base_bios_dir, conf_path) if conf_path else base_bios_dir
 
                 if chain:
-                    root = os.path.join(base_bios, conf_path) if conf_path else base_bios
                     parts = chain.split("/")
-                    child_dir  = os.path.join(root, *parts)          # deepest child
-                    parent_dir = os.path.join(root, parts[0])        # first-level parent
+                    child_dir  = os.path.join(root, *parts)     # deepest child
+                    parent_dir = os.path.join(root, parts[0])   # first-level parent
 
                     if mode == "child_only":
-                        added += _append_bios_from_folder(child_dir, bios, seen)
+                        _append_bios_from_folder(child_dir, bios, seen)
                     elif mode == "parent_only":
-                        added += _append_bios_from_folder(parent_dir, bios, seen)
+                        _append_bios_from_folder(parent_dir, bios, seen)
                     else:  # child_or_parent
-                        added += _append_bios_from_folder(child_dir, bios, seen)
-                        if added == 0:
-                            added += _append_bios_from_folder(parent_dir, bios, seen)
-
-                    # Fallback to ALL if nothing found in scoped folders
-                    if added == 0:
-                        _append_all_bios(base_bios, bios, seen)
-
+                        _append_bios_from_folder(child_dir, bios, seen)
+                        if not bios:
+                            _append_bios_from_folder(parent_dir, bios, seen)
                 else:
-                    # No selection yet:
-                    # If there are no subfolders under the configured path, list ALL;
-                    # otherwise also list ALL (your requested behaviour).
-                    _append_all_bios(base_bios, bios, seen)
+                    # NEW: if no chain yet, but there are bios directly at the configured root,
+                    # show those (common when there are no label subfolders at all).
+                    if _folder_has_json_files(root):
+                        _append_bios_from_folder(root, bios, seen)
+                    # otherwise (there are only subfolders), leave empty until a label is picked.
 
         # ---------- B) refer_to = biographies (unscoped list) ----------
-        elif g.get("refer_to", {}).get("source") == "biographies":
+        if not bios and g.get("refer_to", {}).get("source") == "biographies":
             r = g["refer_to"]
             r_type = r.get("type")
             r_path = (r.get("path") or "").strip("/")
             base = os.path.join("types", r_type, "biographies") if r_type else None
             if base and os.path.isdir(base):
-                # list everything under the (optional) path, or entire tree if none
-                scan_root = os.path.join(base, r_path) if r_path else base
-                _append_all_bios(scan_root, bios, seen)
+                scan = os.path.join(base, r_path) if r_path else base
+                # list *all* JSONs beneath scan
+                for root, _, files in os.walk(scan):
+                    for f in files:
+                        if not f.endswith(".json"):
+                            continue
+                        bid = os.path.splitext(f)[0]
+                        if bid in seen:
+                            continue
+                        data = load_json_safely(os.path.join(root, f))
+                        bios.append({
+                            "id": bid,
+                            "display": data.get("name", bid.replace("_", " ").title()),
+                            "description": data.get("description", "")
+                        })
+                        seen.add(bid)
 
         if bios:
             bios.sort(key=lambda x: (x.get("display") or x.get("id") or "").lower())

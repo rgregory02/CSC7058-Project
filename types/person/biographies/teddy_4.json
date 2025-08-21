@@ -4,11 +4,11 @@
     "name": "Teddy",
     "type": "person",
     "created": "2025-08-20T01:41:17.915972+00:00",
-    "updated": "2025-08-20T01:41:33.093840+00:00",
+    "updated": "2025-08-21T20:37:13.000166+00:00",
     "entries": [
         {
             "created": "2025-08-20T01:41:33.093840+00:00",
-            "updated": "2025-08-20T01:41:33.093840+00:00",
+            "updated": "2025-08-21T20:37:13.000166+00:00",
             "time": {
                 "label_type": "date",
                 "confidence": 100,
@@ -23,7 +23,14 @@
                 "precision": "exact",
                 "age_years": null,
                 "notes": "Direct date entry"
-            }
+            },
+            "person": [
+                {
+                    "label_type": "work_place",
+                    "confidence": 100,
+                    "id": "hospital"
+                }
+            ]
         }
     ]
 }
