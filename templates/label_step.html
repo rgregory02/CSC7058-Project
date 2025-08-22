@@ -781,14 +781,8 @@ function selectChild(groupKey, labelId){
 
   updateSaveButtonState();
 
-  // remove parent bio list to avoid duplication
-  const parentKey = groupKey.split('/').slice(0, -1).join('/');
-  if (parentKey) {
-    const parentBioHost = qs("#bios_for_" + safe(parentKey));
-    if (parentBioHost) parentBioHost.innerHTML = "";
-  }
-
-  // now show bios for the child
+  // ✅ Do NOT clear the parent bios; keep both parent + child widgets alive
+  // Optionally refresh the child bios to reflect the new selection:
   fetchBiosFor(groupKey);
 }
 

@@ -1,0 +1,36 @@
+{
+    "id": "becca_16",
+    "uid": "2f6aa224dba84c359464088091fa1e1f",
+    "name": "Becca",
+    "type": "person",
+    "created": "2025-08-22T20:04:13.355593+00:00",
+    "updated": "2025-08-22T20:04:30.450905+00:00",
+    "entries": [
+        {
+            "created": "2025-08-22T20:04:18.491613+00:00",
+            "updated": "2025-08-22T20:04:30.450905+00:00",
+            "time": {
+                "label_type": "date",
+                "confidence": 100,
+                "date_value": "2025-07-31"
+            },
+            "time_normalised": {
+                "kind": "date",
+                "start_iso": "2025-07-31",
+                "end_iso": "2025-07-31",
+                "start_ts": 1753920000,
+                "end_ts": 1753920000,
+                "precision": "exact",
+                "age_years": null,
+                "notes": "Direct date entry"
+            },
+            "person": [
+                {
+                    "label_type": "educational_place",
+                    "confidence": 100,
+                    "id": "school"
+                }
+            ]
+        }
+    ]
+}

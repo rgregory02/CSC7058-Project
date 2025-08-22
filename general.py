@@ -2388,6 +2388,7 @@ def general_step_time(type_name, bio_id):
         editing_entry=editing_entry,
         edit_index=edit_index if editing_entry else None,
     )
+
 @app.route("/general_step/labels/<type_name>/<bio_id>", methods=["GET", "POST"])
 def general_step_labels(type_name, bio_id):
     """
@@ -2671,7 +2672,6 @@ def general_step_labels(type_name, bio_id):
             if mode == "child_only":
                 bios = _list_bios_in_folder(os.path.join(effective_root, *chain))
             elif mode == "parent_only":
-                # “first parent” is chain[:1], but also fall back to root if empty
                 bios = _list_bios_in_folder(os.path.join(effective_root, chain[0])) or _list_bios_in_folder(effective_root)
             else:
                 # child_or_parent: take first non-empty candidate
@@ -2696,6 +2696,28 @@ def general_step_labels(type_name, bio_id):
     # ======================= POST (save) =======================
     if request.method == "POST":
         new_entries: List[dict] = []
+
+        # --- Re-expand groups from what the user actually submitted (includes any new children)
+        submitted_selections: Dict[str, str] = {}
+        for form_key in request.form.keys():
+            if not form_key.startswith("selected_id_"):
+                continue
+            if form_key.endswith("_bio"):
+                continue  # bio selections handled alongside main selection
+            gkey = form_key[len("selected_id_"):]
+            val = (request.form.get(form_key) or "").strip()
+            if val:
+                submitted_selections[gkey] = val
+        try:
+            expanded_groups = expand_child_groups(
+                base_groups=base_groups,
+                current_type=type_name,
+                label_base_path=label_base_path,
+                existing_labels=submitted_selections,
+            )
+        except Exception as e:
+            print(f"[WARN] expand_child_groups (POST) failed: {e}")
+            # keep previously computed expanded_groups
 
         # ---- GPT suggestions ----
         gpt_raw = (request.form.get("gpt_selected_labels_json") or "").strip()
@@ -2803,15 +2825,13 @@ def general_step_labels(type_name, bio_id):
     for g in expanded_groups:
         ref_refer  = g.get("refer_to") if isinstance(g.get("refer_to"), dict) else None
         ref_legacy = g.get("link_biography") if isinstance(g.get("link_biography"), dict) else None
-
         is_bio_link = (ref_refer and ref_refer.get("source") == "biographies") or bool(ref_legacy)
         if not is_bio_link:
             continue
-
-    rtype = (ref_refer or ref_legacy or {}).get("type") or type_name
-    rtype = (rtype or "").strip()
-    if rtype:
-        refer_types.add(rtype)
+        rtype = (ref_refer or ref_legacy or {}).get("type") or type_name
+        rtype = (rtype or "").strip()
+        if rtype:
+            refer_types.add(rtype)
 
     linkable_bios = {}
     for rtype in sorted(refer_types):
@@ -2834,6 +2854,7 @@ def general_step_labels(type_name, bio_id):
         bio_name=bio_data.get("name", bio_id),
         skip_allowed=(len(expanded_groups) == 0)
     )
+
 # ============================== HELPERS (single canonical set) ==============================
 
 def _collect_label_groups(label_base_path: str, type_name: str) -> List[dict]:
