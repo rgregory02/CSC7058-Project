@@ -7,7 +7,17 @@ from typing import List, Dict, Any, Optional
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp"]
+# near your other helpers/util imports
+IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".gif")
+
+def _sibling_image(folder: str, lid: str) -> str:
+    """Return '/types/.../<lid>.<ext>' if a sibling image exists, else ''."""
+    for ext in IMAGE_EXTS:
+        cand = os.path.join(folder, lid + ext)
+        if os.path.exists(cand):
+            rel = os.path.relpath(cand, ".").replace("\\", "/")
+            return rel if rel.startswith("/") else f"/{rel}"
+    return ""
 
 def load_json_safe(path):
     try:
@@ -154,36 +164,58 @@ def expand_child_groups(*, base_groups, current_type, label_base_path, existing_
         return None
 
     def _collect_folder_options(folder_abs: str):
-        """Lightweight loader used for child folders."""
+        """Lightweight loader used for child folders, including sibling images."""
         if not folder_abs or not os.path.isdir(folder_abs):
             return []
+
         opts = []
         for f in sorted(os.listdir(folder_abs)):
             if not f.endswith(".json") or f == "_group.json":
                 continue
-            data = load_json_as_dict(os.path.join(folder_abs, f)) or {}
-            oid  = (data.get("id") or os.path.splitext(f)[0]).strip()
+
+            path = os.path.join(folder_abs, f)
+            data = load_json_as_dict(path) or {}
+
+            oid = (data.get("id") or os.path.splitext(f)[0]).strip()
             if not oid:
                 continue
+
             disp = (
                 data.get("display")
                 or data.get("label")
                 or data.get("name")
+                or data.get("properties", {}).get("name")
                 or oid.replace("_", " ").title()
             )
+
             opt = {"id": oid, "display": disp}
+
+            # description (prefer top-level, then properties.description)
             desc = data.get("description") or data.get("properties", {}).get("description")
             if desc:
                 opt["description"] = desc
-            # preserve images if present
+
+            # existing image fields (if present in JSON)
             if data.get("image"):
                 opt["image"] = data["image"]
             if data.get("image_url"):
                 opt["image_url"] = data["image_url"]
+
+            # NEW: attach sibling image file (oid + extension) if no image already set
+            if "image" not in opt and "image_url" not in opt:
+                for ext in (".png", ".jpg", ".jpeg", ".webp", ".gif"):
+                    img_path = os.path.join(folder_abs, oid + ext)
+                    if os.path.exists(img_path):
+                        rel = os.path.relpath(img_path, ".").replace("\\", "/")
+                        # ensure it’s a web path starting with '/'
+                        opt["image"] = "/" + rel if not rel.startswith("/") else rel
+                        break
+
             opts.append(opt)
+
         # nice stable ordering
         opts.sort(key=lambda o: ((o.get("display") or o.get("id") or "").lower(),
-                                 (o.get("id") or "").lower()))
+                                (o.get("id") or "").lower()))
         return opts
 
     while queue:
@@ -448,32 +480,71 @@ def sanitise_key(raw: str, fallback: str = "") -> str:
 def checkbox_on(req, name: str) -> bool:
     return (req.form.get(name) or "").lower() in ("on", "true", "1", "yes")
 
-def collect_label_options_from_folder(folder_abs):
-    """Return [{id, display, description?, image?}] for *.json files in a folder."""
-    out = []
-    if not os.path.isdir(folder_abs):
-        return out
-    for f in sorted(os.listdir(folder_abs)):
-        if not f.endswith(".json") or f == "_group.json":
-            continue
-        lid = os.path.splitext(f)[0]
-        data = load_json_safe(os.path.join(folder_abs, f))
-        display = (data.get("properties", {}) or {}).get("name") or data.get("name") or lid
-        desc = data.get("description", (data.get("properties", {}) or {}).get("description", ""))
+def collect_label_options_from_folder(folder_abs: str):
+    """
+    Return [{id, display, description?, image?|image_url?}] for *.json files in a folder.
+    - Uses explicit `image` / `image_url` from the JSON if present.
+    - Otherwise falls back to a sibling file <id>.(png|jpg|jpeg|webp) (case-insensitive).
+    """
+    if not folder_abs or not os.path.isdir(folder_abs):
+        return []
 
-        # sibling image if present
-        img = None
-        for ext in IMAGE_EXTS:
-            cand = os.path.join(folder_abs, lid + ext)
-            if os.path.exists(cand):
-                rel = os.path.relpath(cand, ".").replace("\\", "/")
-                img = f"/{rel}"
-                break
+    exts = (".png", ".jpg", ".jpeg", ".webp")
+    out = []
+
+    # Pre-list files once for case-insensitive sibling lookup
+    try:
+        dir_listing = os.listdir(folder_abs)
+    except Exception:
+        dir_listing = []
+    lower_map = {fn.lower(): fn for fn in dir_listing}
+
+    for fname in sorted(dir_listing):
+        if not fname.endswith(".json") or fname == "_group.json":
+            continue
+
+        lid = os.path.splitext(fname)[0]
+        data = load_json_safe(os.path.join(folder_abs, fname)) or {}
+
+        display = (
+            (data.get("properties") or {}).get("name")
+            or data.get("display")
+            or data.get("label")
+            or data.get("name")
+            or lid
+        )
+        desc = (
+            data.get("description")
+            or (data.get("properties") or {}).get("description", "")
+        )
 
         item = {"id": lid, "display": display}
-        if desc: item["description"] = desc
-        if img:  item["image"] = img
+        if desc:
+            item["description"] = desc
+
+        # 1) Prefer explicit image fields from JSON, if present
+        if data.get("image"):
+            item["image"] = data["image"]
+        if data.get("image_url"):
+            item["image_url"] = data["image_url"]
+
+        # 2) Fallback to sibling file <id>.<ext> (case-insensitive) if no image set
+        if "image" not in item and "image_url" not in item:
+            for ext in exts:
+                cand_name = lid + ext
+                # case-insensitive match in the folder
+                real_name = lower_map.get(cand_name.lower())
+                if real_name:
+                    ipath = os.path.join(folder_abs, real_name)
+                    if os.path.exists(ipath):
+                        rel = os.path.relpath(ipath, ".").replace("\\", "/")
+                        item["image"] = rel if rel.startswith("/") else f"/{rel}"
+                        break
+
         out.append(item)
+
+    out.sort(key=lambda o: ((o.get("display") or o.get("id") or "").lower(),
+                            (o.get("id") or "").lower()))
     return out
 
 def normalise_source_meta(meta: dict, prop_key: str, current_type: str):

@@ -1,0 +1,112 @@
+{
+    "id": "car",
+    "uid": "1df7bf2ca354458cb6b63e6143ccd827",
+    "name": "Car",
+    "type": "person",
+    "created": "2025-08-22T18:18:20.762295+00:00",
+    "updated": "2025-08-22T19:14:26.935401+00:00",
+    "entries": [
+        {
+            "created": "2025-08-22T18:18:27.749050+00:00",
+            "updated": "2025-08-22T19:06:20.890755+00:00",
+            "time": {
+                "label_type": "date",
+                "confidence": 100,
+                "date_value": "2025-08-05"
+            },
+            "time_normalised": {
+                "kind": "date",
+                "start_iso": "2025-08-05",
+                "end_iso": "2025-08-05",
+                "start_ts": 1754352000,
+                "end_ts": 1754352000,
+                "precision": "exact",
+                "age_years": null,
+                "notes": "Direct date entry"
+            },
+            "person": [
+                {
+                    "label_type": "educational_place",
+                    "confidence": 100,
+                    "id": "school"
+                },
+                {
+                    "label_type": "school",
+                    "confidence": 100,
+                    "id": "blue_primary_school",
+                    "biography": "blue_primary_school",
+                    "biography_confidence": 100
+                }
+            ]
+        },
+        {
+            "created": "2025-08-22T19:12:42.817930+00:00",
+            "updated": "2025-08-22T19:13:12.215467+00:00",
+            "time": {
+                "label_type": "date",
+                "confidence": 100,
+                "date_value": "2025-08-12"
+            },
+            "time_normalised": {
+                "kind": "date",
+                "start_iso": "2025-08-12",
+                "end_iso": "2025-08-12",
+                "start_ts": 1754956800,
+                "end_ts": 1754956800,
+                "precision": "exact",
+                "age_years": null,
+                "notes": "Direct date entry"
+            },
+            "person": [
+                {
+                    "label_type": "educational_place",
+                    "confidence": 100,
+                    "id": "school"
+                },
+                {
+                    "label_type": "work_place",
+                    "confidence": 100,
+                    "id": "hospital"
+                }
+            ]
+        },
+        {
+            "created": "2025-08-22T19:14:00.402833+00:00",
+            "updated": "2025-08-22T19:14:00.402833+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 100,
+                "subvalue": "preteen"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 11.5,
+                "notes": "Life stage 'preteen' (no reference date — absolute bounds unknown)"
+            }
+        },
+        {
+            "created": "2025-08-22T19:14:26.935401+00:00",
+            "updated": "2025-08-22T19:14:26.935401+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 100,
+                "subvalue": "nineties"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 95,
+                "notes": "Life stage 'nineties' (no reference date — absolute bounds unknown)"
+            }
+        }
+    ]
+}

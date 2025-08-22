@@ -1,2 +1,16 @@
-{"source": { "kind": "type_labels", "type": "buildings", "path": "work_building" },
-"link_biography": { "type": "buildings", "source": "biographies", "mode": "child", "path": "work_building" }}
+{
+  "name": "Work Place",
+  "description": "",
+  "source": {
+    "kind": "type_labels",
+    "type": "buildings",
+    "path": "work_building",
+    "allow_children": true
+  },
+  "link_biography": {
+    "type": "buildings",
+    "source": "biographies",
+    "path": "work_building",
+    "mode": "child_or_parent"
+  }
+}

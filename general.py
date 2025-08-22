@@ -72,7 +72,8 @@ from utils import (
     _score_label,
     _collect_all_labels,
     build_label_catalog_for_type,
-    resolve_property_options as _utils_resolve_property_options
+    resolve_property_options as _utils_resolve_property_options,
+    _sibling_image
 )
 
 from time_utils import normalise_time_for_bio_entry
@@ -185,11 +186,10 @@ def _resolve_group_options(scope_t: str, meta: dict, *, group_key: str, collecti
             ) or []
         except Exception:
             return []
-        
-@app.route('/types/<path:filename>')
-def serve_type_images(filename):
-    return send_from_directory('types', filename)
 
+@app.route('/types/<path:filename>')
+def serve_type_files(filename):
+    return send_from_directory('types', filename)
 
 def _copytree_safe(src: str, dst: str):
     """Copy a directory tree into an existing (or new) destination, without blowing up if files exist."""
@@ -2428,31 +2428,45 @@ def general_step_labels(type_name, bio_id):
         return idx
 
     def _validate_input_group(g: dict, value: str) -> Optional[str]:
-        inp = (g or {}).get("input") or {}
+        # normalize input block
+        inp = (g or {}).get("input")
+        if isinstance(inp, str):
+            # allow shorthand like "text"
+            inp = {"kind": inp}
+        if not isinstance(inp, dict):
+            inp = {}
+
         val = (value or "").strip()
 
         if g.get("required") and not val:
             return f"'{g.get('label') or g.get('key')}' is required."
 
+        # lengths (be forgiving)
         try:
             mn = int(inp.get("min_length")) if inp.get("min_length") is not None else None
+        except Exception:
+            mn = None
+        try:
             mx = int(inp.get("max_length")) if inp.get("max_length") is not None else None
         except Exception:
-            mn = mx = None
+            mx = None
 
         if mn is not None and len(val) < mn:
             return f"Must be at least {mn} characters."
         if mx is not None and len(val) > mx:
             return f"Must be at most {mx} characters."
 
-        patt = (inp.get("pattern") or "").strip()
-        if patt:
+        # optional regex
+        patt = inp.get("pattern")
+        if isinstance(patt, str) and patt:
             try:
                 import re
                 if not re.fullmatch(patt, val or ""):
                     return "Format is invalid."
             except re.error:
+                # ignore bad patterns rather than bombing
                 pass
+
         return None
 
     # ===== ensure current entry =====
@@ -2784,14 +2798,20 @@ def general_step_labels(type_name, bio_id):
     except Exception:
         existing_bio_selections = {}
 
-    # Fallback “all bios by type” list — include legacy link_biography too
+    # Fallback “all bios by type” list — support both refer_to and legacy link_biography
     refer_types = set()
     for g in expanded_groups:
-        ref = (g.get("refer_to") or g.get("link_biography") or {})
-        if isinstance(ref, dict) and ((ref.get("source") == "biographies") or ("link_biography" in g)):
-            rtype = (ref.get("type") or type_name).strip()
-            if rtype:
-                refer_types.add(rtype)
+        ref_refer  = g.get("refer_to") if isinstance(g.get("refer_to"), dict) else None
+        ref_legacy = g.get("link_biography") if isinstance(g.get("link_biography"), dict) else None
+
+        is_bio_link = (ref_refer and ref_refer.get("source") == "biographies") or bool(ref_legacy)
+        if not is_bio_link:
+            continue
+
+    rtype = (ref_refer or ref_legacy or {}).get("type") or type_name
+    rtype = (rtype or "").strip()
+    if rtype:
+        refer_types.add(rtype)
 
     linkable_bios = {}
     for rtype in sorted(refer_types):
@@ -2869,11 +2889,19 @@ def _options_from_dir(t: str, k: str) -> list:
             continue
         opt = {
             "id": oid,
-            "display": (data.get("display") or data.get("label") or data.get("name") or oid.replace("_", " ").title()),
+            "display": (data.get("display") or data.get("label") or data.get("name")
+                        or oid.replace("_", " ").title()),
         }
         if data.get("description"):  opt["description"]  = data["description"]
-        if data.get("image"):        opt["image"]        = data["image"]
-        if data.get("image_url"):    opt["image_url"]    = data["image_url"]
+        # prefer explicit image fields, otherwise look for sibling file
+        if data.get("image"):
+            opt["image"] = data["image"]
+        elif data.get("image_url"):
+            opt["image_url"] = data["image_url"]
+        else:
+            img = _sibling_image(base, oid)
+            if img: opt["image"] = img
+
         if isinstance(data.get("children"), list): opt["children"] = data["children"]
         if isinstance(data.get("refer_to"), dict): opt["refer_to"] = data["refer_to"]
         if "order" in data:          opt["order"]        = data["order"]
@@ -2888,6 +2916,7 @@ def _options_from_file(t: str, k: str) -> list:
         return []
     meta = load_json_as_dict(jf) or {}
     raw  = meta.get("options") or []
+    base_folder = os.path.join("types", t, "labels", k)  # where sibling images would live
     out  = []
     for item in raw:
         if not isinstance(item, dict):
@@ -2897,11 +2926,18 @@ def _options_from_file(t: str, k: str) -> list:
             continue
         opt = {
             "id": oid,
-            "display": (item.get("display") or item.get("label") or item.get("name") or oid.replace("_", " ").title()),
+            "display": (item.get("display") or item.get("label") or item.get("name")
+                        or oid.replace("_", " ").title()),
         }
         if item.get("description"):  opt["description"]  = item["description"]
-        if item.get("image"):        opt["image"]        = item["image"]
-        if item.get("image_url"):    opt["image_url"]    = item["image_url"]
+        if item.get("image"):
+            opt["image"] = item["image"]
+        elif item.get("image_url"):
+            opt["image_url"] = item["image_url"]
+        else:
+            img = _sibling_image(base_folder, oid)
+            if img: opt["image"] = img
+
         if isinstance(item.get("children"), list): opt["children"] = item["children"]
         if isinstance(item.get("refer_to"), dict): opt["refer_to"] = item["refer_to"]
         if "order" in item:          opt["order"]        = item["order"]
