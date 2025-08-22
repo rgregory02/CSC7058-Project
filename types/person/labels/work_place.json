@@ -1,26 +1,2 @@
-{
-  "name": "Work place",
-  "description": "Where the person works.",
-  "input": "select",
-  "source": {
-    "kind": "type_labels",
-    "type": "buildings",
-    "path": "work_building",
-
-    "allow_children": true
-  },
-
-  
-  "link_biography": {
-    "type": "buildings",
-    "mode": "child",   
-    "lookup": "id",              
-    "path": "{{option}}"   
-    },   
-   "ui": {
-    "allow_confidence": true,
-    "default_confidence": 100,
-    "display_template": "Works at {{option}}"
-  }
-}
-
+{"source": { "kind": "type_labels", "type": "buildings", "path": "work_building" },
+"link_biography": { "type": "buildings", "source": "biographies", "mode": "child", "path": "work_building" }}

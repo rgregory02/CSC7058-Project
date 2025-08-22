@@ -71,7 +71,8 @@ from utils import (
     now_iso_utc,
     _score_label,
     _collect_all_labels,
-    build_label_catalog_for_type
+    build_label_catalog_for_type,
+    resolve_property_options as _utils_resolve_property_options
 )
 
 from time_utils import normalise_time_for_bio_entry
@@ -94,6 +95,97 @@ def favicon():
         mimetype='image/vnd.microsoft.icon'
     )
 
+def _list_event_groups() -> list:
+    base = os.path.join("types", "events", "labels")
+    if not os.path.isdir(base):
+        return []
+    out = []
+    for fn in os.listdir(base):
+        if not fn.endswith(".json"):
+            continue
+        data = load_json_as_dict(os.path.join(base, fn)) or {}
+        key = data.get("key") or os.path.splitext(fn)[0]
+        label = data.get("label") or key.replace("_", " ").title()
+        out.append({
+            "key": key,
+            "label": label,
+            "description": data.get("description", ""),
+            "meta": data,
+        })
+    out.sort(key=lambda x: x["label"].lower())
+    return out
+
+def _load_time_kinds_and_options():
+    """
+    Build:
+      - time_kinds: list[{key, desc, has_folder}] from types/time/labels/*.json
+      - time_options_by_key: { key: [ {id,display}, ... ] } from child files in same-named folders
+    """
+    base = os.path.join("types", "time", "labels")
+    time_kinds, options_by_key = [], {}
+
+    if not os.path.isdir(base):
+        return time_kinds, options_by_key
+
+    for fn in sorted(os.listdir(base)):
+        if not fn.endswith(".json"):
+            continue
+
+        key = os.path.splitext(fn)[0]  # e.g. "life_stage", "date", "range"
+        data = load_json_as_dict(os.path.join(base, fn)) or {}
+        desc = (data.get("description") or data.get("label") or key.replace("_", " ").title()).strip()
+
+        has_folder = os.path.isdir(os.path.join(base, key))
+        time_kinds.append({"key": key, "desc": desc, "has_folder": has_folder})
+
+        if has_folder:
+            folder = os.path.join(base, key)
+            opts = []
+            for cf in sorted(os.listdir(folder)):
+                if not cf.endswith(".json"):
+                    continue
+                item = load_json_as_dict(os.path.join(folder, cf)) or {}
+                oid  = (item.get("id") or os.path.splitext(cf)[0]).strip()
+                disp = (item.get("display") or item.get("label") or oid.replace("_"," ").title()).strip()
+                if oid:
+                    opts.append({"id": oid, "display": disp})
+            options_by_key[key] = opts
+
+    return time_kinds, options_by_key
+
+
+def _resolve_group_options(scope_t: str, meta: dict, *, group_key: str, collection_type: str = None) -> list:
+    """
+    Adapter around utils.resolve_property_options so existing call sites work.
+
+    Call sites here use:
+        _resolve_group_options(scope_t, meta, group_key=..., collection_type=...)
+
+    utils.resolve_property_options expects:
+        resolve_property_options(current_type, label_base_path, prop_key, prop_meta)
+    """
+    # If collection_type is provided (e.g., "events"), resolve against that collection's labels,
+    # otherwise resolve against the scope type’s own labels.
+    label_base_path = os.path.join("types", (collection_type or scope_t), "labels")
+
+    try:
+        return _utils_resolve_property_options(
+            scope_t,
+            label_base_path,
+            group_key,
+            meta or {}
+        ) or []
+    except TypeError:
+        # Safety for older/alternate utils implementations that might accept a 3‑arg form.
+        try:
+            return _utils_resolve_property_options(
+                scope_t,
+                label_base_path,
+                {"key": group_key, **(meta or {})}
+            ) or []
+        except Exception:
+            return []
+        
 @app.route('/types/<path:filename>')
 def serve_type_images(filename):
     return send_from_directory('types', filename)
@@ -946,8 +1038,8 @@ def api_suggest_biographies():
     """
     Body: {
       "type_name": "person",
-      "group_key": "work_place/hospital",   # usually a child key
-      "selections": { "work_place": "hospital", "work_place/hospital": "royal_victoria" }
+      "group_key": "work_place/hospital",   # top-level or child key
+      "selections": { "work_place": "hospital", "work_place/hospital": "royal_victoria_hospital" }
     }
     Returns: { "ok": true, "bios": [ {id, display, description?}, ... ] }
     """
@@ -959,34 +1051,127 @@ def api_suggest_biographies():
         if not (type_name and group_key):
             return jsonify({"ok": False, "reason": "Missing type_name/group_key"}), 400
 
-        label_base_path = os.path.join("types", type_name, "labels")
-        base_groups = collect_label_groups(label_base_path, type_name)
+        # --- helpers (local, mirror route logic) --------------------------------
+        def _list_bios_in_folder(folder: str) -> list[dict]:
+            out = []
+            if not folder or not os.path.isdir(folder):
+                return out
+            for root, _, files in os.walk(folder):
+                for f in files:
+                    if not f.endswith(".json"):
+                        continue
+                    fp = os.path.join(root, f)
+                    try:
+                        j = load_json_as_dict(fp) or {}
+                    except Exception:
+                        j = {}
+                    bid = (j.get("id") or os.path.splitext(f)[0]).strip()
+                    disp = (j.get("name") or j.get("display") or bid.replace("_"," ").title()).strip()
+                    desc = (j.get("description") or "").strip()
+                    if bid:
+                        item = {"id": bid, "display": disp}
+                        if desc:
+                            item["description"] = desc
+                        out.append(item)
+            out.sort(key=lambda b: (b.get("display","").lower(), b.get("id","").lower()))
+            return out
 
-        # We only need to compute suggestions for the relevant groups; pass selections as existing_labels.
-        # Make sure we feed a list of groups that includes this group (and possibly siblings).
-        # Easiest: reuse expand_child_groups to ensure any children exist, then run build_suggested_biographies.
+        def _selected_chain_from(group_key: str) -> list[str]:
+            """Follows selections: group -> group/sel -> group/sel/sel2 ..."""
+            parts = []
+            cur = group_key
+            while True:
+                sel = selections.get(cur)
+                if isinstance(sel, dict):
+                    sel = sel.get("label") or sel.get("id")
+                if not sel:
+                    break
+                parts.append(str(sel))
+                cur = f"{cur}/{sel}"
+            return parts
+
+        # --- load groups (use whichever helper exists in your app) --------------
+        label_base_path = os.path.join("types", type_name, "labels")
+        try:
+            base_groups = _collect_label_groups(label_base_path, type_name)   # new helper
+        except NameError:
+            base_groups = collect_label_groups(label_base_path, type_name)     # legacy
+
         expanded = expand_child_groups(
             base_groups=base_groups,
             current_type=type_name,
             label_base_path=label_base_path,
-            existing_labels=selections,   # accepts {"key": "id"} or {"key": {"label": "id"}}
+            existing_labels=selections,
         )
 
-        suggested = build_suggested_biographies(
-            current_type=type_name,
-            label_groups_list=expanded,
-            label_base_path=label_base_path,
-            existing_labels=selections
-        )
+        # Find the specific group we are asking about
+        group = next((g for g in expanded if (g.get("key") or "") == group_key), None)
 
-        safe = group_key.replace("/", "__")
-        bios = suggested.get(safe, [])
+        # Work out biography base + mode
+        # Accept modern {"refer_to":{"source":"biographies", ...}} and legacy {"link_biography": {...}}
+        ref = (group or {}).get("refer_to") or (group or {}).get("link_biography") or {}
+        rtype = (ref.get("type") or type_name).strip()
+        base_dir = os.path.join("types", rtype, "biographies")
+
+        # If options are fed from a labels tree, use that labels path as our base folder
+        src = (group or {}).get("source") or {}
+        base_path_from_source = (src.get("path") or "").strip().strip("/") if isinstance(src, dict) else ""
+        base_root = os.path.join(base_dir, *base_path_from_source.split("/")) if base_path_from_source else base_dir
+
+        conf_path = (ref.get("path") or "").strip().strip("/")
+        has_placeholder = ("{{option}}" in conf_path) or ("{option}" in conf_path)
+        effective_root = base_root if (has_placeholder or not conf_path) else os.path.join(base_dir, conf_path)
+
+        mode = (ref.get("mode") or "child_or_parent").strip().lower()
+
+        # --- compute folders to search based on the selection chain -------------
+        chain = _selected_chain_from(group_key)
+
+        # If there are no subfolders at all under effective_root, always list-all
+        def _dir_has_subfolders(folder: str) -> bool:
+            try:
+                return any(os.path.isdir(os.path.join(folder, d)) for d in os.listdir(folder))
+            except Exception:
+                return False
+
+        if not _dir_has_subfolders(effective_root):
+            bios = _list_bios_in_folder(effective_root)
+            return jsonify({"ok": True, "bios": bios}), 200
+
+        # No selection yet → search-all at effective root
+        if not chain:
+            bios = _list_bios_in_folder(effective_root)
+            return jsonify({"ok": True, "bios": bios}), 200
+
+        # Build candidate folders: deepest → … → base_root
+        candidates = [os.path.join(effective_root, *chain[:i]) for i in range(len(chain), 0, -1)]
+        candidates.append(effective_root)  # final fallback
+
+        # Pick list according to mode
+        bios: list[dict] = []
+        if mode == "child_only":
+            bios = _list_bios_in_folder(os.path.join(effective_root, *chain))
+        elif mode == "parent_only":
+            bios = _list_bios_in_folder(os.path.join(effective_root, chain[0])) or _list_bios_in_folder(effective_root)
+        else:
+            # child_or_parent: first non-empty candidate wins
+            for folder in candidates:
+                bios = _list_bios_in_folder(folder)
+                if bios:
+                    break
+
+        # Optional UX: if leaf id equals a biography id/display, show just that one
+        if chain:
+            leaf = chain[-1]
+            exact = [b for b in bios if (b.get("id") == leaf or (b.get("display") or "").lower() == leaf.replace("_"," ").lower())]
+            if exact:
+                bios = exact
+
         return jsonify({"ok": True, "bios": bios}), 200
 
     except Exception as e:
         print("[/api/labels/suggest_biographies] ERROR:", e)
         return jsonify({"ok": False, "reason": "Server error"}), 500
-
 
 # --- Helpers ---------------------------------------------------------------
 
@@ -2203,7 +2388,6 @@ def general_step_time(type_name, bio_id):
         editing_entry=editing_entry,
         edit_index=edit_index if editing_entry else None,
     )
-
 @app.route("/general_step/labels/<type_name>/<bio_id>", methods=["GET", "POST"])
 def general_step_labels(type_name, bio_id):
     """
@@ -2212,8 +2396,9 @@ def general_step_labels(type_name, bio_id):
       • Option groups (with nested children)
       • Cross-type labels
       • Biography suggestions with sensible fallbacks:
-          - No label subgroups? Show ALL biographies for that type.
-          - Has label subgroups? Show bios in the matching subfolder after a selection.
+          - No label subgroups? Show ALL biographies for that type (and path).
+          - Has label subgroups? After a selection, show bios in the matching subfolder chain.
+          - If a child option matches a biography exactly, show ONLY that biography.
     """
     # ---------- paths / load ----------
     label_base_path = os.path.join("types", type_name, "labels")
@@ -2225,19 +2410,21 @@ def general_step_labels(type_name, bio_id):
     bio_data = load_json_as_dict(bio_file_path) or {}
     bio_data.setdefault("entries", [])
 
-    # --- helpers ---
+    # --- helpers (local) ---
     def _as_int(x, default=None):
-        try: return int(x)
-        except (TypeError, ValueError): return default
+        try:
+            return int(x)
+        except (TypeError, ValueError):
+            return default
 
     def _build_option_index(groups: List[Dict]) -> Dict[str, str]:
-        idx = {}
+        idx: Dict[str, str] = {}
         for g in groups or []:
             gkey = g.get("key")
             for opt in g.get("options", []) or []:
                 oid = opt.get("id")
                 if oid and gkey:
-                    idx[str(oid)] = gkey
+                    idx[str(oid)] = gkey  # map option-id -> group.key
         return idx
 
     def _validate_input_group(g: dict, value: str) -> Optional[str]:
@@ -2253,8 +2440,10 @@ def general_step_labels(type_name, bio_id):
         except Exception:
             mn = mx = None
 
-        if mn is not None and len(val) < mn: return f"Must be at least {mn} characters."
-        if mx is not None and len(val) > mx: return f"Must be at most {mx} characters."
+        if mn is not None and len(val) < mn:
+            return f"Must be at least {mn} characters."
+        if mx is not None and len(val) > mx:
+            return f"Must be at most {mx} characters."
 
         patt = (inp.get("pattern") or "").strip()
         if patt:
@@ -2282,7 +2471,7 @@ def general_step_labels(type_name, bio_id):
     bio_data["entries"][entry_index].setdefault(type_name, [])
 
     # -------- build base groups --------
-    base_groups = collect_label_groups(label_base_path, type_name)
+    base_groups = _collect_label_groups(label_base_path, type_name)
     base_index  = _build_option_index(base_groups)
 
     # -------- map saved selections -> existing_labels (initial) --------
@@ -2293,23 +2482,28 @@ def general_step_labels(type_name, bio_id):
         lid = (it.get("id") or "").strip()
         payload = {"confidence": it.get("confidence", 100), "source": it.get("source", "")}
         if lid:
-            payload["label"] = lid; payload["id"] = lid
+            payload["label"] = lid
+            payload["id"] = lid
         key = base_index.get(lid) or lt
-        if key: existing_labels[key] = payload
+        if key:
+            existing_labels[key] = payload
 
     # -------- preview overlay --------
     preview_key = (request.args.get("preview_key") or "").strip()
     preview_val = (request.args.get("preview_val") or "").strip()
     display_labels = dict(existing_labels)
     if preview_key and preview_val:
-        display_labels[preview_key] = {"label": preview_val, "id": preview_val, "confidence": 100, "source": "preview"}
+        display_labels[preview_key] = {
+            "label": preview_val, "id": preview_val, "confidence": 100, "source": "preview"
+        }
 
     # -------- expand child groups (recurses) --------
     selected_map = {}
     for k, v in display_labels.items():
         if isinstance(v, dict):
             sel = v.get("label") or v.get("id")
-            if sel: selected_map[k] = sel
+            if sel:
+                selected_map[k] = sel
 
     try:
         expanded_groups = expand_child_groups(
@@ -2329,16 +2523,161 @@ def general_step_labels(type_name, bio_id):
         lt  = (it.get("label_type") or "").strip()
         lid = (it.get("id") or "").strip()
         payload = {"confidence": it.get("confidence", 100), "source": it.get("source", "")}
-        if lid: payload["label"] = lid; payload["id"] = lid
+        if lid:
+            payload["label"] = lid
+            payload["id"] = lid
         key = expanded_index.get(lid) or lt
-        if key: rebuilt_existing[key] = payload
+        if key:
+            rebuilt_existing[key] = payload
     if preview_key and preview_val:
-        rebuilt_existing[preview_key] = {"label": preview_val, "id": preview_val, "confidence": 100, "source": "preview"}
+        rebuilt_existing[preview_key] = {
+            "label": preview_val, "id": preview_val, "confidence": 100, "source": "preview"
+        }
     display_labels = rebuilt_existing
 
-    # helper for GPT ingestion
+    # helper (used by GPT ingestion)
     def find_group_key_for_id(opt_id: str) -> Optional[str]:
         return expanded_index.get(opt_id or "")
+
+    # =================== BIO SUGGESTION GATHERER (with exact‑match narrowing) ===================
+    def _list_bios_in_folder(folder: str) -> List[dict]:
+        """Return bios (recursively) under folder."""
+        out: List[dict] = []
+        if not folder or not os.path.isdir(folder):
+            return out
+        for root, _, files in os.walk(folder):
+            for f in files:
+                if not f.endswith(".json"):
+                    continue
+                path = os.path.join(root, f)
+                try:
+                    data = load_json_as_dict(path) or {}
+                except Exception:
+                    data = {}
+                bid = (data.get("id") or os.path.splitext(f)[0]).strip()
+                disp = (data.get("name") or data.get("display") or bid.replace("_", " ").title()).strip()
+                desc = (data.get("description") or "").strip()
+                if bid:
+                    item = {"id": bid, "display": disp}
+                    if desc:
+                        item["description"] = desc
+                    out.append(item)
+        out.sort(key=lambda b: (b.get("display", "").lower(), b.get("id", "").lower()))
+        return out
+
+    def _dir_has_subfolders(folder: str) -> bool:
+        try:
+            return any(os.path.isdir(os.path.join(folder, d)) for d in os.listdir(folder))
+        except Exception:
+            return False
+
+    def _selected_chain_for_group(group_key: str) -> List[str]:
+        """Return ['hospital','royal_victoria_hospital'] for chained selections."""
+        parts: List[str] = []
+        cur = group_key
+        while True:
+            sel = (display_labels.get(cur) or {}).get("id")
+            if not sel:
+                break
+            parts.append(sel)
+            cur = f"{cur}/{sel}"
+        return parts
+
+    def _gather_bio_cards_for_groups(groups: List[dict]) -> Dict[str, List[dict]]:
+        """
+        For each group that links to biographies (supports `refer_to` and legacy `link_biography`):
+
+        • No selection -> list ALL biographies under the effective root folder.
+        • With selection -> search deepest subfolder then walk up ancestors to base root
+        (child_or_parent). If `mode="child_only"` or `"parent_only"` respect that.
+        • If a leaf option’s id exactly matches a biography id/display, optionally return only that one.
+        """
+        out: Dict[str, List[dict]] = {}
+
+        def _dir_has_subfolders(folder: str) -> bool:
+            try:
+                return any(os.path.isdir(os.path.join(folder, d)) for d in os.listdir(folder))
+            except Exception:
+                return False
+
+        def _selected_chain_for_group(group_key: str) -> List[str]:
+            parts: List[str] = []
+            cur = group_key
+            while True:
+                sel = (display_labels.get(cur) or {}).get("id")
+                if not sel: break
+                parts.append(sel)
+                cur = f"{cur}/{sel}"
+            return parts
+
+        for g in (groups or []):
+            # accept modern + legacy
+            ref = g.get("refer_to") or g.get("link_biography")
+            if not isinstance(ref, dict):
+                continue
+            is_bio_link = (ref.get("source") == "biographies") or ("link_biography" in g)
+            if not is_bio_link:
+                continue
+
+            rtype = (ref.get("type") or type_name).strip()
+            base_dir = os.path.join("types", rtype, "biographies")
+
+            # if the group’s options come from a labels tree, we use that path as the base
+            src = g.get("source") or {}
+            base_path_from_source = (src.get("path") or "").strip().strip("/") if isinstance(src, dict) else ""
+            base_root = os.path.join(base_dir, *base_path_from_source.split("/")) if base_path_from_source else base_dir
+
+            conf_path = (ref.get("path") or "").strip().strip("/")
+            mode = (ref.get("mode") or "child_or_parent").strip().lower()
+
+            has_placeholder = ("{{option}}" in conf_path) or ("{option}" in conf_path)
+            effective_root = base_root if has_placeholder or not conf_path else os.path.join(base_dir, conf_path)
+
+            key_safe = g.get("key","").replace("/", "__")
+
+            # --- no subfolders? always show all under effective_root
+            if not _dir_has_subfolders(effective_root):
+                out[key_safe] = _list_bios_in_folder(effective_root)
+                continue
+
+            chain = _selected_chain_for_group(g.get("key",""))
+            if not chain:
+                # no selection yet → search-all
+                out[key_safe] = _list_bios_in_folder(effective_root)
+                continue
+
+            # build candidate folders: deepest → … → base_root
+            candidates = []
+            for i in range(len(chain), 0, -1):
+                candidates.append(os.path.join(effective_root, *chain[:i]))
+            candidates.append(effective_root)  # final fallback: base root
+
+            bios: List[dict] = []
+
+            if mode == "child_only":
+                bios = _list_bios_in_folder(os.path.join(effective_root, *chain))
+            elif mode == "parent_only":
+                # “first parent” is chain[:1], but also fall back to root if empty
+                bios = _list_bios_in_folder(os.path.join(effective_root, chain[0])) or _list_bios_in_folder(effective_root)
+            else:
+                # child_or_parent: take first non-empty candidate
+                for folder in candidates:
+                    bios = _list_bios_in_folder(folder)
+                    if bios:
+                        break
+
+            # Optional: if the leaf option exactly matches a biography, prefer just that one
+            try:
+                leaf_id = chain[-1]
+                exact = [b for b in bios if (b.get("id") == leaf_id or (b.get("display") or "").lower() == leaf_id.replace("_"," ").lower())]
+                if exact:
+                    bios = exact
+            except Exception:
+                pass
+
+            out[key_safe] = bios
+
+        return out
 
     # ======================= POST (save) =======================
     if request.method == "POST":
@@ -2351,15 +2690,19 @@ def general_step_labels(type_name, bio_id):
                 gpt_items = json.loads(gpt_raw)
                 if isinstance(gpt_items, list):
                     for lab in gpt_items:
-                        if not isinstance(lab, dict): continue
+                        if not isinstance(lab, dict):
+                            continue
                         lid = (lab.get("id") or "").strip()
-                        if not lid: continue
-                        lt  = (lab.get("label_type") or "").strip()
+                        if not lid:
+                            continue
+                        lt = (lab.get("label_type") or "").strip()
                         if not lt:
                             maybe = find_group_key_for_id(lid)
                             lt = (maybe.split("/")[-1] if maybe else type_name)
-                        try: conf = int(lab.get("confidence", 100))
-                        except Exception: conf = 100
+                        try:
+                            conf = int(lab.get("confidence", 100))
+                        except Exception:
+                            conf = 100
                         new_entries.append({
                             "id": lid,
                             "label_type": lt.split("/")[-1],
@@ -2372,7 +2715,8 @@ def general_step_labels(type_name, bio_id):
         # ---- Manual groups ----
         for g in expanded_groups:
             key = (g.get("key") or "").strip()
-            if not key: continue
+            if not key:
+                continue
 
             conf_raw = (request.form.get(f"confidence_{key}") or "").strip()
             conf = int(conf_raw) if conf_raw.isdigit() else 100
@@ -2382,8 +2726,10 @@ def general_step_labels(type_name, bio_id):
                 val = (request.form.get(f"input_{key}") or "").strip()
                 err = _validate_input_group(g, val)
                 if err:
-                    try: flash(err, "error")
-                    except Exception: print("[WARN] flash unavailable:", err)
+                    try:
+                        flash(err, "error")
+                    except Exception:
+                        print("[WARN] flash unavailable:", err)
                     return redirect(request.url)
                 if val:
                     new_entries.append({
@@ -2394,15 +2740,16 @@ def general_step_labels(type_name, bio_id):
                     })
                 continue
 
-            # option / biography
-            sel_id   = (request.form.get(f"selected_id_{key}") or "").strip()
-            sel_bio  = (request.form.get(f"selected_id_{key}_bio") or "").strip()
+            # option / linked biography (MERGED into one entry)
+            sel_id = (request.form.get(f"selected_id_{key}") or "").strip()
+            sel_bio = (request.form.get(f"selected_id_{key}_bio") or "").strip()
             bio_conf_raw = (request.form.get(f"confidence_{key}_bio") or "").strip()
             bio_conf = int(bio_conf_raw) if bio_conf_raw.isdigit() else 100
 
             if sel_id or sel_bio:
                 entry = {"label_type": key.split("/")[-1], "confidence": conf}
-                if sel_id: entry["id"] = sel_id
+                if sel_id:
+                    entry["id"] = sel_id
                 if sel_bio:
                     entry["biography"] = sel_bio
                     entry["biography_confidence"] = bio_conf
@@ -2424,36 +2771,32 @@ def general_step_labels(type_name, bio_id):
 
     # ======================= GET (suggest bios + render) =======================
     try:
-        suggested_biographies = build_suggested_biographies(
-            current_type=type_name,
-            label_groups_list=expanded_groups,
-            label_base_path=label_base_path,
-            existing_labels=display_labels,
-        )
+        suggested_biographies = _gather_bio_cards_for_groups(expanded_groups)
     except Exception as e:
-        print(f"[WARN] build_suggested_biographies failed: {e}")
+        print(f"[WARN] _gather_bio_cards_for_groups failed: {e}")
         suggested_biographies = {}
 
     try:
-        existing_bio_selections = map_existing_bio_selections(
+        existing_bio_selections = _map_existing_bio_selections(
             expanded_groups,
             bio_data["entries"][entry_index].get(type_name, [])
         )
     except Exception:
         existing_bio_selections = {}
 
-    # Fallback: for any group that links to biographies, pre-load "all" list
+    # Fallback “all bios by type” list — include legacy link_biography too
     refer_types = set()
     for g in expanded_groups:
-        ref = (g.get("refer_to") or {})
-        if isinstance(ref, dict) and (ref.get("source") == "biographies"):
+        ref = (g.get("refer_to") or g.get("link_biography") or {})
+        if isinstance(ref, dict) and ((ref.get("source") == "biographies") or ("link_biography" in g)):
             rtype = (ref.get("type") or type_name).strip()
-            if rtype: refer_types.add(rtype)
+            if rtype:
+                refer_types.add(rtype)
 
     linkable_bios = {}
     for rtype in sorted(refer_types):
         try:
-            linkable_bios[rtype] = list_biographies(rtype) or []
+            linkable_bios[rtype] = _list_biographies(rtype) or []
         except Exception:
             linkable_bios[rtype] = []
 
@@ -2461,38 +2804,28 @@ def general_step_labels(type_name, bio_id):
         "label_step.html",
         current_type=type_name,
         label_groups_list=expanded_groups,
-        existing_labels=display_labels,
+        existing_labels=display_labels,             # saved + preview
         existing_bio_selections=existing_bio_selections,
         suggested_biographies=suggested_biographies,
-        linkable_bios=linkable_bios,          # <— used by template fallback
-        step=0,
-        next_step=1,
-        prev_step=None,
+        linkable_bios=linkable_bios,                # fallback only
+        step=0, next_step=1, prev_step=None,
         bio_id=bio_id,
         time_selection=session.get("time_selection"),
         bio_name=bio_data.get("name", bio_id),
         skip_allowed=(len(expanded_groups) == 0)
     )
-
-
-# ============================== HELPERS ==============================
+# ============================== HELPERS (single canonical set) ==============================
 
 def _collect_label_groups(label_base_path: str, type_name: str) -> List[dict]:
-    """
-    Load top‑level property groups for a type from:
-      • types/<type_name>/labels/*.json (group files)
-      • Each group’s options are resolved via _resolve_group_options (merges dir + file sources)
-    Normalises old 'link_biography' into 'refer_to'.
-    """
+    """Load top‑level property groups for a type from types/<type>/labels/*.json.
+       Each group’s options are resolved via _resolve_group_options (merges dir/file/self/cross‑type).
+       Legacy 'link_biography' is normalised into 'refer_to'."""
     groups: List[dict] = []
     if not os.path.isdir(label_base_path):
         return groups
 
     for fn in sorted(os.listdir(label_base_path)):
-        if not fn.endswith(".json"):
-            continue
-        # group meta file (not per‑option)
-        if fn == "_group.json":
+        if not fn.endswith(".json") or fn == "_group.json":
             continue
 
         path = os.path.join(label_base_path, fn)
@@ -2500,7 +2833,6 @@ def _collect_label_groups(label_base_path: str, type_name: str) -> List[dict]:
         key  = meta.get("key") or os.path.splitext(fn)[0]
         label = meta.get("label") or key.replace("_", " ").title()
 
-        # bring forward any legacy 'link_biography'
         if isinstance(meta.get("link_biography"), dict) and not meta.get("refer_to"):
             meta["refer_to"] = dict(meta["link_biography"])
 
@@ -2513,7 +2845,7 @@ def _collect_label_groups(label_base_path: str, type_name: str) -> List[dict]:
             "options": options,
             "input": meta.get("input"),
             "required": meta.get("required", False),
-            "refer_to": meta.get("refer_to"),  # may be biographies or labels
+            "refer_to": meta.get("refer_to") or meta.get("link_biography"),
             "source": meta.get("source", {}),
             "order": meta.get("order", 999),
         })
@@ -2522,134 +2854,173 @@ def _collect_label_groups(label_base_path: str, type_name: str) -> List[dict]:
     return groups
 
 
-def _expand_child_groups(*, base_groups: List[dict], current_type: str,
-                         label_base_path: str, selected_map: Dict[str, str]) -> List[dict]:
-    """
-    Given the base groups and the current selections (group.key -> selected option id),
-    append any *child* groups declared under the selected option’s 'children' meta.
-
-    Child group keys are emitted as '<parent>/<child_key>'.
-    A child group inherits/uses its own meta to resolve options (including 'refer_to').
-    """
-    out: List[dict] = list(base_groups)
-
-    # index base groups by key for quick lookup
-    base_by_key = {g.get("key"): g for g in base_groups}
-
-    for parent_key, selected_id in (selected_map or {}).items():
-        parent = base_by_key.get(parent_key) or {}
-        if not parent:
+def _options_from_dir(t: str, k: str) -> list:
+    """Read options from: types/<t>/labels/<k>/*.json; preserve images/desc/children/refer_to/order."""
+    base = os.path.join("types", t, "labels", k)
+    if not os.path.isdir(base):
+        return []
+    out = []
+    for fn in sorted(os.listdir(base)):
+        if not fn.endswith(".json") or fn == "_group.json":
             continue
-
-        # find the selected option record
-        picked = None
-        for opt in parent.get("options") or []:
-            if (opt.get("id") or "") == (selected_id or ""):
-                picked = opt
-                break
-        if not picked:
+        data = load_json_as_dict(os.path.join(base, fn)) or {}
+        oid  = (data.get("id") or os.path.splitext(fn)[0]).strip()
+        if not oid:
             continue
-
-        for ch in (picked.get("children") or []):
-            # child can be {id,key,label,source,refer_to,description,...}
-            child_key = (ch.get("key") or ch.get("id") or "").strip()
-            if not child_key:
-                continue
-
-            # construct child meta (normalise legacy, carry description/label)
-            child_meta = {
-                "key": f"{parent_key}/{child_key}",
-                "label": ch.get("label") or child_key.replace("_", " ").title(),
-                "description": ch.get("description", ""),
-                "input": ch.get("input"),
-                "required": ch.get("required", False),
-                "source": ch.get("source") or {},
-                "refer_to": ch.get("refer_to") or ch.get("link_biography"),
-                "order": ch.get("order", 999),
-            }
-            if isinstance(child_meta["refer_to"], dict) and child_meta["refer_to"].get("source") == "biographies":
-                # keep as biographies
-                pass
-            # Resolve this child’s options (if it is an "options" type)
-            options = _resolve_group_options(current_type, child_meta, group_key=child_key, collection_type=current_type)
-
-            out.append({
-                "key": child_meta["key"],
-                "label": child_meta["label"],
-                "description": child_meta["description"],
-                "options": options,
-                "input": child_meta.get("input"),
-                "required": child_meta.get("required", False),
-                "refer_to": child_meta.get("refer_to"),
-                "source": child_meta.get("source") or {},
-                "order": child_meta.get("order", 999),
-            })
-
-    # Keep stable order (parents first; child order secondary)
-    out.sort(key=lambda g: (g.get("key").count("/"), int(g.get("order", 999)), g.get("label", "").lower()))
+        opt = {
+            "id": oid,
+            "display": (data.get("display") or data.get("label") or data.get("name") or oid.replace("_", " ").title()),
+        }
+        if data.get("description"):  opt["description"]  = data["description"]
+        if data.get("image"):        opt["image"]        = data["image"]
+        if data.get("image_url"):    opt["image_url"]    = data["image_url"]
+        if isinstance(data.get("children"), list): opt["children"] = data["children"]
+        if isinstance(data.get("refer_to"), dict): opt["refer_to"] = data["refer_to"]
+        if "order" in data:          opt["order"]        = data["order"]
+        out.append(opt)
     return out
 
 
-def _build_suggested_biographies(*, current_type: str, label_groups_list: List[dict],
-                                 label_base_path: str, existing_labels: Dict[str, dict]) -> Dict[str, List[dict]]:
-    """
-    For each group that links to biographies, prepare a list to show in the UI.
-    Keyed by group.key with '/' replaced by '__' to match the HTML.
-    """
-    suggestions: Dict[str, List[dict]] = {}
-
-    for g in label_groups_list or []:
-        ref = g.get("refer_to") or {}
-        if not (isinstance(ref, dict) and ref.get("source") == "biographies"):
+def _options_from_file(t: str, k: str) -> list:
+    """Read options from meta file: types/<t>/labels/<k>.json; preserve images/desc/children/refer_to/order."""
+    jf = os.path.join("types", t, "labels", f"{k}.json")
+    if not os.path.isfile(jf):
+        return []
+    meta = load_json_as_dict(jf) or {}
+    raw  = meta.get("options") or []
+    out  = []
+    for item in raw:
+        if not isinstance(item, dict):
             continue
-        rtype = (ref.get("type") or current_type).strip()
-        # simple heuristic: if parent selection exists, bias towards bios whose id/display contains it
-        bias = ""
-        parent_key = g.get("key").split("/")[0] if "/" in g.get("key") else g.get("key")
-        maybe = (existing_labels.get(parent_key) or {}).get("id") or ""
-        if maybe:
-            bias = str(maybe).lower()
+        oid = (item.get("id") or item.get("key") or "").strip()
+        if not oid:
+            continue
+        opt = {
+            "id": oid,
+            "display": (item.get("display") or item.get("label") or item.get("name") or oid.replace("_", " ").title()),
+        }
+        if item.get("description"):  opt["description"]  = item["description"]
+        if item.get("image"):        opt["image"]        = item["image"]
+        if item.get("image_url"):    opt["image_url"]    = item["image_url"]
+        if isinstance(item.get("children"), list): opt["children"] = item["children"]
+        if isinstance(item.get("refer_to"), dict): opt["refer_to"] = item["refer_to"]
+        if "order" in item:          opt["order"]        = item["order"]
+        out.append(opt)
+    return out
 
-        bios = _list_biographies(rtype)
-        if bias:
-            bios.sort(key=lambda b: (0 if bias in (b.get("id","")+b.get("display","")).lower() else 1,
-                                     b.get("display","").lower()))
-        key_out = g.get("key").replace("/", "__")
-        suggestions[key_out] = bios[:24]  # cap
 
-    return suggestions
-
-
-def _map_existing_bio_selections(groups: List[dict], saved_items: List[dict]) -> Dict[str, Any]:
-    """
-    Build a dict like:
-        { "<group.key>_bio": "<bio_id>", "<group.key>_bio_conf": 100, ... }
-    so the template can pre‑select linked biography cards and their confidence sliders.
-    """
-    # index by label_type (child uses the segment after '/')
-    by_lt = {}
-    for it in (saved_items or []):
-        lt = (it.get("label_type") or "").strip()
-        if lt:
-            by_lt[lt] = it
-
+def _merge_option_lists(*lists: list) -> list:
+    """Merge lists by id; prefer richer fields; keep children unique; sort by order/display/id."""
     out = {}
-    for g in groups or []:
-        lt = g.get("key", "").split("/")[-1]
-        it = by_lt.get(lt)
-        if not it:
-            continue
-        bio = (it.get("biography") or "").strip()
-        if bio:
-            out[f"{g.get('key')}_bio"] = bio
-            out[f"{g.get('key')}_bio_conf"] = int(it.get("biography_confidence", 100))
-    return out
 
+    def better(a: dict, b: dict) -> dict:
+        if not a:
+            return dict(b)
+        c = dict(a)
+        for fld in ("display", "description", "image", "image_url", "refer_to", "order"):
+            if not c.get(fld) and b.get(fld) is not None:
+                c[fld] = b[fld]
+        ach = a.get("children") or []
+        bch = b.get("children") or []
+        if ach or bch:
+            seen, merged = set(), []
+            for src in (ach, bch):
+                for ch in src:
+                    cid = ch.get("id") or ch.get("key")
+                    if cid and cid not in seen:
+                        seen.add(cid); merged.append(ch)
+            c["children"] = merged
+        return c
+
+    for lst in lists:
+        if not isinstance(lst, list): continue
+        for o in lst:
+            oid = o.get("id") or o.get("key")
+            if not oid: continue
+            out[oid] = better(out.get(oid), o)
+
+    items = list(out.values())
+    items.sort(key=lambda x: (
+        x.get("order", 999),
+        (x.get("display") or x.get("id") or "").lower(),
+        (x.get("id") or "").lower(),
+    ))
+    return items
+
+
+def _resolve_group_options(scope_t: str, meta: dict, *, group_key: str, collection_type: str = "events") -> list:
+    """
+    Merge option sources:
+      • meta["options"]
+      • meta["source"] (kind: 'type_labels' | 'self_labels' | {source:'labels'})
+      • meta["refer_to"] / 'link_biography' when they point to labels
+      • Safety nets: types/<collection_type>/labels/<group_key>/ and types/<scope_t>/labels/<group_key>/
+    """
+    if not isinstance(meta, dict):
+        meta = {}
+
+    candidate_lists = []
+
+    # literal list
+    lit = meta.get("options")
+    if isinstance(lit, list) and lit:
+        candidate_lists.append(lit)
+
+    # explicit source
+    src = meta.get("source") or {}
+    if isinstance(src, dict):
+        kind  = (src.get("kind") or "").strip()
+        plain = (src.get("source") or "").strip()
+
+        if kind in ("type_labels", "self_labels"):
+            t = (src.get("type") or (scope_t if kind == "self_labels" else "")).strip()
+            k = (src.get("path") or "").strip()
+            candidate_lists.append(_merge_option_lists(_options_from_dir(t, k), _options_from_file(t, k)))
+
+        if plain == "labels":
+            t = (src.get("type") or "").strip()
+            k = (src.get("path") or "").strip()
+            candidate_lists.append(_merge_option_lists(_options_from_dir(t, k), _options_from_file(t, k)))
+
+    # refer_to / link_biography → labels
+    ref = meta.get("refer_to") or meta.get("link_biography") or {}
+    if isinstance(ref, dict) and (ref.get("source") == "labels"):
+        t = (ref.get("type") or "").strip()
+        k = (ref.get("path") or "").strip()
+        candidate_lists.append(_merge_option_lists(_options_from_dir(t, k), _options_from_file(t, k)))
+
+    # safety nets
+    if group_key:
+        candidate_lists.append(_merge_option_lists(_options_from_dir(collection_type, group_key),
+                                                  _options_from_file(collection_type, group_key)))
+        candidate_lists.append(_merge_option_lists(_options_from_dir(scope_t, group_key),
+                                                  _options_from_file(scope_t, group_key)))
+
+    merged = []
+    for lst in candidate_lists:
+        merged = _merge_option_lists(merged, lst)
+    return merged
+
+
+# --- compatibility shim so older calls still work (e.g. Events step) ---
+def resolve_property_options(*args, **kwargs):
+    """Accept old util signatures and forward to _resolve_group_options."""
+    # Old util signature: (current_type, label_base_path, prop_key, prop_meta)
+    if len(args) == 4 and not kwargs:
+        current_type, _label_base_path, prop_key, prop_meta = args
+        return _resolve_group_options(current_type, prop_meta or {}, group_key=prop_key or "", collection_type=current_type)
+
+    # Newer kw usage
+    scope_t = kwargs.get("scope_t") or kwargs.get("current_type") or ""
+    meta = kwargs.get("meta") or kwargs.get("prop_meta") or {}
+    group_key = kwargs.get("group_key") or kwargs.get("prop_key") or ""
+    collection_type = kwargs.get("collection_type") or kwargs.get("type_name") or scope_t or "events"
+    return _resolve_group_options(scope_t, meta, group_key=group_key, collection_type=collection_type)
+
+
+# ---------- biography utilities ----------
 
 def _list_biographies(type_name: str) -> List[dict]:
-    """
-    Return [{id, display, description?}] from types/<type_name>/biographies/*.json
-    """
     base = os.path.join("types", type_name, "biographies")
     out: List[dict] = []
     if not os.path.isdir(base):
@@ -2657,27 +3028,43 @@ def _list_biographies(type_name: str) -> List[dict]:
     for fn in sorted(os.listdir(base)):
         if not fn.endswith(".json"):
             continue
-        data = load_json_as_dict(os.path.join(base, fn)) or {}
+        try:
+            data = load_json_as_dict(os.path.join(base, fn)) or {}
+        except Exception:
+            data = {}
         bid = (data.get("id") or os.path.splitext(fn)[0]).strip()
         disp = (data.get("name") or data.get("display") or bid.replace("_"," ").title()).strip()
         desc = (data.get("description") or "").strip()
         if bid:
             item = {"id": bid, "display": disp}
-            if desc:
-                item["description"] = desc
+            if desc: item["description"] = desc
             out.append(item)
     out.sort(key=lambda b: (b.get("display","").lower(), b.get("id","").lower()))
     return out
 
 
-# ------------------ label/time options helpers (yours, kept) ------------------
+def _map_existing_bio_selections(groups: List[dict], saved_items: List[dict]) -> Dict[str, Any]:
+    """Build { '<group.key>_bio': '<bio_id>', '<group.key>_bio_conf': <int>, ... } for preselects."""
+    by_lt = {}
+    for it in (saved_items or []):
+        lt = (it.get("label_type") or "").strip()
+        if lt: by_lt[lt] = it
+
+    out = {}
+    for g in groups or []:
+        lt = g.get("key", "").split("/")[-1]
+        it = by_lt.get(lt)
+        if not it: continue
+        bio = (it.get("biography") or "").strip()
+        if bio:
+            out[f"{g.get('key')}_bio"] = bio
+            out[f"{g.get('key')}_bio_conf"] = int(it.get("biography_confidence", 100))
+    return out
+
+
+# ------------------ time/events helpers (unchanged logic) ------------------
 
 def _load_time_kinds_and_options():
-    """
-    Build:
-      - time_kinds: list[{key, desc, has_folder}] from types/time/labels/*.json
-      - time_options_by_key: { key: [ {id,display}, ... ] } from child files in same-named folders
-    """
     base = os.path.join("types", "time", "labels")
     time_kinds, options_by_key = [], {}
 
@@ -2688,7 +3075,7 @@ def _load_time_kinds_and_options():
         if not fn.endswith(".json"):
             continue
 
-        key = os.path.splitext(fn)[0]  # e.g. "life_stage", "date", "range"
+        key = os.path.splitext(fn)[0]  # e.g., "life_stage", "date", "range"
         data = load_json_as_dict(os.path.join(base, fn)) or {}
         desc = (data.get("description") or data.get("label") or key.replace("_", " ").title()).strip()
 
@@ -2730,145 +3117,6 @@ def _list_event_groups() -> list:
         })
     out.sort(key=lambda x: x["label"].lower())
     return out
-
-
-def _options_from_dir(t: str, k: str) -> list:
-    base = os.path.join("types", t, "labels", k)
-    if not os.path.isdir(base):
-        return []
-    out = []
-    for fn in sorted(os.listdir(base)):
-        if not fn.endswith(".json") or fn == "_group.json":
-            continue
-        data = load_json_as_dict(os.path.join(base, fn)) or {}
-        opt_id = (data.get("id") or os.path.splitext(fn)[0]).strip()
-        label = (data.get("display") or data.get("label") or data.get("name") or opt_id.replace("_", " ").title())
-        opt = {"id": opt_id, "display": label}
-        if isinstance(data.get("children"), list):
-            opt["children"] = data["children"]
-        if isinstance(data.get("refer_to"), dict):
-            opt["refer_to"] = data["refer_to"]
-        out.append(opt)
-    return out
-
-
-def _options_from_file(t: str, k: str) -> list:
-    jf = os.path.join("types", t, "labels", f"{k}.json")
-    if not os.path.isfile(jf):
-        return []
-    data = load_json_as_dict(jf) or {}
-    return data.get("options", []) or []
-
-
-def _merge_option_lists(*lists: list) -> list:
-    """
-    Merge multiple lists of options:
-      [ {id, display, children?, refer_to?, description?}, ... ]
-
-    • De‑dupes by id.
-    • Prefers richer records (display/description/refer_to).
-    • Merges children arrays uniquely by child.id when present.
-    • Returns list sorted by display then id (case‑insensitive).
-    """
-    out = {}
-
-    def better(a: dict, b: dict) -> dict:
-        if not a:
-            return dict(b)
-        c = dict(a)
-        if not c.get("display") and b.get("display"):
-            c["display"] = b["display"]
-        if not c.get("description") and b.get("description"):
-            c["description"] = b["description"]
-        if not c.get("refer_to") and b.get("refer_to"):
-            c["refer_to"] = b["refer_to"]
-        ach = a.get("children") or []
-        bch = b.get("children") or []
-        if ach or bch:
-            seen = set()
-            merged = []
-            for src in (ach, bch):
-                for ch in src:
-                    cid = ch.get("id") or ch.get("key")
-                    if cid and cid not in seen:
-                        seen.add(cid)
-                        merged.append(ch)
-            c["children"] = merged
-        return c
-
-    for lst in lists:
-        if not isinstance(lst, list):
-            continue
-        for o in lst:
-            oid = o.get("id") or o.get("key")
-            if not oid:
-                continue
-            out[oid] = better(out.get(oid), o)
-
-    items = list(out.values())
-    items.sort(key=lambda x: ((x.get("display") or x.get("id") or "").lower(),
-                              (x.get("id") or "").lower()))
-    return items
-
-
-def _options_from_both(t: str, k: str) -> list:
-    """Merge directory + file options for a (type, key) pair."""
-    if not t or not k:
-        return []
-    return _merge_option_lists(_options_from_dir(t, k), _options_from_file(t, k))
-
-
-def _resolve_group_options(scope_t: str, meta: dict, *, group_key: str, collection_type: str = "events") -> list:
-    """
-    Resolve options for a group by MERGING all applicable sources:
-
-      • meta["options"] (literal list)
-      • meta["source"] (kind: 'type_labels' | 'self_labels' | {source:'labels'})
-      • meta["refer_to"] / legacy 'link_biography' when they point to labels
-      • SAFETY NET A: types/<collection_type>/labels/<group_key>/
-      • SAFETY NET B: types/<scope_t>/labels/<group_key>/
-
-    Returns one merged list, keeping 'children' (so the UI can offer the Child group).
-    """
-    if not isinstance(meta, dict):
-        meta = {}
-
-    candidate_lists = []
-
-    # literal options
-    lit = meta.get("options")
-    if isinstance(lit, list) and lit:
-        candidate_lists.append(lit)
-
-    # explicit source
-    src = meta.get("source") or {}
-    if isinstance(src, dict):
-        kind  = (src.get("kind") or "").strip()
-        plain = (src.get("source") or "").strip()
-
-        if kind in ("type_labels", "self_labels"):
-            t = (src.get("type") or (scope_t if kind == "self_labels" else "")).strip()
-            k = (src.get("path") or "").strip()
-            candidate_lists.append(_options_from_both(t, k))
-
-        if plain == "labels":
-            t = (src.get("type") or "").strip()
-            k = (src.get("path") or "").strip()
-            candidate_lists.append(_options_from_both(t, k))
-
-    # refer_to / legacy link_biography that point to labels
-    ref = meta.get("refer_to") or meta.get("link_biography") or {}
-    if isinstance(ref, dict) and (ref.get("source") == "labels"):
-        t = (ref.get("type") or "").strip()
-        k = (ref.get("path") or "").strip()
-        candidate_lists.append(_options_from_both(t, k))
-
-    # safety nets — same key under collections or the biography type itself
-    if group_key:
-        candidate_lists.append(_options_from_both(collection_type, group_key))
-        candidate_lists.append(_options_from_both(scope_t, group_key))
-
-    return _merge_option_lists(*candidate_lists)
 
 @app.route("/general_step/events/<type_name>/<bio_id>", methods=["GET", "POST"])
 def general_step_events(type_name, bio_id):

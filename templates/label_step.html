@@ -186,38 +186,32 @@
         {# ---------- Linked biographies (server-rendered) ---------- #}
 {# ---------- Linked biographies (now for top-level AND child groups) ---------- #}
 {% set is_bio_link = (group.refer_to and group.refer_to.source == 'biographies') or group.link_biography %}
+<div id="children_for_{{ safe_key }}"></div>
+
+<div id="bios_for_{{ safe_key }}">
 {% if is_bio_link %}
-{% set sugg_key = group.key.replace('/', '__') %}
+  {% set sugg_key = group.key.replace('/', '__') %}
+  {% set _rtype_from_refer = (group.refer_to.type if (group.refer_to and group.refer_to.type) else None) %}
+  {% set _rtype_from_link  = (group.link_biography.type if (group.link_biography and group.link_biography.type) else None) %}
+  {% set rtype = _rtype_from_refer or _rtype_from_link or current_type %}
 
-{# pick a type label to display for the header #}
-{% set _rtype_from_refer = (group.refer_to.type if (group.refer_to and group.refer_to.type) else None) %}
-{% set _rtype_from_link  = (group.link_biography.type if (group.link_biography and group.link_biography.type) else None) %}
-{% set rtype = _rtype_from_refer or _rtype_from_link or current_type %}
-
-{# make sure these are always lists #}
-{% set bio_list = (suggested_biographies.get(sugg_key) or []) %}
-{% set fallback = ((linkable_bios.get(rtype) if linkable_bios else None) or []) %}
-{% set listing = (bio_list if (bio_list|length > 0) else fallback) %}
+  {% set bio_list = (suggested_biographies.get(sugg_key) or []) %}
+  {% set fallback = ((linkable_bios.get(rtype) if linkable_bios else None) or []) %}
+  {% set listing = (bio_list if (bio_list|length > 0) else fallback) %}
 
   {% set bio_input_name   = 'selected_id_' ~ group.key ~ '_bio' %}
   {% set bio_hidden_id    = 'input_' ~ sugg_key ~ '_bio' %}
   {% set bio_selected_id  = (existing_bio_selections.get(group.key ~ '_bio','') if existing_bio_selections else '') %}
   {% set bio_conf_val     = (existing_bio_selections.get(group.key ~ '_bio_conf', 100) if existing_bio_selections else 100) %}
 
-  <div class="bio-suggestions" id="bio_suggestions_{{ sugg_key }}" style="margin-top:8px;">
+  <div class="bio-suggestions">
     <div class="label-title">📖 Linked Biographies ({{ rtype|replace('_',' ')|title }})</div>
 
-    <input type="hidden"
-           name="{{ bio_input_name }}"
-           id="{{ bio_hidden_id }}"
-           class="group-selection-tracker"
-           value="{{ bio_selected_id }}">
+    <input type="hidden" name="{{ bio_input_name }}" id="{{ bio_hidden_id }}"
+           class="group-selection-tracker" value="{{ bio_selected_id }}">
 
-    <input type="text"
-           class="label-search"
-           placeholder="Search biographies…"
-           oninput="filterLabels(this, '{{ sugg_key }}_bio')"
-           data-group="{{ sugg_key }}_bio">
+    <input type="text" class="label-search" placeholder="Search biographies…"
+           oninput="filterLabels(this, '{{ sugg_key }}_bio')" data-group="{{ sugg_key }}_bio">
 
     <div class="label-options">
       {% for option in (listing or []) %}
@@ -239,11 +233,8 @@
 
     <div class="confidence-slider" style="margin-top:10px;">
       <label for="confidence_{{ safe_key }}_bio">🎯 Biography Match Confidence:</label><br>
-      <input type="range"
-             name="confidence_{{ group.key }}_bio"
-             id="confidence_{{ safe_key }}_bio"
-             min="0" max="100"
-             value="{{ bio_conf_val }}"
+      <input type="range" name="confidence_{{ group.key }}_bio" id="confidence_{{ safe_key }}_bio"
+             min="0" max="100" value="{{ bio_conf_val }}"
              oninput="updateConfidence('{{ group.key }}_bio')">
       <div class="confidence-display">
         <span id="confidence_display_{{ safe_key }}_bio">{{ bio_conf_val }}%</span>
@@ -252,10 +243,7 @@
     </div>
   </div>
 {% endif %}
-
-        {# ---------- AJAX injection targets (for live children + bios) ---------- #}
-        <div id="children_for_{{ safe_key }}"></div>
-        <div id="bios_for_{{ safe_key }}"></div>
+</div>
 
 {% if (not group.options) and (not is_child) and (not group.input) and (not is_bio_link) %}
   <div class="muted">No labels available yet for this group.</div>
@@ -613,7 +601,14 @@
   function renderBios(groupKey, bios) {
     const host = qs("#bios_for_" + safe(groupKey));
     if (!host) return;
-    if (!bios || !bios.length) { host.innerHTML = ""; return; }
+    if (!bios || !bios.length) {
+      host.innerHTML = `
+        <div class="bio-suggestions">
+          <div class="label-title">📖 Linked Biographies ({{ current_type|replace('_',' ')|title }})</div>
+          <div class="muted">No biographies found for the current selection.</div>
+        </div>`;
+      return;
+    }
 
     const cards = bios.map(b => `
       <div class="label-card"
@@ -725,22 +720,36 @@
     const hid = qs("#input_" + safe(groupKey));
     const current = (hid && hid.value) ? String(hid.value) : "";
 
-    if (current === String(labelId)) { clearGroupUI(groupKey); return; }
+    // toggle off
+    if (current === String(labelId)) { 
+      clearGroupUI(groupKey); 
+      return; 
+    }
 
+    // mark selection
     qsa(`.label-card[data-group="${groupKey}"]`).forEach(c => c.classList.remove("selected"));
     const card = qs(`#card_${safe(groupKey)}_${cssEscape(labelId)}`);
     if (card) card.classList.add("selected");
-    if (hid) hid.value = labelId;
+    if (hid)  hid.value = labelId;
 
     updateSaveButtonState();
 
-    if (isChild) { fetchBiosFor(groupKey); return; }
+    // --- if this was a child group, just refresh bios for that child and exit
+    if (isChild) {
+      fetchBiosFor(groupKey);
+      return;
+    }
 
+    // --- parent group flow:
+    // 1) DO NOT clear the parent bios anymore (keep them visible)
+    // 2) Clear any previously rendered child container
     const cHost = qs("#children_for_" + safe(groupKey));
     if (cHost) cHost.innerHTML = "";
-    const bHost = qs("#bios_for_" + safe(groupKey));
-    if (bHost) bHost.innerHTML = "";
 
+    // 3) Refresh parent bios for the new parent selection
+    fetchBiosFor(groupKey);
+
+    // 4) Ask server for child options and render child group (below the parent)
     fetch("/api/labels/children", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
@@ -760,19 +769,28 @@
     .catch(()=>{});
   }
 
-  function selectChild(groupKey, labelId){
-    const hid = qs("#input_" + safe(groupKey));
-    const current = (hid && hid.value) ? String(hid.value) : "";
-    if (current === String(labelId)) { clearGroupUI(groupKey); return; }
+function selectChild(groupKey, labelId){
+  const hid = qs("#input_" + safe(groupKey));
+  const current = (hid && hid.value) ? String(hid.value) : "";
+  if (current === String(labelId)) { clearGroupUI(groupKey); return; }
 
-    qsa(`.label-card[data-group="${groupKey}"]`).forEach(c => c.classList.remove("selected"));
-    const card = qs(`#card_${safe(groupKey)}_${cssEscape(labelId)}`);
-    if (card) card.classList.add("selected");
-    if (hid) hid.value = labelId;
+  qsa(`.label-card[data-group="${groupKey}"]`).forEach(c => c.classList.remove("selected"));
+  const card = qs(`#card_${safe(groupKey)}_${cssEscape(labelId)}`);
+  if (card) card.classList.add("selected");
+  if (hid) hid.value = labelId;
 
-    updateSaveButtonState();
-    fetchBiosFor(groupKey);
+  updateSaveButtonState();
+
+  // remove parent bio list to avoid duplication
+  const parentKey = groupKey.split('/').slice(0, -1).join('/');
+  if (parentKey) {
+    const parentBioHost = qs("#bios_for_" + safe(parentKey));
+    if (parentBioHost) parentBioHost.innerHTML = "";
   }
+
+  // now show bios for the child
+  fetchBiosFor(groupKey);
+}
 
   function fetchBiosFor(groupKey){
     fetch("/api/labels/suggest_biographies", {

@@ -1,0 +1,29 @@
+{
+    "id": "teddy_5",
+    "uid": "734ada5062fe40d3b269dd499d4e9fd4",
+    "name": "Teddy",
+    "type": "person",
+    "created": "2025-08-21T21:19:32.673212+00:00",
+    "updated": "2025-08-21T21:19:37.479417+00:00",
+    "entries": [
+        {
+            "created": "2025-08-21T21:19:37.479417+00:00",
+            "updated": "2025-08-21T21:19:37.479417+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 100,
+                "subvalue": "preteen"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 11.5,
+                "notes": "Life stage 'preteen' (no reference date — absolute bounds unknown)"
+            }
+        }
+    ]
+}

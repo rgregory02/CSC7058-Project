@@ -4,11 +4,11 @@
     "name": "Becca",
     "type": "person",
     "created": "2025-08-21T20:42:44.594442+00:00",
-    "updated": "2025-08-21T20:45:37.704152+00:00",
+    "updated": "2025-08-21T21:16:24.137714+00:00",
     "entries": [
         {
             "created": "2025-08-21T20:42:49.994528+00:00",
-            "updated": "2025-08-21T20:45:37.704152+00:00",
+            "updated": "2025-08-21T21:16:24.137714+00:00",
             "time": {
                 "label_type": "dob",
                 "confidence": 100,
@@ -26,9 +26,29 @@
             },
             "person": [
                 {
+                    "label_type": "educational_place",
+                    "confidence": 100,
+                    "id": "school"
+                },
+                {
+                    "label_type": "pet",
+                    "confidence": 100,
+                    "id": "teddy"
+                },
+                {
+                    "label_type": "relationship",
+                    "confidence": 100,
+                    "id": "parent"
+                },
+                {
                     "label_type": "work_place",
                     "confidence": 100,
                     "id": "hospital"
+                },
+                {
+                    "label_type": "school",
+                    "confidence": 100,
+                    "id": "blue_primary_school"
                 }
             ]
         }

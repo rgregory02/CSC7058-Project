@@ -1,0 +1,41 @@
+{
+    "id": "becca_11",
+    "uid": "db91dadb06d34a5e82ef62c3f8b92c8e",
+    "name": "Becca",
+    "type": "person",
+    "created": "2025-08-22T14:27:12.483304+00:00",
+    "updated": "2025-08-22T14:29:33.876083+00:00",
+    "entries": [
+        {
+            "created": "2025-08-22T14:27:18.221752+00:00",
+            "updated": "2025-08-22T14:29:33.876083+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 100,
+                "subvalue": "childhood"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 6.5,
+                "notes": "Life stage 'childhood' (no reference date — absolute bounds unknown)"
+            },
+            "person": [
+                {
+                    "label_type": "relationship",
+                    "confidence": 100,
+                    "id": "child"
+                },
+                {
+                    "label_type": "work_place",
+                    "confidence": 100,
+                    "id": "hospital"
+                }
+            ]
+        }
+    ]
+}

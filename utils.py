@@ -15,30 +15,6 @@ def load_json_safe(path):
     except Exception:
         return {}
 
-def load_json_as_dict(file_path):
-    """
-    Load the JSON file at file_path into a dictionary.
-    Returns an empty dictionary if the file does not exist or cannot be read.
-    """
-    if not os.path.exists(file_path):
-        return {}  # Return an empty dict instead of failing
-
-    try:
-        with open(file_path, "r", encoding="utf-8") as json_file:
-            return json.load(json_file)
-    except (json.JSONDecodeError, IOError) as e:
-        print(f"Error loading JSON file {file_path}: {e}")
-        return {}  # Return an empty dict if loading fails
-
-def save_dict_as_json(file_path, dictionary):
-    try:
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(dictionary, f, ensure_ascii=False, indent=4)
-        return True
-    except IOError as e:
-        print(f"Error saving JSON file {file_path}: {e}")
-        return False
 
 def uk_datetime(iso_dt):
     """
@@ -84,6 +60,211 @@ def prettify(name):
     import os
     base = os.path.splitext(name)[0]  # Remove .json, .jpg etc.
     return base.replace('_', ' ').replace('-', ' ').strip().title()
+
+# ---------------------- bio selection mapping ----------------------
+
+def map_existing_bio_selections(all_groups, entry_list):
+    """
+    Map previously selected biographies to their full group keys.
+
+    Returns e.g.:
+      {
+        "work_building/hospital_bio": "royal_victoria_hospital",
+        "work_building/hospital_bio_conf": 100
+      }
+    """
+    # leaf -> [full_keys...]
+    leaf_to_keys = {}
+    for g in all_groups or []:
+        key = g.get("key") or ""
+        if not key:
+            continue
+        leaf = key.split("/")[-1]
+        leaf_to_keys.setdefault(leaf, []).append(key)
+
+    selections = {}
+    for entry in entry_list or []:
+        lt = (entry.get("label_type") or "").strip()
+        bio_id = (entry.get("biography") or "").strip()
+        if not lt or not bio_id:
+            continue
+        for full_key in leaf_to_keys.get(lt, []):
+            selections[f"{full_key}_bio"] = bio_id
+            selections[f"{full_key}_bio_conf"] = int(entry.get("biography_confidence", 100))
+    return selections
+
+
+def _map_existing_bio_selections(groups, saved_items):
+    """Alias to map_existing_bio_selections for route code that expects the underscore name."""
+    return map_existing_bio_selections(groups, saved_items)
+
+
+# ---------------------- JSON utilities ----------------------
+
+def save_dict_as_json(file_path, dictionary):
+    try:
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(dictionary, f, ensure_ascii=False, indent=4)
+        return True
+    except IOError as e:
+        print(f"Error saving JSON file {file_path}: {e}")
+        return False
+
+
+def load_json_as_dict(file_path):
+    """
+    Load the JSON file at file_path into a dictionary.
+    Returns an empty dict if the file does not exist or cannot be read.
+    """
+    if not os.path.exists(file_path):
+        return {}
+    try:
+        with open(file_path, "r", encoding="utf-8") as json_file:
+            return json.load(json_file)
+    except (json.JSONDecodeError, IOError) as e:
+        print(f"Error loading JSON file {file_path}: {e}")
+        return {}
+
+
+# ---------------------- child group expansion ----------------------
+
+def expand_child_groups(*, base_groups, current_type, label_base_path, existing_labels):
+    """
+    Expand nested child groups when a parent option is selected.
+
+    - Supports self labels (current type) and cross-type labels (via source.kind=type_labels/self_labels
+      or source.source='labels') with allow_children.
+    - Recurses so work_place -> hospital -> royal_victoria_hospital -> ... will appear as you select deeper.
+    - existing_labels may contain either raw strings or dicts with {label|id}.
+    - Child groups inherit parent's `refer_to` and `link_biography` so biography suggestions
+      render on the child group (not the parent).
+    """
+    # Start with a copy and a queue so we can recurse without deep recursion
+    expanded = [dict(g) for g in (base_groups or [])]
+    seen_keys = {g.get("key") for g in expanded if g.get("key")}
+    queue = list(expanded)  # process newly-added groups as well
+
+    def _selected_id_for(key: str):
+        sel = (existing_labels or {}).get(key)
+        if isinstance(sel, str):
+            return sel
+        if isinstance(sel, dict):
+            return sel.get("label") or sel.get("id")
+        return None
+
+    def _collect_folder_options(folder_abs: str):
+        """Lightweight loader used for child folders."""
+        if not folder_abs or not os.path.isdir(folder_abs):
+            return []
+        opts = []
+        for f in sorted(os.listdir(folder_abs)):
+            if not f.endswith(".json") or f == "_group.json":
+                continue
+            data = load_json_as_dict(os.path.join(folder_abs, f)) or {}
+            oid  = (data.get("id") or os.path.splitext(f)[0]).strip()
+            if not oid:
+                continue
+            disp = (
+                data.get("display")
+                or data.get("label")
+                or data.get("name")
+                or oid.replace("_", " ").title()
+            )
+            opt = {"id": oid, "display": disp}
+            desc = data.get("description") or data.get("properties", {}).get("description")
+            if desc:
+                opt["description"] = desc
+            # preserve images if present
+            if data.get("image"):
+                opt["image"] = data["image"]
+            if data.get("image_url"):
+                opt["image_url"] = data["image_url"]
+            opts.append(opt)
+        # nice stable ordering
+        opts.sort(key=lambda o: ((o.get("display") or o.get("id") or "").lower(),
+                                 (o.get("id") or "").lower()))
+        return opts
+
+    while queue:
+        g = queue.pop(0)
+        parent_key = (g.get("key") or "").strip()
+        if not parent_key:
+            continue
+
+        # Need a selection for THIS group to consider a child
+        parent_id = _selected_id_for(parent_key)
+        if not parent_id:
+            continue
+
+        # Determine the label-source for the parent group
+        # Accept any of: source.kind in {type_labels, self_labels}, source.source == 'labels'
+        src = (g.get("source") or {})
+        refer = (g.get("refer_to") or g.get("link_biography") or {})  # used only for inheritance
+        kind = (src.get("kind") or "").strip()
+        src_source = (src.get("source") or "").strip()  # 'labels' | 'biographies' | ''
+        allow_children = bool(src.get("allow_children"))
+
+        # Work out which type/path to look under for the CHILD labels
+        search_type = None
+        base_path = None
+
+        if kind in ("type_labels", "self_labels") or src_source == "labels":
+            # explicit labels source
+            if kind == "self_labels":  # refers to current type implicitly
+                search_type = current_type
+            else:
+                search_type = (src.get("type") or current_type).strip()
+            base_path = (src.get("path") or parent_key).strip("/")
+
+            # If cross-type (different from current), require allow_children to expand
+            if search_type != current_type and not allow_children:
+                continue
+
+        else:
+            # no hint -> treat as this type's label tree
+            search_type = current_type
+            base_path = parent_key
+
+        # Resolve absolute folder for the child options
+        if search_type == current_type:
+            child_folder = os.path.join(label_base_path, *base_path.split("/"), parent_id)
+        else:
+            child_folder = os.path.join("types", search_type, "labels", *base_path.split("/"), parent_id)
+
+        if not os.path.isdir(child_folder):
+            continue
+
+        child_key = f"{base_path}/{parent_id}"
+        if child_key in seen_keys:
+            continue
+
+        child_options = _collect_folder_options(child_folder)
+        if not child_options:
+            continue
+
+        # Build the child group
+        child_group = {
+            "key": child_key,
+            "label": f"{(g.get('label') or parent_key).replace('_', ' ').title()} / {parent_id.replace('_', ' ').title()}",
+            "options": child_options,
+            # inherit hints so deeper children expand and bios render here
+            "source": dict(src) if isinstance(src, dict) else {},
+        }
+        if refer:
+            # inherit for biography suggestion logic
+            if g.get("refer_to"):
+                child_group["refer_to"] = dict(g["refer_to"])
+            if g.get("link_biography"):
+                child_group["link_biography"] = dict(g["link_biography"])
+
+        expanded.append(child_group)
+        seen_keys.add(child_key)
+        queue.append(child_group)  # allow deeper nesting if the child is already selected
+
+    # Sort by depth then key for a stable UI
+    expanded.sort(key=lambda gg: (len((gg.get("key") or "").split("/")), gg.get("key") or ""))
+    return expanded
 
 def _normalise_input_meta(meta: dict):
     """Return {"kind": ..., "name": "value", "placeholder": ..., "help": ...} or None."""
@@ -1298,128 +1479,6 @@ def collect_label_groups(label_base_path: str, current_type: str):
     groups.sort(key=lambda g: g.get("key", ""))
     return groups
 
-def expand_child_groups(*, base_groups, current_type, label_base_path, existing_labels):
-    """
-    Expand nested child groups when a parent option is selected.
-
-    - Supports self labels (current type) and cross-type labels (type_labels) with allow_children.
-    - Recurses so work_place -> hospital -> royal_victoria -> (etc) will appear as you select deeper.
-    - existing_labels may contain either raw strings or dicts with {label|id}.
-    - Child groups inherit parent's `refer_to` and `link_biography` so biography suggestions
-      render on the child group (not the parent).
-    """
-    # Start with a copy and a queue so we can recurse without deep recursion
-    expanded = [dict(g) for g in base_groups]
-    seen_keys = {g["key"] for g in expanded}
-    queue = list(expanded)  # process newly-added groups as well
-
-    def _selected_id_for(key: str):
-        sel = existing_labels.get(key)
-        if isinstance(sel, str):
-            return sel
-        if isinstance(sel, dict):
-            return sel.get("label") or sel.get("id")
-        return None
-
-    def _collect_folder_options(folder_abs: str):
-        """Lightweight loader used for child folders."""
-        if not os.path.isdir(folder_abs):
-            return []
-        opts = []
-        for f in sorted(os.listdir(folder_abs)):
-            if not f.endswith(".json") or f == "_group.json":
-                continue
-            try:
-                data = load_json_as_dict(os.path.join(folder_abs, f))
-            except Exception:
-                data = {}
-            lid = os.path.splitext(f)[0]
-            disp = (
-                data.get("properties", {}).get("name")
-                or data.get("name")
-                or lid
-            )
-            desc = data.get("description", data.get("properties", {}).get("description", ""))
-            opts.append({"id": lid, "display": disp, "description": desc})
-        return opts
-
-    while queue:
-        g = queue.pop(0)
-
-        parent_key = g.get("key")
-        if not parent_key:
-            continue
-
-        # Need a selection for THIS group to consider a child
-        parent_id = _selected_id_for(parent_key)
-        if not parent_id:
-            continue
-
-        # Determine where the parent's options come from
-        # (we look at normalised hints on the group)
-        src = g.get("refer_to") or g.get("source") or {}
-        kind = src.get("source") or src.get("kind") or ""   # "labels" | "biographies" | ""
-        allow_children = bool(src.get("allow_children"))
-
-        # Work out which type/path to look under for the CHILD labels
-        search_type = None
-        base_path = None
-
-        if kind == "labels":
-            # explicit cross-type labels
-            search_type = src.get("type") or current_type
-            base_path = (src.get("path") or parent_key).strip("/")
-            # require allow_children for cross-type expansion
-            if search_type != current_type and not allow_children:
-                continue
-        elif kind == "biographies":
-            # biographies do not yield child label groups
-            continue
-        else:
-            # no hint -> treat as this type's label tree
-            search_type = current_type
-            base_path = parent_key
-
-        # Resolve absolute folder for the child options
-        if search_type == current_type:
-            child_folder = os.path.join(label_base_path, *base_path.split("/"), parent_id)
-        else:
-            child_folder = os.path.join("types", search_type, "labels", *base_path.split("/"), parent_id)
-
-        if not os.path.isdir(child_folder):
-            continue
-
-        child_key = f"{base_path}/{parent_id}"
-        if child_key in seen_keys:
-            # already added from an earlier pass
-            continue
-
-        child_options = _collect_folder_options(child_folder)
-        if not child_options:
-            continue
-
-        # Build the child group
-        child_group = {
-            "key": child_key,
-            "label": f"{(g.get('label') or parent_key).replace('_',' ').title()} / {parent_id.replace('_',' ').title()}",
-            "options": child_options,
-        }
-
-        # Inherit hints so:
-        #  - deeper children can continue to expand
-        #  - biography suggestions render on the child group
-        if g.get("refer_to"):
-            child_group["refer_to"] = dict(g["refer_to"])
-        if g.get("link_biography"):
-            child_group["link_biography"] = dict(g["link_biography"])
-
-        expanded.append(child_group)
-        seen_keys.add(child_key)
-        queue.append(child_group)  # allow deeper nesting if the child is already selected
-
-    expanded.sort(key=lambda g: (len(g["key"].split("/")), g["key"]))
-    return expanded
-
 # utils.py
 import os, json, re, sqlite3, urllib.request, urllib.error, urllib.parse
 from datetime import datetime, timezone
@@ -1724,34 +1783,6 @@ def _import_labels_from_sqlite(type_name: str, group_key: str, display_label: st
 #     return expanded
 
 
-def map_existing_bio_selections(all_groups, entry_list):
-    """
-    Maps previously selected biographies to their full group key.
-
-    Args:
-        all_groups (list): list of group dicts with at least "key"
-        entry_list (list): list of entry dicts from bio_data["entries"][...][type_name]
-
-    Returns:
-        dict: e.g., {"work_building/hospital_bio": biography_id,
-                     "work_building/hospital_bio_conf": confidence}
-    """
-    # Build a map from leaf -> full key(s)
-    leaf_to_keys = {}
-    for g in all_groups:
-        leaf = g["key"].split("/")[-1]
-        leaf_to_keys.setdefault(leaf, []).append(g["key"])
-
-    selections = {}
-    for entry in entry_list:
-        lt = entry.get("label_type")
-        if not lt or not entry.get("biography"):
-            continue
-        if lt in leaf_to_keys:
-            for full_key in leaf_to_keys[lt]:
-                selections[f"{full_key}_bio"] = entry["biography"]
-                selections[f"{full_key}_bio_conf"] = entry.get("biography_confidence", 100)
-    return selections
 
 
 def load_property_definitions(label_base_path):
@@ -2048,10 +2079,6 @@ def _build_suggested_biographies(*, current_type: str,
         label_base_path=label_base_path,
         existing_labels=existing_labels
     )
-
-def _map_existing_bio_selections(groups: List[dict], saved_items: List[dict]) -> Dict[str, Any]:
-    """Alias to your map_existing_bio_selections."""
-    return map_existing_bio_selections(groups, saved_items)
 
 def _list_biographies(type_name: str) -> List[dict]:
     """Alias to your list_biographies, but shaped the way the template expects."""

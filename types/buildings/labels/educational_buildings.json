@@ -1,11 +1,18 @@
 {
-  "name": "Educational Building",
-  "description": "A building for educational purposes.",
-  "image": "",
-  "created": "2025-07-21T12:27:38.466019+00:00",
-  "properties": {
-    "value": "educational_building",
-    "confidence": 100,
-    "source": ""
+  "name": "Educational Place",
+  "description": "",
+  "source": {
+    "kind": "type_labels",
+    "type": "buildings",
+    "path": "educational_buildings",
+    "allow_children": true
+  },
+
+  "refer_to": {
+    "source": "biographies",
+    "type": "buildings",
+    "path": "educational_buildings",
+    "mode": "child_or_parent"
   }
+
 }
