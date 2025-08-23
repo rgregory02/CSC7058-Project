@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# near your other helpers/util imports
+
 IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".gif")
 
 def _sibling_image(folder: str, lid: str) -> str:
