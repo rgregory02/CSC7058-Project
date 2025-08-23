@@ -2007,12 +2007,20 @@ def general_iframe_wizard():
     # (Optional) edit flags
     edit_entry = request.args.get("edit_entry_index")
     edit_bio   = request.args.get("edit_bio")
+    edit_entry = request.args.get("edit_entry_index")
+    edit_bio   = request.args.get("edit_bio")
+    add_flag   = (request.args.get("add") == "1")
 
     if bio_id and type_name:
         bio_file = os.path.join("types", type_name, "biographies", f"{bio_id}.json")
         if os.path.exists(bio_file):
             bio = load_json_as_dict(bio_file) or {}
             entries = bio.get("entries") or []
+
+            if add_flag:
+                session.pop("entry_index", None)
+                session.pop("editing_entry", None)
+                session.pop("editing_bio", None)
 
             if edit_entry is not None:
                 try:
@@ -2225,6 +2233,13 @@ def general_step_time(type_name, bio_id):
             editing_entry = True
             edit_index = maybe
 
+    else:
+        # Fallback to session (wizard wrapper stored it)
+        sess_idx = _as_int(session.get("entry_index"))
+        if sess_idx is not None and 0 <= sess_idx < len(bio_data["entries"]) and session.get("editing_entry"):
+            editing_entry = True
+            edit_index = sess_idx
+
     # Optional preset (e.g., ?preset=dob)
     preset_kind = (request.args.get("preset") or "").strip()
 
@@ -2312,6 +2327,7 @@ def general_step_time(type_name, bio_id):
                 bio_data["entries"].append(entry)
                 # update session pointer to this new entry so labels step picks it up
                 session["entry_index"] = len(bio_data["entries"]) - 1
+                session["editing_entry"] = False
             else:
                 # OVERWRITE the specific entry in explicit edit mode
                 entry = bio_data["entries"][edit_index]

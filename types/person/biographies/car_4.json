@@ -4,7 +4,7 @@
     "name": "Car",
     "type": "person",
     "created": "2025-08-23T02:02:34.322466+00:00",
-    "updated": "2025-08-23T02:03:01.297769+00:00",
+    "updated": "2025-08-23T02:25:30.366875+00:00",
     "entries": [
         {
             "created": "2025-08-23T02:02:40.475316+00:00",
@@ -36,6 +36,39 @@
                     "id": "royal_victoria_hospital",
                     "biography": "royal_victoria_hospital",
                     "biography_confidence": 60
+                }
+            ]
+        },
+        {
+            "created": "2025-08-23T02:07:06.439209+00:00",
+            "updated": "2025-08-23T02:25:30.366875+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 100,
+                "subvalue": "infant"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 0.5,
+                "notes": "Life stage 'infant' (no reference date — absolute bounds unknown)"
+            },
+            "person": [
+                {
+                    "label_type": "work_place",
+                    "confidence": 100,
+                    "id": "hospital"
+                },
+                {
+                    "label_type": "hospital",
+                    "confidence": 100,
+                    "id": "royal_victoria_hospital",
+                    "biography": "royal_victoria_hospital",
+                    "biography_confidence": 100
                 }
             ]
         }

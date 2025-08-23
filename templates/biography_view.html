@@ -108,13 +108,13 @@
         <h3 class="section-title">⚙️ Actions</h3>
         <p class="small">Use the Label Wizard to change labels; add more time entries; or search/edit the raw biography.</p>
         <ul class="small" style="margin:0 0 0 18px">
-          <a class="btn ghost" href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='time') }}">⏱️ Add Time Period</a>
+          <a class="btn ghost" href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='time', add=1) }}">⏱️ Add Time Period</a>
           <a class="btn"
    href="{{ url_for('general_iframe_wizard',
                     type=type_name,
                     bio_id=bio_id,
                     step='start',
-                    edit_bio=1) }}"
+                    edit_entry_index=(entries|length - 1 if entries else 0)) }}"
    target="_top">
   ✏️ Edit (From Start)
 </a>
