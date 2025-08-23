@@ -1,0 +1,17 @@
+{
+    "name": "testingtest",
+    "description": "",
+    "source": {
+        "kind": "type_labels",
+        "type": "buildings",
+        "path": "work_building",
+        "allow_children": true
+    },
+    "refer_to": {
+        "source": "biographies",
+        "type": "buildings",
+        "path": "",
+        "mode": "child_or_parent",
+        "auto_link": true
+    }
+}

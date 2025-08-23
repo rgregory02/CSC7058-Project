@@ -3560,7 +3560,6 @@ def new_property(type_name):
     os.makedirs(base, exist_ok=True)
 
     if request.method == "POST":
-        # Name -> key (auto if key blank)
         name = (request.form.get("name") or "").strip()
         raw_key = (request.form.get("key") or "").strip().lower()
         key = _slugify_key(raw_key or name)
@@ -3575,41 +3574,57 @@ def new_property(type_name):
 
         payload = {
             "name": name or key.replace("_", " ").title(),
-            "description": (request.form.get("description") or "").strip()
+            "description": (request.form.get("description") or "").strip(),
         }
 
-        # ----- Source block -----
-        source_kind = (request.form.get("source_kind") or "").strip()
-        source_type = (request.form.get("source_type") or "").strip()
-        source_path = (request.form.get("source_path") or "").strip()
-        allow_children = checkbox_on(request, "source_allow_children")
+        # ----- SOURCE (labels) / REFER_TO (biographies) -----
+        source_kind     = (request.form.get("source_kind") or "").strip()
+        source_type     = (request.form.get("source_type") or "").strip()
+        source_path     = (request.form.get("source_path") or "").strip()
+        allow_children  = checkbox_on(request, "source_allow_children")
+        link_bio_mode   = (request.form.get("link_bio_mode") or "child_or_parent").strip()
+        link_bio_auto   = checkbox_on(request, "link_bio_auto")  # <-- NEW
+
+        # Always start clean
+        payload.pop("source", None)
+        payload.pop("refer_to", None)
 
         if source_kind == "self_labels":
-            # normalize to a type_labels that points to the current type
             payload["source"] = {
                 "kind": "type_labels",
                 "type": type_name,
                 "path": source_path or key,   # default to the property key
                 "allow_children": bool(allow_children),
             }
-        elif source_kind in ("type_labels", "type_biographies") and source_type:
-            src = {"kind": source_kind, "type": source_type}
-            if source_kind == "type_labels":
-                src["path"] = source_path
-                src["allow_children"] = bool(allow_children)
-            payload["source"] = src
-        else:
-            payload.pop("source", None)
-
-
-        # ----- Link biography block (optional) -----
-        link_bio_type = (request.form.get("link_bio_type") or "").strip()
-        if link_bio_type:
-            payload["link_biography"] = {
-                "type": link_bio_type,
-                "path": (request.form.get("link_bio_path") or "").strip(),
-                "mode": (request.form.get("link_bio_mode") or "child_or_parent").strip()
+        elif source_kind == "type_labels" and source_type:
+            payload["source"] = {
+                "kind": "type_labels",
+                "type": source_type,
+                "path": source_path,
+                "allow_children": bool(allow_children),
             }
+        elif source_kind == "type_biographies" and source_type:
+            # Wizard reads biographies config from `refer_to`
+            payload["refer_to"] = {
+                "source": "biographies",
+                "type":   source_type,
+                "path":   source_path,   # may be blank or include {option}/{{option}}
+                "mode":   link_bio_mode,
+                "auto_link": bool(link_bio_auto),  # <-- NEW
+            }
+
+        # ----- (Legacy / optional) Link biography block -----
+        # If `refer_to` wasn't set above, honor these form fields as a shorthand.
+        if "refer_to" not in payload:
+            link_bio_type = (request.form.get("link_bio_type") or "").strip()
+            if link_bio_type:
+                payload["refer_to"] = {
+                    "source": "biographies",
+                    "type":   link_bio_type,
+                    "path":   (request.form.get("link_bio_path") or "").strip(),
+                    "mode":   link_bio_mode,
+                    "auto_link": bool(link_bio_auto),  # <-- NEW
+                }
 
         save_dict_as_json(path, payload)
         flash("Property created.", "success")
@@ -3636,49 +3651,59 @@ def edit_property(type_name, prop_key):
     prop = load_json_as_dict(path)
 
     if request.method == "POST":
-        # Allow rename of key (auto‑slug if blank)
-        name = (request.form.get("name") or "").strip() or prop.get("name") or prop_key.replace("_", " ").title()
+        name        = (request.form.get("name") or "").strip() or prop.get("name") or prop_key.replace("_", " ").title()
         raw_new_key = (request.form.get("key") or prop_key).strip().lower()
-        new_key = _slugify_key(raw_new_key or name) or prop_key
+        new_key     = _slugify_key(raw_new_key or name) or prop_key
 
-        # Start from existing to avoid losing unknown future fields
         payload = dict(prop)
         payload["name"] = name
         payload["description"] = (request.form.get("description") or "").strip()
 
-        source_kind = (request.form.get("source_kind") or "").strip()
-        source_type = (request.form.get("source_type") or "").strip()
-        source_path = (request.form.get("source_path") or "").strip()
-        allow_children = checkbox_on(request, "source_allow_children")
+        source_kind     = (request.form.get("source_kind") or "").strip()
+        source_type     = (request.form.get("source_type") or "").strip()
+        source_path     = (request.form.get("source_path") or "").strip()
+        allow_children  = checkbox_on(request, "source_allow_children")
+        link_bio_mode   = (request.form.get("link_bio_mode") or "child_or_parent").strip()
+        link_bio_auto   = checkbox_on(request, "link_bio_auto")  # <-- NEW
+
+        # Normalize fields
+        payload.pop("source", None)
+        payload.pop("refer_to", None)
 
         if source_kind == "self_labels":
-            # normalize to a type_labels that points to the current type
             payload["source"] = {
                 "kind": "type_labels",
                 "type": type_name,
-                "path": source_path or new_key,   # default to the property key
+                "path": source_path or new_key,
                 "allow_children": bool(allow_children),
             }
-        elif source_kind in ("type_labels", "type_biographies") and source_type:
-            src = {"kind": source_kind, "type": source_type}
-            if source_kind == "type_labels":
-                src["path"] = source_path
-                src["allow_children"] = bool(allow_children)
-            payload["source"] = src
-        else:
-            payload.pop("source", None)
-
-
-        # Link biography (optional)
-        link_bio_type = (request.form.get("link_bio_type") or "").strip()
-        if link_bio_type:
-            payload["link_biography"] = {
-                "type": link_bio_type,
-                "path": (request.form.get("link_bio_path") or "").strip(),
-                "mode": (request.form.get("link_bio_mode") or "child_or_parent").strip()
+        elif source_kind == "type_labels" and source_type:
+            payload["source"] = {
+                "kind": "type_labels",
+                "type": source_type,
+                "path": source_path,
+                "allow_children": bool(allow_children),
             }
-        else:
-            payload.pop("link_biography", None)
+        elif source_kind == "type_biographies" and source_type:
+            payload["refer_to"] = {
+                "source": "biographies",
+                "type":   source_type,
+                "path":   source_path,
+                "mode":   link_bio_mode,
+                "auto_link": bool(link_bio_auto),  # <-- NEW
+            }
+
+        # Legacy shorthand (only if `refer_to` not set above)
+        if "refer_to" not in payload:
+            link_bio_type = (request.form.get("link_bio_type") or "").strip()
+            if link_bio_type:
+                payload["refer_to"] = {
+                    "source": "biographies",
+                    "type":   link_bio_type,
+                    "path":   (request.form.get("link_bio_path") or "").strip(),
+                    "mode":   link_bio_mode,
+                    "auto_link": bool(link_bio_auto),  # <-- NEW
+                }
 
         # Save (handle rename)
         new_path = os.path.join(base, f"{new_key}.json")
@@ -3701,7 +3726,6 @@ def edit_property(type_name, prop_key):
         available_types=list_types(),
         label_groups_by_type=build_label_groups_by_type(),
     )
-
 
 # ---------- Properties: delete ----------
 @app.route("/type/<type_name>/properties/<prop_key>/delete", methods=["POST"])

@@ -1,0 +1,10 @@
+{
+    "name": "Fun buildings",
+    "description": "",
+    "source": {
+        "kind": "type_labels",
+        "type": "buildings",
+        "path": "work_building",
+        "allow_children": true
+    }
+}

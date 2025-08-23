@@ -205,7 +205,20 @@
   {% set bio_conf_val     = (existing_bio_selections.get(group.key ~ '_bio_conf', 100) if existing_bio_selections else 100) %}
 
   <div class="bio-suggestions">
-    <div class="label-title">📖 Linked Biographies ({{ rtype|replace('_',' ')|title }})</div>
+    <div class="label-title" style="justify-content:space-between;gap:8px">
+  <span>📖 Linked Biographies ({{ rtype|replace('_',' ')|title }})</span>
+  {% set _auto = (group.refer_to.auto_link if group.refer_to else (group.link_biography.auto_link if group.link_biography else False)) %}
+  <label class="muted" style="font-weight:400;display:flex;align-items:center;gap:6px">
+    <input type="checkbox"
+           class="auto-link-toggle"
+           data-group="{{ sugg_key }}"
+           {% if _auto %}checked{% endif %}>
+    Auto‑link exact match
+  </label>
+</div>
+<script>
+  AUTO_LINK["{{ group.key }}"] = {{ 'true' if _auto else 'false' | tojson }};
+</script>
 
     <input type="hidden" name="{{ bio_input_name }}" id="{{ bio_hidden_id }}"
            class="group-selection-tracker" value="{{ bio_selected_id }}">
@@ -406,6 +419,7 @@
 </div>
 
 <script>
+  const AUTO_LINK = Object.create(null);
   const CURRENT_TYPE = "{{ current_type }}";
   const qs  = sel => document.querySelector(sel);
   const qsa = sel => Array.from(document.querySelectorAll(sel));
@@ -601,6 +615,13 @@
   function renderBios(groupKey, bios) {
     const host = qs("#bios_for_" + safe(groupKey));
     if (!host) return;
+
+    // Preserve any existing selection + confidence before we overwrite the DOM
+    const prevHidden = qs("#input_" + safe(groupKey) + "_bio");
+    const prevBioId = prevHidden ? (prevHidden.value || "").trim() : "";
+    const prevConfEl = qs("#confidence_" + safe(groupKey) + "_bio");
+    const prevConf = prevConfEl ? parseInt(prevConfEl.value || "100", 10) : 100;
+
     if (!bios || !bios.length) {
       host.innerHTML = `
         <div class="bio-suggestions">
@@ -610,13 +631,14 @@
       return;
     }
 
+    const groupSafe = safe(groupKey);
     const cards = bios.map(b => `
       <div class="label-card"
-           tabindex="0"
-           data-group="${safe(groupKey)}_bio"
-           data-value="${b.id}"
-           onclick="toggleBioSelection(this, 'input_${safe(groupKey)}_bio')"
-           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); this.click();}">
+          tabindex="0"
+          data-group="${groupSafe}_bio"
+          data-value="${b.id}"
+          onclick="toggleBioSelection(this, 'input_${groupSafe}_bio')"
+          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); this.click();}">
         <div><strong>${b.display || b.id}</strong></div>
         ${b.description ? `<div class="label-description">${b.description}</div>` : ""}
       </div>
@@ -624,32 +646,72 @@
 
     host.innerHTML = `
       <div class="bio-suggestions">
-        <div class="label-title">
-  📖 Linked Biographies ({{ (rtype or current_type)|replace('_',' ')|title }})
-</div>
+        <div class="label-title">📖 Linked Biographies ({{ current_type|replace('_',' ')|title }})</div>
+
         <input type="hidden"
-               id="input_${safe(groupKey)}_bio"
-               name="selected_id_${groupKey}_bio"
-               class="group-selection-tracker"
-               value="">
+              id="input_${groupSafe}_bio"
+              name="selected_id_${groupKey}_bio"
+              class="group-selection-tracker"
+              value="${prevBioId}">
+
         <input type="text" class="label-search"
-               placeholder="Search biographies…"
-               oninput="filterLabels(this, '${safe(groupKey)}_bio')"
-               data-group="${safe(groupKey)}_bio">
+              placeholder="Search biographies…"
+              oninput="filterLabels(this, '${groupSafe}_bio')"
+              data-group="${groupSafe}_bio">
+
         <div class="label-options">${cards}</div>
+
         <div class="confidence-slider" style="margin-top:10px;">
-          <label for="confidence_${safe(groupKey)}_bio">🎯 Biography Match Confidence:</label><br>
+          <label for="confidence_${groupSafe}_bio">🎯 Biography Match Confidence:</label><br>
           <input type="range"
-                 name="confidence_${groupKey}_bio"
-                 id="confidence_${safe(groupKey)}_bio"
-                 min="0" max="100" value="100">
+                name="confidence_${groupKey}_bio"
+                id="confidence_${groupSafe}_bio"
+                min="0" max="100" value="${isFinite(prevConf) ? prevConf : 100}">
           <div class="confidence-display">
-            <span id="confidence_display_${safe(groupKey)}_bio">100%</span>
-            <span id="confidence_level_${safe(groupKey)}_bio"></span>
+            <span id="confidence_display_${groupSafe}_bio">${isFinite(prevConf) ? prevConf : 100}%</span>
+            <span id="confidence_level_${groupSafe}_bio"></span>
           </div>
         </div>
       </div>
     `;
+
+    // Mark selection if there was one
+    if (prevBioId) {
+      const card = qs(`.label-card[data-group="${groupSafe}_bio"][data-value="${cssEscape(prevBioId)}"]`);
+      if (card) card.classList.add("selected");
+    }
+
+    // ----- AUTO‑LINK exact match if enabled and nothing selected yet -----
+    try {
+      const autoOn = (AUTO_LINK && AUTO_LINK[groupKey]) ? true : false;
+      if (autoOn) {
+        const curSelInput = qs("#input_" + safe(groupKey));       // the label selection for this group
+        const curLabelId = (curSelInput ? (curSelInput.value || "").trim() : "");
+        const hiddenBio = qs("#input_" + groupSafe + "_bio");
+
+        if (curLabelId && hiddenBio && !hiddenBio.value) {
+          const pretty = curLabelId.replace(/_/g, " ").toLowerCase();
+          const match = bios.find(b =>
+            (b.id && b.id === curLabelId) ||
+            ((b.display || "").toLowerCase() === pretty)
+          );
+          if (match) {
+            // select it
+            hiddenBio.value = match.id;
+            const card = qs(`.label-card[data-group="${groupSafe}_bio"][data-value="${cssEscape(match.id)}"]`);
+            if (card) card.classList.add("selected");
+            // set confidence to 100 for exact auto‑link
+            const confEl = qs("#confidence_" + groupSafe + "_bio");
+            const confDisp = qs("#confidence_display_" + groupSafe + "_bio");
+            const level = qs("#confidence_level_" + groupSafe + "_bio");
+            if (confEl) confEl.value = 100;
+            if (confDisp) confDisp.textContent = "100%";
+            if (level) { level.textContent = "(Exact)"; level.style.color = "green"; }
+          }
+        }
+      }
+    } catch (_) {}
+
     initConfidenceFor(groupKey + "_bio");
     updateSaveButtonState();
   }
@@ -1013,6 +1075,16 @@ function selectChild(groupKey, labelId){
     el.textContent = s;
     el.style.color = ok ? "green" : "crimson";
   }
+
+  document.addEventListener('change', (e) => {
+    if (e.target && e.target.classList.contains('auto-link-toggle')) {
+      const g = e.target.getAttribute('data-group').replace(/__/g,'/');
+      AUTO_LINK[g] = !!e.target.checked;
+      // Re-run auto-link attempt for current list
+      try { _tryAutoLink(g); } catch(_) {}
+    }
+  });
+
 </script>
 
 </body>

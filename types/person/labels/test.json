@@ -1,9 +1,0 @@
-{
-  "name": "test",
-  "description": "Testing",
-  "source": {
-    "kind": "self_labels",
-    "path": "test",
-    "allow_children": true
-  }
-}
