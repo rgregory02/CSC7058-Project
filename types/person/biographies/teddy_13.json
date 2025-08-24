@@ -1,0 +1,31 @@
+{
+    "id": "teddy_13",
+    "uid": "5bcfad8158794b36a25c3aceca63a812",
+    "name": "Teddy",
+    "type": "person",
+    "created": "2025-08-24T04:30:23.472974+00:00",
+    "updated": "2025-08-24T04:31:34.497616+00:00",
+    "entries": [
+        {
+            "created": "2025-08-24T04:30:28.388806+00:00",
+            "updated": "2025-08-24T04:31:34.497616+00:00",
+            "time": {
+                "label_type": "dob",
+                "confidence": 100,
+                "date_value": "2025-08-07"
+            },
+            "time_normalised": {
+                "kind": "dob",
+                "start_iso": "2025-08-07",
+                "end_iso": "2025-08-07",
+                "start_ts": 1754524800,
+                "end_ts": 1754524800,
+                "precision": "exact",
+                "age_years": null,
+                "notes": "Fallback date parsing from date_value"
+            },
+            "person": []
+        }
+    ],
+    "dob": "2025-08-07"
+}

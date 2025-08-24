@@ -1,0 +1,29 @@
+{
+    "id": "teddy_14",
+    "uid": "a01503851bf54366bbf4386eb6124c36",
+    "name": "Teddy",
+    "type": "person",
+    "created": "2025-08-24T04:34:50.141266+00:00",
+    "updated": "2025-08-24T04:35:02.692796+00:00",
+    "entries": [
+        {
+            "created": "2025-08-24T04:35:02.692796+00:00",
+            "updated": "2025-08-24T04:35:02.692796+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 100,
+                "subvalue": "forties"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 45,
+                "notes": "Life stage 'forties' (no reference date — absolute bounds unknown)"
+            }
+        }
+    ]
+}

@@ -1,0 +1,29 @@
+{
+    "id": "becca_22",
+    "uid": "4c63fe1e415d4c90854e3403b1ef3be5",
+    "name": "Becca",
+    "type": "person",
+    "created": "2025-08-24T04:40:36.912183+00:00",
+    "updated": "2025-08-24T04:40:41.557160+00:00",
+    "entries": [
+        {
+            "created": "2025-08-24T04:40:41.557160+00:00",
+            "updated": "2025-08-24T04:40:41.557160+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 100,
+                "subvalue": "childhood"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 6.5,
+                "notes": "Life stage 'childhood' (no reference date — absolute bounds unknown)"
+            }
+        }
+    ]
+}

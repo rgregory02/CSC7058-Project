@@ -78,6 +78,17 @@ from utils import (
 
 from time_utils import normalise_time_for_bio_entry
 
+# general.py
+
+from llm_utils import (
+    call_llm_json,
+    build_group_prompts,
+    build_values_prompts,
+    build_enrichment_prompts,
+    collect_folder_options,
+    safe_parse_llm_json,
+)
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'the_random_string')  # Use environment variable if available
 
@@ -1980,6 +1991,8 @@ def api_labels_admin_create_option():
     _safe_json_write(path, data)
     return {"ok": True, "id": opt_id}
 
+
+
 @app.route("/general_iframe_wizard", methods=["GET", "POST"])
 def general_iframe_wizard():
     """
@@ -3773,26 +3786,127 @@ def set_bio_archived(type_name: str, bio_id: str, archived: bool) -> bool:
     return True
 
 
-@app.route("/suggest_labels", methods=["POST"])
-def suggest_labels():
-    data = request.get_json()
-    user_text = data.get("text")
-    type_name = data.get("type")  # e.g. 'person', 'buildings', 'organisation'
 
-    if not user_text or not type_name:
-        return jsonify({"error": "Missing input"}), 400
+# ======= SUGGEST A NEW LABEL GROUP (metadata + examples) =======
+@app.route("/api/labels/suggest_group", methods=["POST"])
+@app.route("/api/llm/labels/suggest_group", methods=["POST"])  # alias
+def llm_suggest_group():
+    data = request.get_json(force=True) or {}
+    t      = (data.get("type") or "").strip()
+    gkey   = (data.get("group_key") or "").strip()
+    hint   = (data.get("hint") or "").strip()
+    if not (t and gkey):
+        return jsonify({"ok": False, "reason": "Missing type/group_key"}), 400
 
+    sys_prompt, usr_prompt = build_group_prompts(t, gkey, hint)
+    raw = call_llm_json(system=sys_prompt, user=usr_prompt, schema="group_suggestion_v1")
+    ok, payload, err = safe_parse_llm_json(raw, schema="group_suggestion_v1")
+    if not ok:
+        return jsonify({"ok": False, "reason": f"Bad JSON: {err}", "raw": raw}), 200
+
+    return jsonify({"ok": True, **payload}), 200
+
+
+# === SUGGEST VALUES FOR AN EXISTING GROUP (this is the one UI uses) ===
+@app.route("/api/labels/suggest_values", methods=["POST"])
+@app.route("/api/llm/labels/suggest_values", methods=["POST"])  # alias (optional)
+def suggest_values_for_group():
+    data = request.get_json(force=True) or {}
+    t    = (data.get("type") or "").strip()
+    # UI sends "group" on some screens and "group_key" elsewhere; accept both
+    gkey = (data.get("group") or data.get("group_key") or "").strip()
+    n    = int(data.get("n") or 8)
+
+    if not (t and gkey):
+        return jsonify({"ok": False, "reason": "Missing type/group_key"}), 400
+
+    existing = collect_folder_options(t, gkey)
+    sys_prompt, usr_prompt = build_values_prompts(t, gkey, n, existing)
+
+    # IMPORTANT: schema & prompt both use 'values'
+    raw = call_llm_json(system=sys_prompt, user=usr_prompt, schema="values_suggestion_v1")
+    ok, payload, err = safe_parse_llm_json(raw, schema="values_suggestion_v1")
+    if not ok:
+        return jsonify({"ok": False, "reason": f"Bad JSON: {err}", "raw": raw}), 502
+
+    values = payload.get("values") or payload.get("options") or []
+    print(f"[AI] values for {t}/{gkey}: {values}")
+    return jsonify({"ok": True, "values": values, "existing": existing}), 200
+
+
+# ================== ENRICH A SINGLE LABEL ======================
+@app.route("/api/labels/enrich", methods=["POST"])
+@app.route("/api/llm/labels/enrich", methods=["POST"])  # alias
+def llm_enrich_label():
+    data   = request.get_json(force=True) or {}
+    t      = (data.get("type") or "").strip()
+    gkey   = (data.get("group_key") or data.get("group") or "").strip()
+    label  = (data.get("label_id") or "").strip()
+    if not (t and gkey and label):
+        return jsonify({"ok": False, "reason": "Missing type/group_key/label_id"}), 400
+
+    context = {"type": t, "group": gkey, "label_id": label}
+    sys_prompt, usr_prompt = build_enrichment_prompts(context)
+
+    raw = call_llm_json(system=sys_prompt, user=usr_prompt, schema="label_enrichment_v1")
+    ok, payload, err = safe_parse_llm_json(raw, schema="label_enrichment_v1")
+    if not ok:
+        return jsonify({"ok": False, "reason": f"Bad JSON: {err}", "raw": raw}), 200
+
+    return jsonify({"ok": True, "enrichment": payload}), 200
+
+
+# ======= PERSIST SELECTED SUGGESTED VALUES AS FILES ===========
+@app.route("/api/labels/create_values", methods=["POST"])
+def api_create_label_values():
+    data = request.get_json(force=True) or {}
+    t     = (data.get("type")  or "").strip()
+    gkey  = (data.get("group") or data.get("group_key") or "").strip()
+    items = data.get("items") or []   # [{id, display, description?, image_url?}]
+
+    if not t or not gkey or not isinstance(items, list):
+        return {"ok": False, "error": "Bad payload"}, 400
+
+    folder = os.path.join("types", t, "labels", gkey)
+    os.makedirs(folder, exist_ok=True)
+
+    written = []
+    for it in items:
+        oid = sanitise_key((it.get("id") or it.get("display") or "").strip())
+        if not oid:
+            continue
+        path = os.path.join(folder, f"{oid}.json")
+        if os.path.exists(path):
+            continue  # skip existing; add overwrite flag later if you want
+        doc = {
+            "id": oid,
+            "display": it.get("display") or oid.replace("_", " ").title(),
+        }
+        if it.get("description"): doc["description"] = it["description"]
+        if it.get("image"):       doc["image"]       = it["image"]
+        if it.get("image_url"):   doc["image_url"]   = it["image_url"]
+        save_dict_as_json(path, doc)
+        written.append(oid)
+
+    return {"ok": True, "written": written}, 200
+
+# in general.py
+@app.route("/diag/llm")
+def diag_llm():
     try:
-        suggestions = suggest_labels_from_text(user_text, type_name)
-        print(f"[SUGGEST] Input: {user_text} → Suggested IDs: {suggestions}")
-        return jsonify({"suggestions": suggestions or []})  # Always return list
-
+        from openai import OpenAI
+        import os
+        client = OpenAI(api_key=(os.getenv("OPENAI_API_KEY") or "").strip())
+        # Small, cheap call
+        r = client.responses.create(
+            model=os.getenv("LLM_MODEL","gpt-4o-mini"),
+            input=[{"role":"user","content":"Return {\"ok\":true} as JSON only"}],
+            response_format={"type":"json_object"},
+            temperature=0
+        )
+        return {"ok": True, "id": getattr(r, "id", None), "text": r.output_text}, 200
     except Exception as e:
-        print(f"[OpenAI ERROR] {e}")
-        return jsonify({
-            "suggestions": [],
-            "error": str(e)
-        }), 500
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}, 500
 
 @app.route("/most_like/<type_name>/<bio_id>")
 def most_like_type(type_name, bio_id):

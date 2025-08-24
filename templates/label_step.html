@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <title>Select Labels – {{ current_type|replace('_',' ')|title }}</title>
   <link rel="stylesheet" href="/static/styles.css">
+  <script>window.AUTO_LINK = window.AUTO_LINK || {};</script>
   <style>
     body { background:#f2f2f2; padding:40px; font-family:sans-serif; }
     .box { background:#fff; max-width:980px; margin:auto; padding:28px; border-radius:12px; box-shadow:0 2px 12px rgba(0,0,0,.08); }
@@ -66,11 +67,21 @@
       {% set matched_conf = existing.get('confidence', 100) %}
 
       <div class="label-group-box" id="group_{{ safe_key }}">
-        <div class="label-title">
-          {{ group.label or group.key.split('/')[-1]|replace('_',' ')|title }}
-          {% if group.description %}<span class="muted">— {{ group.description }}</span>{% endif %}
-          <button type="button" class="clear-btn" onclick="clearGroupUI('{{ group.key }}')">Clear</button>
-        </div>
+<div class="label-title">
+  {{ group.label or group.key.split('/')[-1]|replace('_',' ')|title }}
+  {% if group.description %}<span class="muted">— {{ group.description }}</span>{% endif %}
+
+  <!-- ✨ NEW: per‑group AI suggest trigger -->
+  <button type="button"
+          class="btn ghost"
+          style="padding:6px 10px;font-size:12px;margin-left:8px"
+          onclick="openAiSuggest('{{ current_type }}','{{ group.key }}','{{ safe_key }}')">
+    ✨ Suggest with AI
+  </button>
+
+  <button type="button" class="clear-btn" onclick="clearGroupUI('{{ group.key }}')">Clear</button>
+
+</div>
 
         {% if group.refer_to %}
           <div class="group-note">
@@ -217,7 +228,7 @@
   </label>
 </div>
 <script>
-  AUTO_LINK["{{ group.key }}"] = {{ 'true' if _auto else 'false' | tojson }};
+  AUTO_LINK["{{ group.key }}"] = {{ 'true' if _auto else 'false' }};
 </script>
 
     <input type="hidden" name="{{ bio_input_name }}" id="{{ bio_hidden_id }}"
@@ -380,6 +391,25 @@
         </div>
       </details>
     </div>
+
+    <!-- ✨ AI Suggest modal (shared) -->
+<div id="wiz_ai_modal"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.25);align-items:center;justify-content:center;z-index:9999">
+  <div style="background:#fff;padding:16px;border-radius:12px;width:min(640px,95vw);max-height:80vh;overflow:auto">
+    <h3 style="margin:0 0 8px">AI suggestions</h3>
+    <div style="display:flex;gap:8px;align-items:center">
+      <label>How many?</label>
+      <input id="wiz_ai_n" type="number" min="1" max="20" value="8" style="width:80px">
+      <label style="display:flex;gap:6px;align-items:center;margin-left:auto;font-size:12px">
+        <input type="checkbox" id="wiz_ai_create"> Create as new options
+      </label>
+      <button class="btn" id="wiz_ai_go" type="button">Generate</button>
+      <button class="btn gray" id="wiz_ai_close" type="button">Close</button>
+      <button id="wiz_ai_save_all" class="primary-button">Save all as options</button>
+    </div>
+    <div id="wiz_ai_results" style="margin-top:12px"></div>
+  </div>
+</div>
 
     <!-- GPT assist -->
     <div class="label-group-box">
@@ -1084,6 +1114,165 @@ function selectChild(groupKey, labelId){
       try { _tryAutoLink(g); } catch(_) {}
     }
   });
+
+// Ensure global exists (avoids "AUTO_LINK is not defined" in listeners)
+window.AUTO_LINK = window.AUTO_LINK || {};
+
+// Holds the context of the group we're suggesting for
+const WIZ_AI = { type:null, group:null, safe:null, hiddenId:null };
+
+function openAiSuggest(typeName, groupKey, safeKey){
+  WIZ_AI.type = typeName;
+  WIZ_AI.group = groupKey;
+  WIZ_AI.safe = safeKey;
+  // Your hidden input already follows this pattern:
+  WIZ_AI.hiddenId = `input_${safeKey}`;
+  const resEl = document.getElementById('wiz_ai_results');
+  if (resEl) resEl.innerHTML = '';
+  document.getElementById('wiz_ai_modal').style.display = 'flex';
+}
+window.openAiSuggest = openAiSuggest;
+
+document.getElementById('wiz_ai_close').addEventListener('click', () => {
+  document.getElementById('wiz_ai_modal').style.display = 'none';
+});
+
+document.getElementById('wiz_ai_go').addEventListener('click', async () => {
+  const n = Number(document.getElementById('wiz_ai_n').value || 8);
+  const res = document.getElementById('wiz_ai_results');
+  res.innerHTML = 'Generating…';
+
+  try {
+    const r = await fetch('/api/labels/suggest_values', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ type: WIZ_AI.type, group: WIZ_AI.group, n })
+    });
+
+    const data = await r.json();
+    console.debug('[AI] /api/labels/suggest_values →', data);
+
+    if (!data.ok) {
+      res.innerHTML = `<div class="muted">Error: ${data.error || 'unknown'}</div>`;
+      return;
+    }
+
+    // Support new & legacy shapes
+    const items =
+      (Array.isArray(data.values) && data.values) ||
+      (Array.isArray(data.options) && data.options) ||
+      (data.data && Array.isArray(data.data.values) && data.data.values) ||
+      (data.data && Array.isArray(data.data.items)  && data.data.items)  ||
+      [];
+
+    if (!items.length) { res.innerHTML = '<div class="muted">No suggestions.</div>'; return; }
+
+    res.innerHTML = items.map((it,i)=>`
+      <div class="label-card" tabindex="0"
+           style="margin:6px 0;cursor:pointer"
+           data-i="${i}">
+        <div><strong>${it.display || it.id}</strong> <span class="muted mono">${it.id || ''}</span></div>
+        ${it.description ? `<div class="label-description">${it.description}</div>` : ''}
+      </div>
+    `).join('');
+
+    // Click-to-apply each suggestion
+    Array.from(res.querySelectorAll('.label-card')).forEach(card => {
+      card.addEventListener('click', async () => {
+        const i = Number(card.dataset.i);
+        const picked = items[i];
+
+        // 1) If "Create as new options" is ticked, persist to disk
+        if (document.getElementById('wiz_ai_create')?.checked) {
+          try {
+            const resp = await fetch('/api/labels/create_values', {
+              method: 'POST',
+              headers: {'Content-Type':'application/json'},
+              body: JSON.stringify({ type: WIZ_AI.type, group: WIZ_AI.group, items: [picked] })
+            });
+            const wr = await resp.json();
+            if (!wr?.ok) console.warn('[AI] save failed', wr);
+          } catch (_e) {}
+        }
+
+        // 2) Always inject the option card into the main list so it’s selectable immediately
+        _renderOptionCard(WIZ_AI.safe, WIZ_AI.group, picked);
+
+        // 3) Auto‑select the just‑injected card (updates hidden input + confidence bar)
+        const idToPick = (picked.id || '').trim();
+        const cardEl = document.getElementById(`card_${WIZ_AI.safe}_${idToPick}`);
+        cardEl?.click();
+
+        // 4) Close the modal
+        document.getElementById('wiz_ai_modal').style.display = 'none';
+        if (typeof updateSaveButtonState === 'function') updateSaveButtonState();
+      });
+    });
+  } catch (e) {
+    console.error('[AI] fetch failed:', e);
+    res.innerHTML = `<div class="muted">Error: ${e?.message || e}</div>`;
+  }
+});
+
+document.getElementById('wiz_ai_save_all')?.addEventListener('click', async () => {
+  const res = document.getElementById('wiz_ai_results');
+  const cards = [...res.querySelectorAll('.label-card')];
+  if (!cards.length) { res.innerHTML = '<div class="muted">No suggestions to save.</div>'; return; }
+
+  // Build items array from rendered suggestions
+  const items = cards.map(c => {
+    const strong = c.querySelector('strong')?.textContent?.trim() || '';
+    const mono   = c.querySelector('.mono')?.textContent?.trim() || ''; // if you kept the id in a mono span
+    const desc   = c.querySelector('.label-description')?.textContent?.trim() || '';
+    const id     = (mono || strong || '').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+    return { id, display: strong || id.replace(/_/g,' '), description: desc };
+  });
+
+  try {
+    const r = await fetch('/api/labels/create_values', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ type: WIZ_AI.type, group: WIZ_AI.group, items })
+    });
+    const data = await r.json();
+    if (!data.ok) { res.insertAdjacentHTML('beforeend', `<div class="muted">Save failed.</div>`); return; }
+
+    console.log('[AI] bulk saved', data.written);
+    // Optionally: refresh the list or inject cards as in A)
+  } catch (e) {
+    console.warn(e);
+  }
+});
+
+function _renderOptionCard(safeKey, groupKey, opt){
+  const container = document.querySelector(`#group_${safeKey} .label-options`);
+  if (!container) return;
+
+  const id   = (opt.id || '').trim();
+  const disp = opt.display || id.replace(/_/g,' ');
+  const desc = opt.description || '';
+
+  // Avoid duplicate injection (use cssEscape for portability)
+  if (document.getElementById(`card_${safeKey}_${cssEscape(id)}`)) return;
+
+  const div = document.createElement('div');
+  div.className = 'label-card';
+  div.id        = `card_${safeKey}_${id}`;
+  div.setAttribute('data-group', groupKey);
+  div.setAttribute('data-value', id);
+  div.tabIndex = 0;
+  div.innerHTML = `
+    <div><strong>${disp}</strong></div>
+    ${desc ? `<div class="label-description">${desc}</div>` : ''}
+  `;
+  div.onclick = () => selectLabel(groupKey, id, false);
+  div.onkeydown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectLabel(groupKey, id, false); }
+  };
+
+  container.appendChild(div);
+}
+
 
 </script>
 
