@@ -7,7 +7,7 @@ import math
 import uuid
 
 from collections import defaultdict
-from flask import Flask, Response, jsonify, request, url_for, redirect, render_template, flash, get_flashed_messages, send_from_directory, render_template_string, session, request
+from flask import Flask, Response, jsonify, request, url_for, redirect, render_template, flash, get_flashed_messages, send_from_directory, render_template_string, session
 from markupsafe import Markup, escape
 from urllib.parse import quote, unquote
 from datetime import datetime, timezone, timedelta
@@ -73,13 +73,10 @@ from utils import (
     _collect_all_labels,
     build_label_catalog_for_type,
     resolve_property_options as _utils_resolve_property_options,
-    _sibling_image,
-    fetch_external_options
+    _sibling_image
 )
 
 from time_utils import normalise_time_for_bio_entry
-
-from secrets_utils import set_secret, get_secret, has_secret
 
 # general.py
 
@@ -1994,51 +1991,6 @@ def api_labels_admin_create_option():
     _safe_json_write(path, data)
     return {"ok": True, "id": opt_id}
 
-
-@app.post("/api/admin/secrets/set")
-def api_admin_secrets_set():
-    """
-    Body: { "name": "ONET_API_KEY", "value": "sk-..." }
-    Stores the secret server-side in secrets.json (git-ignored).
-    If value=="", deletes the secret.
-    """
-    payload = request.get_json(force=True) or {}
-    name = (payload.get("name") or "").strip()
-    value = (payload.get("value") or "")
-    if not name:
-        return jsonify(ok=False, error="Missing name"), 400
-    set_secret(name, value)
-    return jsonify(ok=True)
-
-@app.post("/api/admin/secrets/status")
-def api_admin_secrets_status():
-    """
-    Body: { "name": "ONET_API_KEY" }
-    Returns { ok:true, exists:bool }
-    """
-    payload = request.get_json(force=True) or {}
-    name = (payload.get("name") or "").strip()
-    if not name:
-        return jsonify(ok=False, error="Missing name"), 400
-    return jsonify(ok=True, exists=has_secret(name))
-
-@app.post("/api/admin/external/test")
-def api_admin_external_test():
-    """
-    Body: { "source": { ... external_api config ... }, "search": "nurse" }
-    Uses current env/secrets to attempt a live call and returns first few mapped options.
-    """
-    payload = request.get_json(force=True) or {}
-    source = payload.get("source") or {}
-    search = (payload.get("search") or "").strip()
-    if source.get("kind") != "external_api":
-        return jsonify(ok=False, error="source.kind must be external_api"), 400
-
-    try:
-        results = fetch_external_options(source, search)
-        return jsonify(ok=True, sample=results[:5])
-    except Exception as e:
-        return jsonify(ok=False, error=str(e)), 500
 
 
 @app.route("/general_iframe_wizard", methods=["GET", "POST"])
@@ -3955,28 +3907,6 @@ def diag_llm():
         return {"ok": True, "id": getattr(r, "id", None), "text": r.output_text}, 200
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}, 500
-
-@app.route("/api/labels/external_options", methods=["POST"])
-def api_external_options():
-    data = request.get_json(force=True) or {}
-    type_name = data.get("type")
-    prop_key  = data.get("prop")
-    search    = data.get("search","").strip()
-
-    # Load the property definition
-    prop_file = f"./types/{type_name}/properties/{prop_key}.json"
-    if not os.path.exists(prop_file):
-        return {"ok": False, "error": "No such property"}, 404
-
-    prop = load_json_as_dict(prop_file)
-    src = prop.get("source", {})
-    if src.get("kind") != "external_api":
-        return {"ok": False, "error": "Not an external API property"}, 400
-
-    from utils import fetch_external_options
-    results = fetch_external_options(src, search)
-
-    return {"ok": True, "options": results}, 200
 
 @app.route("/most_like/<type_name>/<bio_id>")
 def most_like_type(type_name, bio_id):

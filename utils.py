@@ -1,11 +1,9 @@
-import re, math, os, json, requests
+import re, math, os, json
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from openai import OpenAI
 import glob
 from typing import List, Dict, Any, Optional  
-
-from secrets_utils import get_secret
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -2166,82 +2164,4 @@ def _list_biographies(type_name: str) -> List[dict]:
         })
     # Keep ordering stable
     out.sort(key=lambda x: (x.get("display","").lower(), x.get("id","").lower()))
-    return out
-
-def fetch_external_options(src: dict, search: str = "") -> list[dict]:
-    if not src or src.get("kind") != "external_api":
-        return []
-
-    endpoint = src.get("endpoint")
-    method   = (src.get("method") or "GET").upper()
-
-    # Build headers
-    headers = {}
-    # 1) Look up token name to pull from env or secrets.json
-    env_name = (src.get("headers_env") or "").strip()
-    token = ""
-    if env_name:
-        token = os.getenv(env_name, "") or get_secret(env_name)  # <- env first, then secrets.json
-    if token:
-        # common “Bearer” default; adjust if your API needs a different header key
-        headers["Authorization"] = f"Bearer {token}"
-    # Also allow static headers map if you add it later
-    for k, v in (src.get("headers_static") or {}).items():
-        headers[k] = v
-
-    # Query/body templating
-    def _sub(v: str) -> str:
-        return (v or "").replace("{search}", search)
-
-    params, body = {}, None
-    if isinstance(src.get("query"), dict):
-        params = {k: _sub(str(v)) for k, v in src["query"].items()}
-    if isinstance(src.get("body"), dict):
-        body = {k: _sub(str(v)) for k, v in src["body"].items()}
-
-    # Request
-    try:
-        if method == "GET":
-            resp = requests.get(endpoint, params=params, headers=headers, timeout=15)
-        else:
-            resp = requests.post(endpoint, json=body, params=params, headers=headers, timeout=15)
-    except Exception as e:
-        print(f"[external_api] request error: {e}")
-        return []
-
-    if resp.status_code >= 400:
-        print(f"[external_api] {resp.status_code}: {resp.text[:300]}")
-        return []
-
-    try:
-        data = resp.json()
-    except Exception as e:
-        print(f"[external_api] JSON parse error: {e}")
-        return []
-
-    # list_path like "data.items"
-    items = data
-    for p in (src.get("list_path","").split(".") if src.get("list_path") else []):
-        if not p: continue
-        if isinstance(items, dict):
-            items = items.get(p, [])
-        else:
-            items = []
-    if not isinstance(items, list):
-        items = []
-
-    mapping = src.get("map", {})
-    out = []
-    for it in items:
-        if not isinstance(it, dict):
-            continue
-        _id = str(it.get(mapping.get("id",""), "")).strip()
-        if not _id:
-            continue
-        out.append({
-            "id": _id,
-            "display": str(it.get(mapping.get("display",""), "") or _id).strip(),
-            "description": str(it.get(mapping.get("description",""), "") or ""),
-            "image_url": str(it.get(mapping.get("image_url",""), "") or ""),
-        })
     return out
