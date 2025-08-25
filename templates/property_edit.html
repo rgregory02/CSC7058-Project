@@ -85,6 +85,7 @@
           <option value="self_labels" {{ 'selected' if ui_kind=='self_labels' else '' }}>self_labels (this type)</option>
           <option value="type_labels" {{ 'selected' if ui_kind=='type_labels' else '' }}>type_labels (another type)</option>
           <option value="type_biographies" {{ 'selected' if ui_kind=='type_biographies' else '' }}>type_biographies (another type)</option>
+          <option value="external_api" {{ 'selected' if ui_kind=='external_api' else '' }}>external_api (HTTP)</option>
         </select>
         <small class="help">Choose where this property’s options come from.</small>
       </div>
@@ -128,7 +129,122 @@
             <label for="source_allow_children" style="margin:0">Allow child folders</label>
           </div>
         </div>
+
+     <!-- External API config (shown only when Source kind = external_api) -->
+<div class="full" id="external_api_block" style="display:none">
+  <span class="pill">External API</span>
+
+  <!-- Endpoint + method -->
+  <div class="twoCols" style="margin-top:10px">
+    <div>
+      <label for="api_endpoint">Endpoint URL</label>
+      <input type="text" id="api_endpoint" name="source_api_endpoint"
+             placeholder="https://api.example.com/search"
+             value="{{ (src.get('endpoint') if src else '') or '' }}">
+      <small class="help">Full URL to the API endpoint.</small>
+    </div>
+    <div>
+      <label for="api_method">HTTP Method</label>
+      {% set _m = (src.get('method') if src else '') or 'GET' %}
+      <select id="api_method" name="source_api_method">
+        <option value="GET"  {{ 'selected' if _m=='GET'  else '' }}>GET</option>
+        <option value="POST" {{ 'selected' if _m=='POST' else '' }}>POST</option>
+      </select>
+      <small class="help">GET (query params) or POST (JSON body).</small>
+    </div>
+  </div>
+
+  <!-- Auth + cache -->
+  <div class="twoCols">
+    <div>
+      <label for="api_headers_env">Env Var for Auth</label>
+      <input type="text" id="api_headers_env" name="source_api_headers_env"
+             placeholder="ONENET_API_KEY"
+             value="{{ (src.get('headers_env') if src else '') or '' }}">
+      <small class="help">We’ll send <code>Authorization: Bearer $ENV</code>. Leave blank for none.</small>
+    </div>
+    <div>
+      <label for="api_cache_seconds">Cache (seconds)</label>
+      <input type="text" id="api_cache_seconds" name="source_api_cache_seconds"
+             placeholder="e.g. 3600"
+             value="{{ (src.get('cache_seconds') if src else '') or '' }}">
+      <small class="help">Optional time‑based cache to reduce API calls.</small>
+    </div>
+  </div>
+
+  <!-- Query/body template -->
+  <div class="full">
+    <label for="api_query">Query / Body Template (JSON)</label>
+    <textarea id="api_query" name="source_api_query" placeholder='{"q": "{search}", "limit": 25}'>{{ (src.get('query')|tojson if (src and src.get('query') is not none) else '') }}</textarea>
+    <small class="help">Use <code>{search}</code> to inject the user’s filter text.</small>
+  </div>
+
+  <!-- Response mapping -->
+  <div class="twoCols">
+    <div>
+      <label for="api_list_path">List Path</label>
+      <input type="text" id="api_list_path" name="source_api_list_path"
+             placeholder="results.items"
+             value="{{ (src.get('list_path') if src else '') or '' }}">
+      <small class="help">Dot path to the array in the API response (blank if top‑level array).</small>
+    </div>
+    <div>
+      <label>Field Mapping</label>
+      <div class="twoCols">
+        <div>
+          <input type="text" id="api_map_id" name="source_api_map_id"
+                 placeholder="id"
+                 value="{{ ((src.get('map') or {}).get('id') if src else '') or '' }}">
+          <small class="help">id path</small>
+        </div>
+        <div>
+          <input type="text" id="api_map_display" name="source_api_map_display"
+                 placeholder="name"
+                 value="{{ ((src.get('map') or {}).get('display') if src else '') or '' }}">
+          <small class="help">display path</small>
+        </div>
       </div>
+      <div class="twoCols" style="margin-top:8px">
+        <div>
+          <input type="text" id="api_map_description" name="source_api_map_description"
+                 placeholder="summary"
+                 value="{{ ((src.get('map') or {}).get('description') if src else '') or '' }}">
+          <small class="help">description path (optional)</small>
+        </div>
+        <div>
+          <input type="text" id="api_map_image_url" name="source_api_map_image_url"
+                 placeholder="logo"
+                 value="{{ ((src.get('map') or {}).get('image_url') if src else '') or '' }}">
+          <small class="help">image_url path (optional)</small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🔐 API key management + live test -->
+  <div class="full" id="api_key_box" style="display:none; border:1px dashed #e5e7eb; padding:12px; border-radius:10px; margin-top:8px;">
+    <label>🔐 API Key for <code id="api_key_name">—</code></label>
+    <div class="row" style="gap:8px; align-items:center;">
+      <input type="password" id="api_key_value" placeholder="Paste key (stored securely on server)">
+      <button type="button" class="btn" id="api_key_save">Save Key</button>
+      <button type="button" class="btn secondary" id="api_key_check">Check Key</button>
+    </div>
+    <small class="help" id="api_key_status">Key not checked yet.</small>
+
+    <div class="row" style="gap:8px; margin-top:10px;">
+      <input type="text" id="api_test_search" placeholder="Test search (optional, e.g. nurse)">
+      <button type="button" class="btn ghost" id="api_test_btn">Test Connection</button>
+    </div>
+    <div id="api_test_result" class="muted" style="margin-top:6px"></div>
+  </div>
+
+  <small class="help">
+    These settings are saved on the property as
+    <code>source: { kind: "external_api", endpoint, method, headers_env, query, list_path, map, cache_seconds }</code>.
+    API keys are stored server‑side (not in Git).
+  </small>
+</div>
+
 
       <!-- Link biography block -->
       <div class="full"><span class="pill">Link Biography</span></div>
@@ -213,6 +329,32 @@
   const linkBioTypeEl = document.getElementById('link_bio_type');
   const autoLinkContainer = document.getElementById('auto_link_container');
 
+  // External API block
+  const extApiBlock     = document.getElementById('external_api_block');
+  const apiEndpointEl   = document.getElementById('api_endpoint');
+  const apiMethodEl     = document.getElementById('api_method');
+  const apiHeadersEnvEl = document.getElementById('api_headers_env');
+  const apiCacheEl      = document.getElementById('api_cache_seconds');
+  const apiQueryEl      = document.getElementById('api_query');
+  const apiListPathEl   = document.getElementById('api_list_path');
+  const apiMapIdEl      = document.getElementById('api_map_id');
+  const apiMapDispEl    = document.getElementById('api_map_display');
+  const apiMapDescEl    = document.getElementById('api_map_description');
+  const apiMapImgEl     = document.getElementById('api_map_image_url');
+
+  // External API: key panel elements
+  const apiKeyBox    = document.getElementById('api_key_box');
+  const apiKeyNameEl = document.getElementById('api_key_name');
+  const apiKeyValue  = document.getElementById('api_key_value');
+  const apiKeySave   = document.getElementById('api_key_save');
+  const apiKeyCheck  = document.getElementById('api_key_check');
+  const apiKeyStatus = document.getElementById('api_key_status');
+
+  // External API: test controls
+  const apiTestSearch = document.getElementById('api_test_search');
+  const apiTestBtn    = document.getElementById('api_test_btn');
+  const apiTestOut    = document.getElementById('api_test_result');
+
   let keyDirty = {{ 'true' if mode=='edit' else 'false' }};
 
   function toSnakeCase(s){
@@ -247,12 +389,15 @@
     const isSelf = (kind === 'self_labels');
     const isLbls = (kind === 'type_labels');
     const isBios = (kind === 'type_biographies');
+    const isApi  = (kind === 'external_api');
 
+    // Enable/disable classic label controls
     sourceTypeEl.disabled     = !(isLbls || isBios);
     sourcePathEl.disabled     = !(isSelf || isLbls);
     pathSelect.disabled       = !(isSelf || isLbls);
     allowChildrenEl.disabled  = !(isSelf || isLbls);
 
+    // Fill pickers for classic labels
     if (isSelf){
       fillGroupsUI(LABEL_GROUPS_BY_TYPE[CURRENT_TYPE] || []);
       if (!firstLoad && !sourcePathEl.value) {
@@ -265,10 +410,13 @@
       allowChildrenEl.checked = false;
     }
 
+    // External API visibility
+    showExternalApiConfig(isApi);
+
     // Keep legacy link fields dimmed if type_biographies is chosen
     toggleLegacyLinkBio();
 
-    // NEW: if we’re using labels and link_bio_type is empty, mirror the source type
+    // Mirror link_bio_type from source_type when sensible
     maybeMirrorBioTypeFromSource();
     refreshAutoLinkVisibility();
   }
@@ -283,7 +431,7 @@
     });
   }
 
-  // NEW: mirror link_bio_type from source_type when sensible
+  // Mirror link_bio_type from source_type when sensible
   function maybeMirrorBioTypeFromSource() {
     if (!linkBioTypeEl) return;
     const kind = sourceKindEl.value;
@@ -296,13 +444,110 @@
     }
   }
 
-  // NEW: show/hide the auto-link row
+  // Show/hide the auto-link row
   function refreshAutoLinkVisibility() {
     if (!autoLinkContainer) return;
     const kind = sourceKindEl.value;
     const hasTypeBios = (kind === 'type_biographies') && !!(sourceTypeEl.value);
     const hasLegacy   = !!(linkBioTypeEl && linkBioTypeEl.value);
     autoLinkContainer.style.display = (hasTypeBios || hasLegacy) ? 'block' : 'none';
+  }
+
+  // ---- External API helpers ----
+  function showExternalApiConfig(show){
+    if (!extApiBlock) return;
+    extApiBlock.style.display = show ? 'block' : 'none';
+    refreshKeyBox(); // keep key panel in sync
+  }
+
+  function refreshKeyBox(){
+    if (!apiKeyBox) return;
+    const isApi = (sourceKindEl.value === 'external_api');
+    const envName = (apiHeadersEnvEl?.value || '').trim();
+    apiKeyBox.style.display = (isApi && envName) ? 'block' : 'none';
+    if (apiKeyNameEl) apiKeyNameEl.textContent = envName || '—';
+  }
+
+  function parseQueryJSON(){
+    // Accept either JSON or blank
+    const raw = (apiQueryEl?.value || '').trim();
+    if (!raw) return {};
+    try {
+      return JSON.parse(raw);
+    } catch(_){
+      // Keep it resilient; the server will also validate.
+      return {};
+    }
+  }
+
+  async function saveKey(){
+    const envName = (apiHeadersEnvEl?.value || '').trim();
+    const value = (apiKeyValue?.value || '');
+    if(!envName){ alert('Set the Env var name first'); return; }
+    const res = await fetch('/api/admin/secrets/set', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ name: envName, value })
+    });
+    let data = {};
+    try { data = await res.json(); } catch(_){}
+    if (apiKeyStatus) {
+      apiKeyStatus.textContent = (data && data.ok) ? 'Key saved on server.' : ('Save failed' + (data?.error ? ': ' + data.error : '.'));
+    }
+    if (data?.ok && apiKeyValue) apiKeyValue.value = '';
+  }
+
+  async function checkKey(){
+    const envName = (apiHeadersEnvEl?.value || '').trim();
+    if(!envName){ alert('Set the Env var name first'); return; }
+    const res = await fetch('/api/admin/secrets/status', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ name: envName })
+    });
+    let data = {};
+    try { data = await res.json(); } catch(_){}
+    if (apiKeyStatus) {
+      apiKeyStatus.textContent = (data && data.exists) ? 'Key present on server.' : 'No key stored yet.';
+    }
+  }
+
+  async function testConnection(){
+    if (apiTestOut) apiTestOut.textContent = 'Testing…';
+
+    const source = {
+      kind: 'external_api',
+      endpoint:  apiEndpointEl?.value || '',
+      method:    apiMethodEl?.value || 'GET',
+      headers_env: apiHeadersEnvEl?.value || '',
+      cache_seconds: apiCacheEl?.value || '',
+      query:     parseQueryJSON(),
+      list_path: apiListPathEl?.value || '',
+      map: {
+        id:          apiMapIdEl?.value || '',
+        display:     apiMapDispEl?.value || '',
+        description: apiMapDescEl?.value || '',
+        image_url:   apiMapImgEl?.value || ''
+      }
+    };
+
+    try{
+      const res = await fetch('/api/admin/external/test', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ source, search: (apiTestSearch?.value || '') })
+      });
+      const data = await res.json();
+      if(!data.ok){
+        if (apiTestOut) apiTestOut.textContent = 'Error: ' + (data.error || 'unknown');
+        return;
+      }
+      const sample = data.sample || [];
+      if (apiTestOut) {
+        apiTestOut.innerHTML = sample.length
+          ? ('Sample: ' + sample.slice(0,3).map(o => `${o.display} (${o.id})`).join(', '))
+          : 'No results (check endpoint/list_path/map).';
+      }
+    }catch(e){
+      if (apiTestOut) apiTestOut.textContent = 'Request failed: ' + (e?.message || e);
+    }
   }
 
   // Wire up listeners
@@ -318,15 +563,26 @@
     linkBioTypeEl.addEventListener('change', refreshAutoLinkVisibility);
   }
 
-  // mirror dropdown selection into the text input
+  // Mirror dropdown selection into the text input
   pathSelect.addEventListener('change', () => {
     if (pathSelect.value) sourcePathEl.value = pathSelect.value;
   });
 
+  // External API listeners
+  apiHeadersEnvEl?.addEventListener('input', refreshKeyBox);
+  apiKeySave?.addEventListener('click', saveKey);
+  apiKeyCheck?.addEventListener('click', checkKey);
+  apiTestBtn?.addEventListener('click', testConnection);
+
+  // Init on load
   document.addEventListener('DOMContentLoaded', () => {
     const initialKind = '{{ ui_kind }}';
     if (initialKind === 'self_labels') {
       sourceKindEl.value = 'self_labels';
+    }
+    // If the saved property is external_api, make sure it shows immediately.
+    if (initialKind === 'external_api') {
+      showExternalApiConfig(true);
     }
     refreshSourceControls(true);
 
@@ -336,6 +592,7 @@
 
     // Ensure visibility is correct on load
     refreshAutoLinkVisibility();
+    refreshKeyBox();
   });
 </script>
 

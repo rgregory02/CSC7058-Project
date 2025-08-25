@@ -1272,6 +1272,15 @@ function _renderOptionCard(safeKey, groupKey, opt){
 
   container.appendChild(div);
 }
+const res = await fetch("/api/labels/external_options", {
+  method: "POST",
+  headers: {"Content-Type":"application/json"},
+  body: JSON.stringify({ type: CURRENT_TYPE, prop: propKey, search: userSearch })
+});
+const data = await res.json();
+if (data.ok) {
+  renderOptions(data.options);
+}
 
 
 </script>
