@@ -1,0 +1,9 @@
+{
+  "name": "test",
+  "description": "",
+  "source": {
+    "kind": "self_labels",
+    "path": "test",
+    "allow_children": true
+  }
+}

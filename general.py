@@ -165,6 +165,28 @@ def _load_time_kinds_and_options():
 
     return time_kinds, options_by_key
 
+# --- API label importer (accepts the same keywords your form/route sends) ---
+import os, json, re
+from typing import List, Dict, Any
+import requests
+
+def _dig(obj: Any, path: str) -> Any:
+    if not path:
+        return obj
+    cur = obj
+    for part in path.split("."):
+        if isinstance(cur, dict) and part in cur:
+            cur = cur[part]
+        else:
+            return None
+    return cur
+
+def _normalize_id(val: str) -> str:
+    if not isinstance(val, str):
+        return ""
+    m = re.search(r"/entity/(Q[0-9]+)$", val)
+    return m.group(1) if m else val
+
 
 def _resolve_group_options(scope_t: str, meta: dict, *, group_key: str, collection_type: str = None) -> list:
     """
@@ -4302,29 +4324,57 @@ def create_subfolder(type_name):
         populate_mode = request.form.get("populate_mode") or "manual"
 
         if populate_mode == "api":
-            api_url     = (request.form.get("api_url") or "").strip()
+            # --- read form fields ---
+            api_url         = (request.form.get("api_url") or "").strip()
+            api_method      = (request.form.get("api_method") or "GET").strip().upper()
+            api_headers_env = (request.form.get("api_headers_env") or "").strip()
+            api_cache_secs  = int(request.form.get("api_cache_seconds") or "0")
+
             array_path  = (request.form.get("api_array_path") or "").strip()
             field_id    = (request.form.get("api_field_id") or "id").strip()
             field_name  = (request.form.get("api_field_display") or "name").strip()
-            field_desc  = (request.form.get("api_field_desc") or "description").strip()
-            field_img   = (request.form.get("api_field_image") or "image_url").strip()
-            max_items   = int(request.form.get("api_max_items") or "200")
+            field_desc  = (request.form.get("api_field_desc") or "").strip()
+            field_img   = (request.form.get("api_field_image") or "").strip()
+
+            # optional JSON body / params
+            raw_body = (request.form.get("api_body_json") or request.form.get("api_query") or "").strip()
+            query_payload = None
+            if raw_body:
+                try:
+                    query_payload = json.loads(raw_body)
+                except Exception:
+                    # If not valid JSON, leave None; backend will just not send a body/params
+                    query_payload = None
 
             if not api_url:
                 flash("API URL is required for API population.", "error")
                 return redirect(request.url)
 
-            created = _import_labels_from_api(
-                type_name, internal_name, display_label, group_desc,
-                api_url=api_url,
-                array_path=array_path,
+            # --- call the utils helper with the CORRECT signature ---
+            from utils import _import_labels_from_api as import_labels_from_api_files
+
+            ok, info = import_labels_from_api_files(
+                folder_path=subfolder_path,        # where label files will be written
+                endpoint=api_url,                  # URL
+                method=api_method,                 # GET or POST
+                headers_env=api_headers_env,       # env var name for Authorization Bearer (optional)
+                query=query_payload,               # dict -> params (GET) or JSON body (POST)
+                list_path=array_path,              # dotted array path (e.g. "search" or "results.bindings")
                 field_map={
-                    "id": field_id, "display": field_name,
-                    "description": field_desc, "image_url": field_img
+                    "id":          field_id,
+                    "display":     field_name,
+                    "description": field_desc,
+                    "image_url":   field_img,
                 },
-                headers=None, query=None, max_items=max_items
+                cache_seconds=api_cache_secs,      # optional naive cache in your helper
             )
-            flash(f"✅ Imported {len(created)} labels from API.", "success")
+
+            print("[API IMPORT]", ok, info)
+
+            if not ok:
+                flash(f"⚠️ API import failed: {info.get('error','unknown error')}", "error")
+            else:
+                flash(f"✅ Imported {info.get('count',0)} labels from API.", "success")
 
         elif populate_mode == "db_sqlite":
             sqlite_path = (request.form.get("db_sqlite_path") or "").strip()

@@ -1,0 +1,29 @@
+{
+    "id": "medium",
+    "uid": "31f76540e2394dc9b0e1b1d97ba6d06b",
+    "name": "Medium",
+    "type": "organisations",
+    "created": "2025-08-27T20:18:40.164408+00:00",
+    "updated": "2025-08-27T20:18:48.399739+00:00",
+    "entries": [
+        {
+            "created": "2025-08-27T20:18:48.399739+00:00",
+            "updated": "2025-08-27T20:18:48.399739+00:00",
+            "time": {
+                "label_type": "date",
+                "confidence": 31,
+                "date_value": "2025-08-12"
+            },
+            "time_normalised": {
+                "kind": "date",
+                "start_iso": "2025-08-12",
+                "end_iso": "2025-08-12",
+                "start_ts": 1754956800,
+                "end_ts": 1754956800,
+                "precision": "approx",
+                "age_years": null,
+                "notes": "Direct date entry"
+            }
+        }
+    ]
+}

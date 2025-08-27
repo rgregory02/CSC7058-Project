@@ -10,16 +10,18 @@
     h1{margin:0 0 4px}
     .muted{color:#657085;margin-bottom:16px}
     label{font-weight:600;margin-top:10px;display:block}
-    input[type=text], textarea, input[type=search]{width:100%;padding:10px;border:1px solid #dfe3ee;border-radius:10px}
+    input[type=text], textarea, input[type=search], input[type=number], select{width:100%;padding:10px;border:1px solid #dfe3ee;border-radius:10px}
     textarea{min-height:80px}
     .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
     .btn{display:inline-block;padding:10px 16px;border-radius:10px;background:#6c63ff;color:#fff;text-decoration:none;font-weight:600;border:none;cursor:pointer}
     .btn.secondary{background:#eef0f7;color:#333}
+    .btn.ghost{background:transparent;color:#6c63ff;border:1px solid #cfd3ff}
     .section{padding:14px;border:1px solid #e7e9f2;border-radius:12px;background:#fafbff;margin-top:14px}
     .small{font-size:12px;color:#6b7280}
     .flash{margin:8px 0;padding:10px;border-radius:8px}
     .flash.error{background:#ffecec;border:1px solid #ff8a8a}
     .flash.success{background:#eaffea;border:1px solid #92d992}
+    details > summary{cursor:pointer;margin:6px 0;font-weight:600}
   </style>
 </head>
 <body>
@@ -35,135 +37,174 @@
       {% endif %}
     {% endwith %}
 
-  <form method="POST" onsubmit="return syncInternalName(event)">
-  <input type="hidden" name="return_url" value="{{ return_url }}">
+    <form method="POST" onsubmit="return syncInternalName(event)">
+      <input type="hidden" name="return_url" value="{{ return_url }}">
 
-  <label for="subfolder_label">Display label</label>
-  <input type="text" id="subfolder_label" name="subfolder_label" placeholder="e.g. Work Building" required>
+      <label for="subfolder_label">Display label</label>
+      <input type="text" id="subfolder_label" name="subfolder_label" placeholder="e.g. Work Building" required>
 
-  <label for="subfolder_desc">Description (optional)</label>
-  <textarea id="subfolder_desc" name="subfolder_desc" placeholder="This appears in the wizard."></textarea>
+      <label for="subfolder_desc">Description (optional)</label>
+      <textarea id="subfolder_desc" name="subfolder_desc" placeholder="This appears in the wizard."></textarea>
 
-  <!-- hidden canonical key -->
-  <input type="hidden" id="subfolder_name" name="subfolder_name">
+      <!-- hidden canonical key -->
+      <input type="hidden" id="subfolder_name" name="subfolder_name">
 
-  <div class="section">
-    <label><input type="checkbox" name="also_make_bio_root"> Also create matching biographies base folder</label>
-  </div>
+      <div class="section">
+        <label><input type="checkbox" name="also_make_bio_root"> Also create matching biographies base folder</label>
+      </div>
 
-  <!-- NEW: make_property toggle -->
-  <div class="section">
-    <label><input type="checkbox" name="make_property">
-      Also create a top‑level property JSON (points to this folder)</label>
-    <div class="small">Unchecked → just make the folder (no duplicate tile on the labels page).</div>
-  </div>
+      <!-- make_property toggle -->
+      <div class="section">
+        <label><input type="checkbox" name="make_property">
+          Also create a top-level property JSON (points to this folder)</label>
+        <div class="small">Unchecked → just make the folder (no duplicate tile on the labels page).</div>
+      </div>
 
-  <div class="section">
-    <label for="populate_mode">Populate labels</label>
-    <select id="populate_mode" name="populate_mode" onchange="togglePopulate()">
-      <option value="manual">Manual (add one now)</option>
-      <option value="api">From API (JSON)</option>
-      <option value="db_sqlite">From Database (SQLite)</option>
-    </select>
-  </div>
+      <div class="section">
+        <label for="populate_mode">Populate labels</label>
+        <select id="populate_mode" name="populate_mode" onchange="togglePopulate()">
+          <option value="manual">Manual (add one now)</option>
+          <option value="api">From API (JSON)</option>
+          <option value="db_sqlite">From Database (SQLite)</option>
+        </select>
+      </div>
 
-  <!-- Manual -->
-  <div id="pane_manual" class="section">
-    <label><input type="checkbox" id="create_first_label" name="create_first_label" onchange="toggleFirstLabel()"> Create first label now</label>
-    <div id="firstLabelFields" style="display:none;margin-top:8px">
-      <div class="row">
-        <div>
-          <label for="first_label_name">Label name</label>
-          <input type="text" id="first_label_name" name="first_label_name" placeholder="e.g. Hospital">
+      <!-- Manual -->
+      <div id="pane_manual" class="section">
+        <label><input type="checkbox" id="create_first_label" name="create_first_label" onchange="toggleFirstLabel()"> Create first label now</label>
+        <div id="firstLabelFields" style="display:none;margin-top:8px">
+          <div class="row">
+            <div>
+              <label for="first_label_name">Label name</label>
+              <input type="text" id="first_label_name" name="first_label_name" placeholder="e.g. Hospital">
+            </div>
+            <div>
+              <label for="first_label_conf">Default confidence</label>
+              <input type="range" id="first_label_conf" name="first_label_conf" min="0" max="100" value="100" oninput="updateConf()">
+              <div class="small">Value: <span id="conf_val">100%</span></div>
+            </div>
+          </div>
+          <label for="first_label_desc">Label description (optional)</label>
+          <textarea id="first_label_desc" name="first_label_desc" placeholder="Short description"></textarea>
+
+          <label for="first_label_image">Image filename/URL (optional)</label>
+          <input type="text" id="first_label_image" name="first_label_image" placeholder="e.g. hospital.jpg or https://…">
+
+          <label><input type="checkbox" name="make_stub_bio"> Also create a stub biography inside this label’s bio folder</label>
         </div>
-        <div>
-          <label for="first_label_conf">Default confidence</label>
-          <input type="range" id="first_label_conf" name="first_label_conf" min="0" max="100" value="100" oninput="updateConf()">
-          <div class="small">Value: <span id="conf_val">100%</span></div>
+      </div>
+
+      <!-- API -->
+      <div id="pane_api" class="section" style="display:none">
+        <div class="row" style="align-items:end">
+          <div>
+            <label for="api_url">API URL</label>
+            <input type="text" id="api_url" name="api_url" placeholder="https://example.com/api/labels">
+          </div>
+          <div>
+            <label for="api_method">HTTP Method</label>
+            <select id="api_method" name="api_method">
+              <option value="GET">GET</option>
+              <option value="POST" selected>POST</option>
+            </select>
+          </div>
         </div>
-      </div>
-      <label for="first_label_desc">Label description (optional)</label>
-      <textarea id="first_label_desc" name="first_label_desc" placeholder="Short description"></textarea>
 
-      <label for="first_label_image">Image filename/URL (optional)</label>
-      <input type="text" id="first_label_image" name="first_label_image" placeholder="e.g. hospital.jpg or https://…">
+        <details>
+          <summary>Advanced (auth + body)</summary>
+          <div class="row">
+            <div>
+              <label for="api_headers_env">Env var for auth (optional)</label>
+              <input type="text" id="api_headers_env" name="api_headers_env" placeholder="ONENET_API_KEY">
+              <div class="small">If set, backend sends <code>Authorization: Bearer $ENV</code>.</div>
+            </div>
+            <div>
+              <label for="api_max_items">Max items to import</label>
+              <input type="number" id="api_max_items" name="api_max_items" value="200" min="1" max="5000">
+            </div>
+          </div>
 
-      <label><input type="checkbox" name="make_stub_bio"> Also create a stub biography inside this label’s bio folder</label>
-    </div>
+          <label for="api_query">JSON body / params (optional)</label>
+          <textarea id="api_query" name="api_query" placeholder='{"query": "...", "format": "json"}'></textarea>
+          <div class="small">For GET with params, the backend will pass JSON keys as querystring if this is a JSON object.</div>
+        </details>
+
+        <label for="api_array_path">Array path (e.g. <code>data.items</code>)</label>
+        <input type="text" id="api_array_path" name="api_array_path" placeholder="data.items">
+
+        <div class="row">
+          <div>
+            <label for="api_field_id">Field: id</label>
+            <input type="text" id="api_field_id" name="api_field_id" value="id">
+            <div class="small">Supports dotted paths like <code>item.value</code></div>
+          </div>
+          <div>
+            <label for="api_field_display">Field: display/name</label>
+            <input type="text" id="api_field_display" name="api_field_display" value="name">
+            <div class="small">Supports dotted paths like <code>itemLabel.value</code></div>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="api_field_desc">Field: description</label>
+            <input type="text" id="api_field_desc" name="api_field_desc" value="description">
+            <div class="small">Optional (e.g. <code>shortDescription.value</code>)</div>
+          </div>
+          <div>
+            <label for="api_field_image">Field: image_url</label>
+            <input type="text" id="api_field_image" name="api_field_image" value="image_url">
+            <div class="small">Optional (e.g. <code>logo.value</code>)</div>
+          </div>
+        </div>
+
+<div class="row" style="align-items:center;margin-top:8px">
+  <div>
+    <button type="button" class="btn ghost" onclick="presetWikidataExample()">
+      Load Wikidata (SPARQL) example
+    </button>
   </div>
+  <div class="small">Example preset only — works for any type if you change the SPARQL and field mappings.</div>
+</div>
 
-  <!-- API -->
-  <div id="pane_api" class="section" style="display:none">
-    <label for="api_url">API URL</label>
-    <input type="text" id="api_url" name="api_url" placeholder="https://example.com/api/labels">
+      <!-- DB (SQLite) -->
+      <div id="pane_db" class="section" style="display:none">
+        <label for="db_sqlite_path">SQLite file path</label>
+        <input type="text" id="db_sqlite_path" name="db_sqlite_path" placeholder="/path/to/db.sqlite">
 
-    <label for="api_array_path">Array path (e.g. <code>data.items</code>)</label>
-    <input type="text" id="api_array_path" name="api_array_path" placeholder="data.items">
+        <label for="db_sql">SQL query</label>
+        <textarea id="db_sql" name="db_sql" placeholder="SELECT id, name AS display, description, image_url FROM your_table ORDER BY name;"></textarea>
 
-    <div class="row">
-      <div>
-        <label for="api_field_id">Field: id</label>
-        <input type="text" id="api_field_id" name="api_field_id" value="id">
-      </div>
-      <div>
-        <label for="api_field_display">Field: display/name</label>
-        <input type="text" id="api_field_display" name="api_field_display" value="name">
-      </div>
-    </div>
-    <div class="row">
-      <div>
-        <label for="api_field_desc">Field: description</label>
-        <input type="text" id="api_field_desc" name="api_field_desc" value="description">
-      </div>
-      <div>
-        <label for="api_field_image">Field: image_url</label>
-        <input type="text" id="api_field_image" name="api_field_image" value="image_url">
-      </div>
-    </div>
+        <div class="row">
+          <div>
+            <label for="db_col_id">Column: id</label>
+            <input type="text" id="db_col_id" name="db_col_id" value="id">
+          </div>
+          <div>
+            <label for="db_col_display">Column: display/name</label>
+            <input type="text" id="db_col_display" name="db_col_display" value="display">
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="db_col_desc">Column: description</label>
+            <input type="text" id="db_col_desc" name="db_col_desc" value="description">
+          </div>
+          <div>
+            <label for="db_col_image">Column: image_url</label>
+            <input type="text" id="db_col_image" name="db_col_image" value="image_url">
+          </div>
+        </div>
 
-    <label for="api_max_items">Max items to import</label>
-    <input type="number" id="api_max_items" name="api_max_items" value="200" min="1" max="5000">
-    <div class="small">Auth headers / params: add in route later if needed, or extend the form.</div>
+        <label for="db_max_items">Max items to import</label>
+        <input type="number" id="db_max_items" name="db_max_items" value="500" min="1" max="10000">
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <a class="btn secondary" href="{{ return_url }}">Cancel</a>
+        <button class="btn" type="submit">Create Subfolder</button>
+      </div>
+    </form>
   </div>
-
-  <!-- DB (SQLite) -->
-  <div id="pane_db" class="section" style="display:none">
-    <label for="db_sqlite_path">SQLite file path</label>
-    <input type="text" id="db_sqlite_path" name="db_sqlite_path" placeholder="/path/to/db.sqlite">
-
-    <label for="db_sql">SQL query</label>
-    <textarea id="db_sql" name="db_sql" placeholder="SELECT id, name AS display, description, image_url FROM your_table ORDER BY name;"></textarea>
-
-    <div class="row">
-      <div>
-        <label for="db_col_id">Column: id</label>
-        <input type="text" id="db_col_id" name="db_col_id" value="id">
-      </div>
-      <div>
-        <label for="db_col_display">Column: display/name</label>
-        <input type="text" id="db_col_display" name="db_col_display" value="display">
-      </div>
-    </div>
-    <div class="row">
-      <div>
-        <label for="db_col_desc">Column: description</label>
-        <input type="text" id="db_col_desc" name="db_col_desc" value="description">
-      </div>
-      <div>
-        <label for="db_col_image">Column: image_url</label>
-        <input type="text" id="db_col_image" name="db_col_image" value="image_url">
-      </div>
-    </div>
-
-    <label for="db_max_items">Max items to import</label>
-    <input type="number" id="db_max_items" name="db_max_items" value="500" min="1" max="10000">
-  </div>
-
-  <div style="display:flex;gap:8px;margin-top:14px">
-    <a class="btn secondary" href="{{ return_url }}">Cancel</a>
-    <button class="btn" type="submit">Create Subfolder</button>
-  </div>
-</form>
 
 <script>
   function toKey(s){
@@ -184,9 +225,36 @@
   }
   function togglePopulate(){
     const mode = document.getElementById('populate_mode').value;
-    document.getElementById('pane_manual').style.display = (mode === 'manual') ? '' : 'none';
-    document.getElementById('pane_api').style.display    = (mode === 'api')    ? '' : 'none';
-    document.getElementById('pane_db').style.display     = (mode === 'db_sqlite') ? '' : 'none';
+    document.getElementById('pane_manual').style.display = (mode === 'manual')     ? ''  : 'none';
+    document.getElementById('pane_api').style.display    = (mode === 'api')        ? ''  : 'none';
+    document.getElementById('pane_db').style.display     = (mode === 'db_sqlite')  ? ''  : 'none';
   }
   document.addEventListener('DOMContentLoaded', () => { updateConf(); togglePopulate(); });
+
+  function presetWikidataExample(){
+    document.getElementById('api_url').value = 'https://query.wikidata.org/sparql';
+    document.getElementById('api_method').value = 'POST';
+
+    const q = {
+      // Example query; edit to suit ANY type
+      query:
+        "SELECT ?item ?itemLabel ?shortDescription WHERE {\n" +
+        "  ?item wdt:P31/wdt:P279* wd:Q43229 .  # <-- change QID to target a different class\n" +
+        "  SERVICE wikibase:label { bd:serviceParam wikibase:language 'en'. }\n" +
+        "  OPTIONAL { ?item schema:description ?shortDescription . FILTER(LANG(?shortDescription)='en') }\n" +
+        "} LIMIT 250",
+      format: "json"
+    };
+    document.getElementById('api_query').value = JSON.stringify(q, null, 2);
+
+    document.getElementById('api_array_path').value = 'results.bindings';
+    document.getElementById('api_field_id').value = 'item.value';
+    document.getElementById('api_field_display').value = 'itemLabel.value';
+    document.getElementById('api_field_desc').value = 'shortDescription.value';
+    document.getElementById('api_field_image').value = '';
+    document.getElementById('api_max_items').value = 250;
+  }
+
 </script>
+</body>
+</html>

@@ -380,6 +380,38 @@ def resolve_entities(entry_type, entity_list):
         resolved.append(entry)
     return resolved
 
+def _dot_get(obj, path, default=None):
+    """
+    Safe getter supporting dotted paths like 'item.value' or 'foo.bar.baz'.
+    Works on nested dicts; returns default if anything is missing.
+    """
+    if not path:
+        return default
+    cur = obj
+    for part in str(path).split("."):
+        if isinstance(cur, dict):
+            cur = cur.get(part, default)
+        else:
+            return default
+    return cur
+
+def _walk_list_path(data, list_path: str):
+    """
+    Resolve a dotted path to the list node, e.g. 'results.bindings' into a list.
+    If the path is empty or not a list, returns [].
+    """
+    if not list_path:
+        return data if isinstance(data, list) else []
+    cur = data
+    for part in str(list_path).split("."):
+        if isinstance(cur, dict):
+            cur = cur.get(part)
+        else:
+            cur = None
+        if cur is None:
+            return []
+    return cur if isinstance(cur, list) else []
+
 def enrich_label_data(label_type: str, label_id: str, base_type: str = "person"):
     """
     Attempts to enrich a label by checking both:
@@ -569,25 +601,42 @@ def normalise_source_meta(meta: dict, prop_key: str, current_type: str):
         meta["source"] = new_src
     return meta
 
-
-def load_labels_from_folder(folder_path):
+def load_labels_from_folder(folder_path: str):
     """
-    Loads all .json label files from a folder and returns a list of label dicts.
+    Return a list of label dicts from a folder.
+    Ignores helper/metadata files like '_source.json'.
     """
-    labels = []
-    for filename in os.listdir(folder_path):
-        if filename.endswith(".json"):
+    items = []
+    try:
+        for filename in os.listdir(folder_path):
+            if not filename.endswith(".json"):
+                continue
+            if filename.startswith("_"):  # <— ignore meta (e.g. _source.json)
+                continue
+            fpath = os.path.join(folder_path, filename)
             try:
-                file_path = os.path.join(folder_path, filename)
-                data = load_json_as_dict(file_path)
-                labels.append({
-                    "id": os.path.splitext(filename)[0],
-                    "display": data.get("name", os.path.splitext(filename)[0]),
-                    "description": data.get("description", "")
-                })
-            except Exception as e:
-                print(f"[ERROR] Loading label {filename}: {e}")
-    return labels
+                with open(fpath, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                # normalize a bit
+                if isinstance(data, dict):
+                    _id = (data.get("id") or os.path.splitext(filename)[0]).strip()
+                    disp = data.get("display") or _id.replace("_", " ").title()
+                    out = {
+                        "id": _id,
+                        "display": disp,
+                        "description": data.get("description"),
+                        "image": data.get("image") or data.get("image_url"),
+                        "order": data.get("order", 999)
+                    }
+                    items.append(out)
+            except Exception:
+                # keep going even if one file is bad
+                continue
+    except FileNotFoundError:
+        return []
+    # stable order: by explicit order then display
+    items.sort(key=lambda x: (x.get("order", 999), (x.get("display") or "").lower()))
+    return items
 
 import os, json, uuid
 from datetime import datetime, timezone
@@ -1607,24 +1656,84 @@ def _ensure_property_self_labels(type_name: str, group_key: str, display_label: 
                     "allow_children": True
                 }
             }, f, indent=2)
+import os, json, time, hashlib
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
-def _fetch_api_json(url: str, headers: dict = None, query: dict = None, timeout: int = 15):
+# --- tiny cache (optional) ---
+_API_CACHE = {}
+
+def _fetch_api_json(
+    endpoint: str,
+    method: str = "GET",
+    headers_env: str = "",
+    query=None,                 # dict for GET params / POST json
+    cache_seconds: int = 0,
+    timeout_seconds: int = 60,  # bump from 30 → 60
+):
     """
-    Lightweight HTTP GET (no external deps). Returns parsed JSON or []/{}.
+    Fetch JSON from an external API with retries, proper User-Agent, and optional naive caching.
+    - GET: 'query' dict is sent as URL params.
+    - POST: 'query' dict is sent as JSON body.
+    - headers_env: if set, we send Authorization: Bearer $ENV_VAL (if present).
     """
+    # --- simple cache key ---
+    cache_key_src = json.dumps({
+        "u": endpoint, "m": method, "q": query, "h": headers_env
+    }, sort_keys=True, ensure_ascii=False)
+    cache_key = hashlib.sha1(cache_key_src.encode("utf-8")).hexdigest()
+    now = time.time()
+    if cache_seconds > 0:
+        hit = _API_CACHE.get(cache_key)
+        if hit and (now - hit["t"] <= cache_seconds):
+            return hit["data"]
+
+    # --- session with retries ---
+    session = requests.Session()
+    retry = Retry(
+        total=3,
+        backoff_factor=0.8,   # 0.8s, 1.6s, 2.4s
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=frozenset(["GET", "POST"])
+    )
+    session.mount("https://", HTTPAdapter(max_retries=retry))
+    session.mount("http://", HTTPAdapter(max_retries=retry))
+
+    # --- headers: required UA for Wikidata & friends ---
+    headers = {
+        "Accept": "application/json",
+        # Put a real email/project if you can
+        "User-Agent": "CSC7058-Labels/1.0 (contact: you@example.com)"
+    }
+    # Optional bearer from env
+    if headers_env:
+        token = (os.getenv(headers_env) or "").strip()
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
     try:
-        if query:
-            url = f"{url}?{urllib.parse.urlencode(query, doseq=True)}"
-        req = urllib.request.Request(url, headers=headers or {})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            content = resp.read()
-            try:
-                return json.loads(content.decode("utf-8", errors="ignore"))
-            except Exception:
-                return []
-    except urllib.error.URLError as e:
-        print("[API ERROR]", e)
-        return []
+        method = (method or "GET").upper()
+        if method == "POST":
+            resp = session.post(endpoint, headers=headers, json=query or {}, timeout=timeout_seconds)
+        else:
+            # GET: pass dict as params
+            resp = session.get(endpoint, headers=headers, params=query or {}, timeout=timeout_seconds)
+
+        resp.raise_for_status()
+        data = resp.json()
+
+        if cache_seconds > 0:
+            _API_CACHE[cache_key] = {"t": now, "data": data}
+        return data
+
+    except requests.exceptions.RequestException as e:
+        print("[external API] fetch failed:", e)
+        return None
+    except ValueError:
+        # JSON decode error
+        print("[external API] non-JSON response")
+        return None
 
 def _extract_items_from_json(data, array_path: str, field_map: dict):
     """
@@ -1675,21 +1784,100 @@ def _extract_items_from_json(data, array_path: str, field_map: dict):
         out.append(item)
     return out
 
-def _import_labels_from_api(type_name: str, group_key: str, display_label: str, description: str,
-                            api_url: str, array_path: str, field_map: dict, headers: dict = None, query: dict = None,
-                            max_items: int = 200):
-    labels_dir = os.path.join("types", type_name, "labels", group_key)
-    os.makedirs(labels_dir, exist_ok=True)
+def _import_labels_from_api(
+    folder_path: str,
+    endpoint: str,
+    method: str = "GET",
+    headers_env: str = "",
+    query=None,                 # dict or string; passed as JSON for POST or params for GET (when dict)
+    list_path: str = "",        # e.g. "results.bindings"
+    field_map: dict = None,     # {"id":"item.value","display":"itemLabel.value","description":"shortDescription.value","image_url":"logo.value"}
+    cache_seconds: int = 0
+):
+    """
+    Fetch JSON from an external API and write label files into folder_path.
+    """
+    field_map = field_map or {}
 
-    _ensure_property_self_labels(type_name, group_key, display_label, description)
+    # --- fetch ---
+    data = _fetch_api_json(
+        endpoint=endpoint,
+        method=(method or "GET").upper(),
+        headers_env=headers_env,
+        query=query,
+        cache_seconds=cache_seconds
+    )
+    if data is None:
+        return False, {"error": "No data from API"}
 
-    data = _fetch_api_json(api_url, headers=headers, query=query)
-    items = _extract_items_from_json(data, array_path=array_path, field_map=field_map)
-    created = []
-    for item in items[:max_items]:
-        slug = _write_label_json(labels_dir, group_key, item)
-        created.append(slug)
-    return created
+    # --- select array of rows (with helpful fallbacks) ---
+    rows = None
+    if list_path:
+        rows = _walk_list_path(data, list_path)
+
+    # If no list_path or it didn't resolve to a list, try a few common shapes
+    if not isinstance(rows, list):
+        # wbsearchentities → {"search":[...]}
+        if isinstance(data, dict) and isinstance(data.get("search"), list):
+            rows = data["search"]
+            print("[API IMPORT] auto-detected rows at key 'search'")
+        # SPARQL → {"results":{"bindings":[...]}}
+        elif isinstance(data, dict) and isinstance(_dot_get(data, "results.bindings"), list):
+            rows = _dot_get(data, "results.bindings")
+            print("[API IMPORT] auto-detected rows at 'results.bindings'")
+        # raw list response
+        elif isinstance(data, list):
+            rows = data
+
+    if not isinstance(rows, list):
+        print(f"[API IMPORT] rows_path={list_path!r} -> not a list; data keys={list(data.keys()) if isinstance(data, dict) else type(data)}")
+        return False, {"error": "List path did not resolve to an array."}
+
+    print(f"[API IMPORT] rows_path={list_path!r} -> found {len(rows)} rows")
+    if rows:
+        try:
+            import json as _json
+            print("[API IMPORT] sample row:", _json.dumps(rows[0], indent=2)[:600])
+        except Exception:
+            pass
+
+    os.makedirs(folder_path, exist_ok=True)
+
+    written = []
+    for row in rows:
+        # dotted mapping support
+        rid = _dot_get(row, field_map.get("id", "id"))
+        rdisplay = _dot_get(row, field_map.get("display", "display")) or rid
+        rdesc = _dot_get(row, field_map.get("description", "description"))
+        rimg = _dot_get(row, field_map.get("image_url", "image_url")) or _dot_get(row, "image")
+
+        if isinstance(rid, str) and rid.startswith("http"):
+            # common Wikidata pattern: use the last segment as id
+            rid = rid.rstrip("/").split("/")[-1]
+
+        # fallbacks
+        rid = (rid or rdisplay or "").strip()
+        if not rid:
+            continue
+
+        # normalize id filename
+        oid = sanitise_key(rid)
+        doc = {"id": oid, "display": (rdisplay or oid.replace("_", " ").title())}
+        if rdesc: doc["description"] = rdesc
+        if rimg:  doc["image_url"]   = rimg
+
+        fpath = os.path.join(folder_path, f"{oid}.json")
+        if os.path.exists(fpath):
+            continue  # don’t overwrite existing
+        try:
+            with open(fpath, "w", encoding="utf-8") as f:
+                json.dump(doc, f, ensure_ascii=False, indent=2)
+            written.append(oid)
+        except Exception:
+            # skip bad write but keep going
+            continue
+
+    return True, {"count": len(written), "written": written}
 
 def _import_labels_from_sqlite(type_name: str, group_key: str, display_label: str, description: str,
                                sqlite_path: str, sql: str,

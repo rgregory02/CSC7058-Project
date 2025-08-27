@@ -1,0 +1,9 @@
+{
+  "name": "Wikidata Hospital Orgs test",
+  "description": "",
+  "source": {
+    "kind": "self_labels",
+    "path": "wikidata_hospital_orgs_test",
+    "allow_children": true
+  }
+}

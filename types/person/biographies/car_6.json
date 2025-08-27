@@ -1,0 +1,30 @@
+{
+    "id": "car_6",
+    "uid": "84c02496d5ff4fe192393a41b06f1d80",
+    "name": "Car",
+    "type": "person",
+    "created": "2025-08-25T03:59:53.448419+00:00",
+    "updated": "2025-08-25T04:00:03.649455+00:00",
+    "entries": [
+        {
+            "created": "2025-08-25T04:00:03.649455+00:00",
+            "updated": "2025-08-25T04:00:03.649455+00:00",
+            "time": {
+                "label_type": "dob",
+                "confidence": 100,
+                "date_value": "2025-07-29"
+            },
+            "time_normalised": {
+                "kind": "dob",
+                "start_iso": "2025-07-29",
+                "end_iso": "2025-07-29",
+                "start_ts": 1753747200,
+                "end_ts": 1753747200,
+                "precision": "exact",
+                "age_years": null,
+                "notes": "Fallback date parsing from date_value"
+            }
+        }
+    ],
+    "dob": "2025-07-29"
+}

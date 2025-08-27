@@ -1,0 +1,9 @@
+{
+  "name": "Hospitals",
+  "description": "",
+  "source": {
+    "kind": "self_labels",
+    "path": "hospitals",
+    "allow_children": true
+  }
+}

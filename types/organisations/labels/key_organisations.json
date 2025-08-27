@@ -1,0 +1,10 @@
+{
+    "name": "Key Organisations",
+    "description": "",
+    "source": {
+        "kind": "type_labels",
+        "type": "organisations",
+        "path": "key_organisations",
+        "allow_children": false
+    }
+}

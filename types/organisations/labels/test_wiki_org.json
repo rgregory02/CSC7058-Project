@@ -1,0 +1,9 @@
+{
+  "name": "Test Wiki org",
+  "description": "",
+  "source": {
+    "kind": "self_labels",
+    "path": "test_wiki_org",
+    "allow_children": true
+  }
+}
