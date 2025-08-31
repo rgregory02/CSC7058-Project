@@ -44,14 +44,10 @@
     body[data-embed="1"] .wizard-body {
       margin-top: 0; /* Tighten spacing when header is hidden */
     }
-    /* --- pagination UI helpers --- */
-.is-hidden { display: none; }
-.btn-link {
-  background: none; border: 0; color: #4f46e5; cursor: pointer;
-  padding: 6px 0; font-weight: 600;
-}
-.btn-link:hover { text-decoration: underline; }
-  </style>
+  .is-hidden { display: none !important; }
+  .btn-link { background:none;border:none;color:#007bff;cursor:pointer;padding:0;text-decoration:underline; }
+  .btn-link:hover { text-decoration:none; }
+</style>}
 </head>
 {% set EMBED = request.args.get('embed') in ('1','true','True') %}
 {% if EMBED %}<base target="_top">{% endif %}
@@ -170,7 +166,7 @@
 
 {% else %}
 {% if group.options %}
-  <div class="label-options" id="opts_{{ safe_key }}" data-expanded="0">
+  <div class="label-options" id="opts_{{ safe_key }}" data-expanded="0" data-max="{{ max }}">
     {% set max = ui_limit_labels|default(3) %}
     {% for item in group.options %}
       {% set is_selected = (selected_id == item.id) %}
@@ -955,53 +951,6 @@ function selectChild(groupKey, labelId){
     return arr;
   }
 
-  function filterLabels(input, groupKey) {
-    const q = (input.value || "").toLowerCase();
-    const cards = qsa(`.label-card[data-group="${groupKey}"]`);
-    const cont = document.getElementById("group_" + safe(groupKey));
-    const expanded = cont && cont.getAttribute("data-expanded") === "1";
-
-    let shown = 0;
-    cards.forEach(card => {
-      const t = card.innerText.toLowerCase();
-      const match = t.includes(q);
-
-      if (q) {
-        // Searching → show up to 12 matches
-        if (match && shown < 12) {
-          card.style.display = "flex";
-          shown++;
-        } else {
-          card.style.display = "none";
-        }
-      } else {
-        // No search text
-        if (expanded) {
-          // Expanded group → show everything
-          card.style.display = "flex";
-        } else {
-          // Collapsed → show only first 3
-          if (shown < 3) {
-            card.style.display = "flex";
-            shown++;
-          } else {
-            card.style.display = "none";
-          }
-        }
-      }
-    });
-
-    // Auto-collapse if search cleared
-    if (!q && cont && cont.getAttribute("data-expanded") === "1") {
-      cont.setAttribute("data-expanded", "0");
-      const toggle = document.querySelector(`button[data-target="${cont.id}"]`);
-      if (toggle) {
-        const hiddenCount = cards.length > 3 ? cards.length - 3 : 0;
-        toggle.textContent = hiddenCount > 0 ? `Show more (${hiddenCount})` : "";
-      }
-    }
-  }
-
   function toggleBioSelection(card, hiddenId){
     const hidden = qs("#" + hiddenId);
     if(!hidden) return;
@@ -1375,38 +1324,74 @@ function toggleMore(btn){
   }
 }
 
-/* Override your filter to respect the cap unless expanded */
-function filterLabels(input, groupKey){
-  const q = (input.value || '').toLowerCase();
+function filterLabels(inputOrText, groupKey){
+  const text = (typeof inputOrText === 'string' ? inputOrText : (inputOrText?.value || '')).toLowerCase();
 
-  // Try to resolve a container first (labels or bios list)
-  const sk = (groupKey || '').replaceAll('/','__');
-  const cont = document.getElementById('opts_' + sk) ||
-               document.getElementById('bioslist_' + sk) ||
-               null;
-
-  const expanded = cont ? (cont.getAttribute('data-expanded') === '1') : true;
-  const limit = cont && cont.id.startsWith('bioslist_') ? UI_LIMIT_BIOS : UI_LIMIT_LABELS;
-
-  // Fallback selection if no container found
-  const cards = cont
-    ? Array.from(cont.querySelectorAll('.label-card'))
+  const sk   = (groupKey || '').replaceAll('/','__');
+  const host = document.getElementById('opts_' + sk) || document.getElementById('bioslist_' + sk);
+  const cards = host
+    ? Array.from(host.querySelectorAll('.label-card'))
     : Array.from(document.querySelectorAll(`.label-card[data-group="${groupKey}"]`));
+
+  // read UI limits from container (preferred), else fall back to defaults
+  const expanded = host ? (host.getAttribute('data-expanded') === '1') : false;
+  const maxShown = host ? parseInt(host.getAttribute('data-max') || '3', 10) : 3;
 
   let shown = 0;
   cards.forEach(card => {
-    const match = card.innerText.toLowerCase().includes(q);
-    if (!match) { card.style.display = 'none'; return; }
+    const match = !text || card.innerText.toLowerCase().includes(text);
 
-    // If not expanded, still keep items with "extra" hidden beyond the cap.
-    if (!expanded && card.classList.contains('extra')) {
-      card.style.display = 'none';
+    if (!match) {
+      card.classList.add('is-hidden');
       return;
     }
-    // otherwise show
-    card.style.display = 'flex';
-    shown++;
+
+    // searching → show up to 12 matches
+    if (text) {
+      if (shown < 12) { card.classList.remove('is-hidden'); shown++; }
+      else { card.classList.add('is-hidden'); }
+      return;
+    }
+
+    // not searching → collapsed shows up to maxShown; expanded shows all
+    if (!expanded) {
+      // treat pre-marked .extra as beyond the cap
+      if (card.classList.contains('extra')) { card.classList.add('is-hidden'); return; }
+      if (shown < maxShown) { card.classList.remove('is-hidden'); shown++; }
+      else { card.classList.add('is-hidden'); }
+    } else {
+      card.classList.remove('is-hidden');
+      shown++;
+    }
   });
+
+  // update the toggle button label/visibility
+  const toggleBtn = document.querySelector(`button[data-target="opts_${sk}"], button[data-target="bioslist_${sk}"]`);
+  if (toggleBtn && host) {
+    const total = cards.length;
+    if (text) {
+      // while searching, show “Show less” if expanded; else show count of hidden matches
+      if (expanded) {
+        toggleBtn.style.display = 'inline-block';
+        toggleBtn.textContent = 'Show less';
+      } else {
+        const visibleNow = cards.filter(c => !c.classList.contains('is-hidden')).length;
+        const remaining = Math.max(0, total - visibleNow);
+        toggleBtn.style.display = remaining > 0 ? 'inline-block' : 'none';
+        toggleBtn.textContent = remaining > 0 ? `Show more (${remaining})` : '';
+      }
+    } else {
+      // no search
+      if (expanded) {
+        toggleBtn.style.display = 'inline-block';
+        toggleBtn.textContent = 'Show less';
+      } else {
+        const remaining = Math.max(0, total - Math.min(maxShown, total));
+        toggleBtn.style.display = remaining > 0 ? 'inline-block' : 'none';
+        toggleBtn.textContent = remaining > 0 ? `Show more (${remaining})` : '';
+      }
+    }
+  }
 }
 
 </script>
