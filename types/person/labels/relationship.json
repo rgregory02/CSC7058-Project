@@ -1,22 +1,22 @@
 {
   "name": "Relationship",
   "description": "A person's relationship",
-  "input": "select",
+  "order": 999,
+
   "source": {
     "kind": "self_labels",
     "type": "person",
     "path": "relationship",
-
     "allow_children": true
   },
 
-  
-  "link_biography": {
+  "refer_to": {
+    "source": "biographies",
     "type": "person",
-    "mode": "child_or_parent",
-    "lookup": "id",
-    "path": "relationship"
+    "path": ".",           
+    "mode": "all"          
   },
+
   "ui": {
     "allow_confidence": true,
     "default_confidence": 100,
