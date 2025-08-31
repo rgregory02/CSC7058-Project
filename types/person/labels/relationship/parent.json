@@ -1,4 +1,5 @@
 {
-  "description": "Parent of a person",
-  "properties": {}
+  "id": "parent",
+  "display": "Parent",
+  "description": "A parent of this person"
 }

@@ -1,4 +1,5 @@
 {
-  "description": "Life partner or spouse",
-  "properties": {}
+  "id": "spouse",
+  "display": "Spouse",
+  "description": "A spouse/partner of this person"
 }
