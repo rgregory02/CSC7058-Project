@@ -1,0 +1,55 @@
+{
+    "id": "becca_4",
+    "uid": "74a6407998f0479ba7e8eeedfe84b2a9",
+    "name": "Becca",
+    "type": "person",
+    "created": "2025-08-31T22:17:53.465901+00:00",
+    "updated": "2025-08-31T22:29:21.898883+00:00",
+    "entries": [
+        {
+            "created": "2025-08-31T22:18:01.311207+00:00",
+            "updated": "2025-08-31T22:29:21.898883+00:00",
+            "time": {
+                "label_type": "entire_life",
+                "confidence": 100,
+                "subvalue": "entire_life"
+            },
+            "time_normalised": {
+                "kind": "entire_life",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "unknown",
+                "age_years": null,
+                "notes": "Unrecognised time label (no bounds)"
+            },
+            "events": [
+                {
+                    "group_key": "milestone",
+                    "option_id": "Award",
+                    "option_display": "Award",
+                    "link_type": "organisations",
+                    "linked_bio": "qub",
+                    "confidence": 100,
+                    "time": {
+                        "label_type": "date",
+                        "confidence": 58,
+                        "date_value": "2025-08-05"
+                    },
+                    "time_normalised": {
+                        "kind": "date",
+                        "start_iso": "2025-08-05",
+                        "end_iso": "2025-08-05",
+                        "start_ts": 1754352000,
+                        "end_ts": 1754352000,
+                        "precision": "approx",
+                        "age_years": null,
+                        "notes": "Direct date entry"
+                    },
+                    "created": "2025-08-31T22:29:21.898860+00:00"
+                }
+            ]
+        }
+    ]
+}

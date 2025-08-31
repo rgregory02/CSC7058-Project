@@ -4,32 +4,143 @@
   <meta charset="UTF-8">
   <title>Events — {{ bio_name }}</title>
   <link rel="stylesheet" href="/static/styles.css">
-  <style>
-    body{ background:#f2f2f2; font-family:sans-serif; padding:30px; }
-    .box{ background:#fff; max-width:1000px; margin:auto; padding:24px; border-radius:12px; box-shadow:0 2px 12px rgba(0,0,0,.08); }
-    h1{ margin:0 0 6px; }
-    .subheading{ color:#555; margin-bottom:16px; }
-    .grid{ display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
-    @media (max-width:900px){ .grid{ grid-template-columns:1fr; } }
-    .card{ background:#fff; border:1px solid #e7e9f2; border-radius:12px; padding:16px; }
-    .row{ display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap; }
-    .btn{ padding:10px 16px; border-radius:10px; border:0; cursor:pointer; font-weight:700; }
-    .btn.primary{ background:#2563eb; color:#fff; }
-    .btn.outline{ background:#fff; color:#2563eb; border:1px solid #2563eb; }
-    .small{ font-size:12px; color:#6b7280; }
-    .muted{ color:#6b7280; }
-    .event-row{ border-left:4px solid #e5e7eb; background:#fafafa; border-radius:8px; padding:10px; margin-bottom:10px; }
-    select,input[type="text"],input[type="date"]{ padding:8px; border:1px solid #dfe3ee; border-radius:8px; }
-    .hidden{ display:none; }
-    .flash-container{ margin-bottom:10px; }
-    .flash-banner{ padding:10px; border-radius:8px; }
-    .flash-success{ background:#ecfdf5; color:#065f46; }
-    .flash-error{ background:#fef2f2; color:#991b1b; }
+<style>
+  :root{
+    --content-max: 1240px;   /* widen canvas */
+    --bg:#f6f8fc;
+    --card:#ffffff;
+    --muted:#64748b;
+    --line:#e7e9f2;
+    --brand:#2563eb;
+    --brand-ink:#0b3ea8;
+  }
 
-    /* tiny tooltip helpers */
-    .helpdot{display:inline-block;width:16px;height:16px;border-radius:50%;
-             background:#eef2ff;color:#374151;text-align:center;font:700 12px/16px system-ui;cursor:help;}
-  </style>
+  html,body{ height:100%; }
+  body{
+    background:var(--bg);
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial,sans-serif;
+    padding:56px 32px;                  /* more outer breathing room */
+    line-height:1.45;                   /* taller lines */
+    font-size:15.5px;                   /* nudge up base size */
+  }
+
+  .box{
+    background:var(--card);
+    max-width:var(--content-max);       /* 1240px wide canvas */
+    margin:auto;
+    padding:36px 36px 28px;
+    border-radius:16px;
+    box-shadow:0 14px 40px rgba(20,32,60,.06);
+  }
+
+  h1{ margin:0 0 14px; letter-spacing:.2px; font-size:clamp(22px,2.2vw,28px); }
+  h3{ margin:0 0 12px; }
+
+  .subheading{ color:#0f172a; margin-bottom:18px; font-weight:600; }
+
+  /* Two-column builder with generous gap and wider left pane */
+  .grid{
+    display:grid;
+    grid-template-columns: minmax(640px, 2fr) 1fr;
+    gap:28px;
+    align-items:start;
+  }
+  @media (max-width: 1040px){
+    .grid{ grid-template-columns: 1fr; }
+  }
+
+  .card{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:22px;
+  }
+
+  /* Right panel stays visible */
+  .sticky{ position:sticky; top:18px; }
+
+  .row{ display:flex; gap:12px; align-items:center; margin:10px 0; flex-wrap:wrap; }
+
+  /* Step sections with extra padding */
+  .step{
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:16px 16px 12px;
+    margin-bottom:16px;
+    background:#fbfdff;
+  }
+  .step > .step-title{ font-weight:800; margin-bottom:6px; }
+  .step small{ color:var(--muted); }
+
+  select,input[type="text"],input[type="date"]{
+    padding:11px 12px;
+    border:1px solid #dfe3ee;
+    border-radius:12px;
+    background:#fff;
+    min-height:42px;
+  }
+  select{ min-width:240px; }
+
+  .btn{
+    padding:12px 18px;
+    border-radius:12px;
+    border:0;
+    cursor:pointer;
+    font-weight:800;
+    line-height:1;
+    letter-spacing:.1px;
+  }
+  .btn.primary{ background:var(--brand); color:#fff; }
+  .btn.primary:hover{ background:var(--brand-ink); }
+  .btn.outline{
+    background:#fff; color:var(--brand); border:1px solid var(--brand);
+  }
+
+  .small{ font-size:13px; color:var(--muted); }
+  .muted{ color:var(--muted); }
+
+  .event-row{
+    border-left:5px solid #cfe0ff;
+    background:#f4f8ff;
+    border-radius:12px;
+    padding:14px;
+    margin:16px 0;
+  }
+  .event-row input[type="range"]{ height:6px; }
+
+  .flash-container{ margin-bottom:12px; }
+  .flash-banner{ padding:12px; border-radius:10px; }
+  .flash-success{ background:#ecfdf5; color:#065f46; }
+  .flash-error{ background:#fef2f2; color:#991b1b; }
+
+  .helpdot{
+    display:inline-block;width:18px;height:18px;border-radius:50%;
+    background:#eef2ff;color:#374151;text-align:center;font:800 12px/18px system-ui;cursor:help;
+  }
+
+  /* Collapsible intro becomes a roomy hero */
+  details.intro summary{
+    cursor:pointer; font-weight:800; list-style:none;
+  }
+  details.intro{ border:1px dashed var(--line); border-radius:14px; padding:16px 18px; }
+  details.intro[open]{ background:#fcfeff; }
+
+  /* First-time hero CTA gets extra padding and width */
+  .hero{
+    max-width:900px;
+    margin:18px auto 0;
+    text-align:center;
+    padding:26px 22px;
+    border-radius:16px;
+    border:1px solid var(--line);
+    background:#ffffff;
+  }
+  .hero p{ margin:8px 0 0; }
+
+  .hidden { display: none !important; }      
+
+  .child-wrap { display: inline-flex; gap: 8px; align-items: center; }
+</style>
 
   <script>
     // --- utilities ---
@@ -244,23 +355,21 @@
     <strong>{{ bio_name }}</strong> • {{ type_name|replace('_',' ')|title }}
   </div>
 
-  <!-- compact intro -->
-  <div class="card" style="max-width:1000px; margin:0 auto 10px;">
-    <div style="display:flex;gap:10px;align-items:flex-start;">
-      <div style="font-size:22px;line-height:1">🧠</div>
-      <div>
-        <strong>What is an event?</strong>
-        <div class="small">
-          An event is something that happened to <strong>{{ bio_name }}</strong> — e.g. <em>“Started job at St. Mary’s Hospital”</em> or <em>“Adopted dog (Labrador)”</em>.
-          Choose a <em>group</em> (category), an <em>option</em> (the thing), optionally a <em>child</em> detail, link a biography if relevant, and add a <em>time</em>.
-          You can queue multiple rows then save together.
-        </div>
-        <div class="small" style="margin-top:6px">
-          Tip: Use <strong>Save & Add More</strong> to keep building, or <strong>Save Events & Continue</strong> to move on.
-        </div>
-      </div>
-    </div>
+  <!-- intro (collapsible) -->
+<details class="intro card" style="max-width:1000px; margin:0 auto 12px;" open>
+  <summary>What is an event?</summary>
+  <div class="small" style="margin-top:8px">
+    An event is something that happened to <strong>{{ bio_name }}</strong> — e.g.
+    <em>“Started job at St. Mary’s Hospital”</em> or <em>“Adopted dog (Labrador)”</em>.
+    Choose a <em>group</em> (category), an <em>option</em> (the thing),
+    optionally a <em>child</em> detail, link a biography if relevant, and add a <em>time</em>.
+    You can queue multiple rows then save together.
   </div>
+  <div class="small" style="margin-top:6px">
+    Tip: Use <strong>Save &amp; Add More</strong> to keep building, or
+    <strong>Save Events &amp; Continue</strong> to move on.
+  </div>
+</details>
 
   <!-- payloads -->
   <script id="linkable_payload" type="application/json">{{ (linkable or {})|tojson }}</script>
@@ -269,135 +378,150 @@
   {% set has_events = (current_events|length) > 0 %}
   {% set start = show_builder %}
 
-  {% if not start and not has_events %}
-    <div class="card" style="max-width:680px;margin:16px auto;text-align:center">
-      <h3 style="margin-top:0">Add your first event?</h3>
-      <p class="small">Choose an event group, pick an option (and child if offered), then press <strong>+ Add Row</strong> to set link &amp; time.</p>
-      <a class="btn primary" href="{{ url_for('general_step_events', type_name=type_name, bio_id=bio_id) }}?start=1">Start adding events</a>
-      <div style="margin-top:10px">
-        <a class="btn outline" target="_top"
-           href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='review') }}">Skip to Review</a>
-      </div>
+{% if not start and not has_events %}
+  <section class="hero">
+    <h3 style="margin-top:0;font-size:20px">Add your first event</h3>
+    <p class="small">Choose a group, pick an option (and child if offered), then press <strong>+ Add Row</strong> to set link &amp; time.</p>
+    <div style="margin-top:14px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+      <a class="btn primary" href="{{ url_for('general_step_events', type_name=type_name, bio_id=bio_id) }}?start=1">
+        Start adding events
+      </a>
+      <a class="btn outline" target="_top"
+         href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='review') }}">
+        Skip to Review
+      </a>
     </div>
-  {% endif %}
+  </section>
+{% endif %}
 
   <div id="builder" style="{{ 'display:block' if (start or has_events) else 'display:none' }}">
     <div class="grid">
-      <div class="card">
-        <h3>Build Events</h3>
-        <!-- Guard submit; only save buttons set do_save=1 -->
-        <form method="POST" onsubmit="return guardSubmit(event)">
-          <input type="hidden" name="do_save" id="do_save" value="">
+  <!-- Left: Builder -->
+  <div class="card">
+    <h3 style="margin-bottom:12px">Build Events</h3>
 
-          <!-- Group -->
-          <div class="row" style="margin-bottom:0">
-            <label>Group <span class="helpdot" title="Event category. It determines which options you can pick.">?</span></label>
-          </div>
-          <div class="small muted" style="margin-bottom:6px">
-            Choose the <em>kind</em> of event (e.g. Relationship, Car, Role). Changing this reloads options for that group.
-          </div>
-          <div class="row">
-            <!-- No auto-submit; navigate with GET -->
-            <select id="group_key" name="group_key" onchange="onGroupChange(this)">
-              {% for g in groups %}
-                <option value="{{ g.key }}" {% if g.key==chosen_group %}selected{% endif %}>{{ g.label }}</option>
-              {% endfor %}
-            </select>
-          </div>
+    <!-- Guard submit; only save buttons set do_save=1 -->
+    <form method="POST" onsubmit="return guardSubmit(event)">
+      <input type="hidden" name="do_save" id="do_save" value="">
 
-          <!-- Option -->
-          <div class="row" style="margin-bottom:0">
-            <label>Option <span class="helpdot" title="The specific event within the group. Some options expose a Child selector for finer detail.">?</span></label>
-          </div>
-          <div class="small muted" style="margin-bottom:6px">
-            Pick the specific event within the group. Some options have a more detailed <em>child</em> choice.
-          </div>
-          <div class="row">
-            <select id="option_id" name="option_id">
-              <option value="">— choose —</option>
-              {% for o in (options or []) %}
-                <option value="{{ o.id }}">{{ o.display or o.label or o.id }}</option>
-              {% endfor %}
-            </select>
-
-            <!-- Child -->
-            <span id="child_wrap" class="hidden" style="display:inline-flex;gap:8px;align-items:center">
-              <label>Child <span class="helpdot" title="A more precise sub‑choice for the option (e.g. pet → labrador).">?</span></label>
-              <select id="child_option_id" name="child_option_id"></select>
-            </span>
-
-            <button type="button" class="btn outline" onclick="addRowFromSelected()">+ Add Row</button>
-          </div>
-          <div class="small muted" style="margin-top:-4px; margin-bottom:10px;">
-            When you press <strong>+ Add Row</strong>, you’ll confirm link (optional), set confidence, and add time:
-            a <em>date</em>, a <em>range</em>, a <em>folder‑backed label</em> (like “1990s”), or free text.
-          </div>
-
-          <!-- hidden templates for dynamic rows -->
-          <select id="linkTypeTemplate" class="hidden">
-            {% for t in allowed_types %}
-              <option value="{{ t }}">{{ t|replace('_',' ')|title }}</option>
+      <!-- STEP 1 -->
+      <div class="step">
+        <div class="step-title">1) Choose a group</div>
+        <div class="small muted" style="margin-bottom:8px">
+          The group controls which options you can pick (e.g. Relationship, Role, Pet).
+        </div>
+        <div class="row">
+          <label>Group <span class="helpdot" title="Event category. It determines which options you can pick.">?</span></label>
+          <select id="group_key" name="group_key" onchange="onGroupChange(this)">
+            {% for g in groups %}
+              <option value="{{ g.key }}" {% if g.key==chosen_group %}selected{% endif %}>{{ g.label }}</option>
             {% endfor %}
           </select>
-
-          <select id="timeKindsTemplate" class="hidden">
-            <option value="">— none —</option>
-            {% for kind in time_kinds %}
-              <option value="{{ kind.key }}">{{ kind.desc }}</option>
-            {% endfor %}
-          </select>
-
-          <div id="rows"></div>
-
-          <div style="display:flex; gap:8px; margin-top:12px;">
-            <button type="submit" class="btn outline" name="next_action" value="stay"
-                    onclick="markSaveIntent(true)">💾 Save & Add More</button>
-            <button type="submit" class="btn primary" name="next_action" value="review"
-                    onclick="markSaveIntent(true)">✅ Save Events & Continue</button>
-          </div>
-          <div class="small muted" style="margin-top:8px">
-            Not ready to finish? Use <strong>Save & Add More</strong> to keep building this entry.
-            Happy with these rows? Choose <strong>Save Events & Continue</strong>.
-          </div>
-        </form>
-      </div>
-
-      <div class="card">
-        <h3>Current Entry — Events</h3>
-        {% if current_events %}
-          <ul class="small" style="margin:0 0 0 16px">
-            {% for ev in current_events %}
-              <li>
-                <strong>{{ ev.option_display or ev.option_id }}</strong>
-                {% if ev.link_type and ev.linked_bio %}
-                  — <em>{{ ev.link_type }}</em> → <code>{{ ev.linked_bio }}</code>
-                {% endif %}
-                {% if ev.time %}
-                  {% if ev.time.label_type=='date' %} • {{ ev.time.date_value }}
-                  {% elif ev.time.label_type=='range' %} • {{ ev.time.start_date }}…{{ ev.time.end_date }}
-                  {% elif ev.time.label_type=='sub' and ev.time.subvalue %} • {{ ev.time.subvalue|replace('_',' ')|title }}
-                  {% else %}
-                    {% if ev.time.label_id %} • {{ ev.time.label_id }}{% endif %}
-                    {% if ev.time.label_free %} ({{ ev.time.label_free }}){% endif %}
-                  {% endif %}
-                {% endif %}
-                {% if ev.confidence is not none %} ({{ ev.confidence }}%){% endif %}
-              </li>
-            {% endfor %}
-          </ul>
-        {% else %}
-          <div class="small">
-            No events yet in this entry. Build one on the left, click <strong>+ Add Row</strong>, then save.
-            You can add multiple rows before saving.
-          </div>
-        {% endif %}
-
-        <div style="margin-top:10px">
-          <a class="btn outline" target="_top"
-             href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='review') }}">Skip to Review</a>
         </div>
       </div>
+
+      <!-- STEP 2 -->
+      <div class="step">
+        <div class="step-title">2) Pick an option (and child if offered)</div>
+        <div class="small muted" style="margin-bottom:8px">
+          Some options expose a more specific <em>child</em> choice (e.g. Pet → Labrador).
+        </div>
+        <div class="row">
+          <label>Option <span class="helpdot" title="The specific event within the group. Some options expose a Child selector for finer detail.">?</span></label>
+          <select id="option_id" name="option_id">
+            <option value="">— choose —</option>
+            {% for o in (options or []) %}
+              <option value="{{ o.id }}">{{ o.display or o.label or o.id }}</option>
+            {% endfor %}
+          </select>
+
+<span id="child_wrap" class="child-wrap hidden">
+  <label>Child <span class="helpdot" title="A more precise sub-choice for the option (e.g. pet → labrador).">?</span></label>
+  <select id="child_option_id" name="child_option_id"></select>
+</span>
+
+          <button type="button" class="btn outline" onclick="addRowFromSelected()">+ Add Row</button>
+        </div>
+        <div class="small muted" style="margin-top:-4px;">
+          After <strong>+ Add Row</strong>, set link &amp; time for this event below.
+        </div>
+      </div>
+
+      <!-- Hidden templates (unchanged) -->
+      <select id="linkTypeTemplate" class="hidden">
+        {% for t in allowed_types %}
+          <option value="{{ t }}">{{ t|replace('_',' ')|title }}</option>
+        {% endfor %}
+      </select>
+
+      <select id="timeKindsTemplate" class="hidden">
+        <option value="">— none —</option>
+        {% for kind in time_kinds %}
+          <option value="{{ kind.key }}">{{ kind.desc }}</option>
+        {% endfor %}
+      </select>
+
+      <!-- STEP 3 -->
+      <div class="step" style="background:#fff;">
+        <div class="step-title">3) Link &amp; time each row</div>
+        <div class="small muted" style="margin-bottom:8px">
+          For each row, pick a link target (optional) and add time:
+          a <em>date</em>, a <em>range</em>, a <em>folder-label</em> like “1990s”, or free text.
+        </div>
+
+        <div id="rows"></div>
+
+        <div style="display:flex; gap:10px; margin-top:12px;">
+          <button type="submit" class="btn outline" name="next_action" value="stay"
+                  onclick="markSaveIntent(true)">💾 Save &amp; Add More</button>
+          <button type="submit" class="btn primary" name="next_action" value="review"
+                  onclick="markSaveIntent(true)">✅ Save Events &amp; Continue</button>
+        </div>
+        <div class="small muted" style="margin-top:8px">
+          Not ready to finish? Use <strong>Save &amp; Add More</strong> to keep building this entry.
+          Happy with these rows? Choose <strong>Save Events &amp; Continue</strong>.
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- Right: Summary (sticky) -->
+  <div class="card sticky">
+    <h3>Current Entry — Events</h3>
+    {% if current_events %}
+      <ul class="small" style="margin:0 0 0 16px">
+        {% for ev in current_events %}
+          <li>
+            <strong>{{ ev.option_display or ev.option_id }}</strong>
+            {% if ev.link_type and ev.linked_bio %}
+              — <em>{{ ev.link_type }}</em> → <code>{{ ev.linked_bio }}</code>
+            {% endif %}
+            {% if ev.time %}
+              {% if ev.time.label_type=='date' %} • {{ ev.time.date_value }}
+              {% elif ev.time.label_type=='range' %} • {{ ev.time.start_date }}…{{ ev.time.end_date }}
+              {% elif ev.time.label_type=='sub' and ev.time.subvalue %} • {{ ev.time.subvalue|replace('_',' ')|title }}
+              {% else %}
+                {% if ev.time.label_id %} • {{ ev.time.label_id }}{% endif %}
+                {% if ev.time.label_free %} ({{ ev.time.label_free }}){% endif %}
+              {% endif %}
+            {% endif %}
+            {% if ev.confidence is not none %} ({{ ev.confidence }}%){% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="small">
+        No events yet in this entry. Build one on the left, click <strong>+ Add Row</strong>, then save.
+        You can add multiple rows before saving.
+      </div>
+    {% endif %}
+
+    <div style="margin-top:12px">
+      <a class="btn outline" target="_top"
+         href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='review') }}">Skip to Review</a>
     </div>
+  </div>
+</div>
   </div>
 </div>
 </body>
