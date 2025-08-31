@@ -6608,7 +6608,7 @@ from flask import send_from_directory
 @app.route('/serve_label_image/<string:type_name>/<string:label_name>/<string:image_name>')
 def serve_label_image(type_name, label_name, image_name):
     """ Serve images from the `types` directory dynamically. """
-    image_path = f"./types/{type_name}/labels/{label_name}/"  # Adjust if the structure is different
+    image_path = f"./types/{type_name}/labels/{label_name}/"
     return send_from_directory(image_path, image_name)
 
 
@@ -7691,7 +7691,6 @@ def events_add():
         per_type_bios=per_type_bios,
         time_catalog=time_catalog
     )
-
 
 
 if __name__ == "__main__":
