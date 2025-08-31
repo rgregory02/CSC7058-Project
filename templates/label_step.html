@@ -5,6 +5,11 @@
   <title>Select Labels – {{ current_type|replace('_',' ')|title }}</title>
   <link rel="stylesheet" href="/static/styles.css">
   <script>window.AUTO_LINK = window.AUTO_LINK || {};</script>
+  <script>
+  // limits provided by the Flask route (fallback to 3 if not passed)
+  const UI_LIMIT_LABELS = {{ ui_limit_labels|default(3) }};
+  const UI_LIMIT_BIOS   = {{ ui_limit_bios|default(3) }};
+</script>
   <style>
     body { background:#f2f2f2; padding:40px; font-family:sans-serif; }
     .box { background:#fff; max-width:980px; margin:auto; padding:28px; border-radius:12px; box-shadow:0 2px 12px rgba(0,0,0,.08); }
@@ -39,6 +44,13 @@
     body[data-embed="1"] .wizard-body {
       margin-top: 0; /* Tighten spacing when header is hidden */
     }
+    /* --- pagination UI helpers --- */
+.is-hidden { display: none; }
+.btn-link {
+  background: none; border: 0; color: #4f46e5; cursor: pointer;
+  padding: 6px 0; font-weight: 600;
+}
+.btn-link:hover { text-decoration: underline; }
   </style>
 </head>
 {% set EMBED = request.args.get('embed') in ('1','true','True') %}
@@ -158,11 +170,12 @@
 
 {% else %}
 {% if group.options %}
-  <div class="label-options">
+  <div class="label-options" id="opts_{{ safe_key }}" data-expanded="0">
+    {% set max = ui_limit_labels|default(3) %}
     {% for item in group.options %}
       {% set is_selected = (selected_id == item.id) %}
       {% set img = item.image or item.image_url %}
-      <div class="label-card {% if is_selected %}selected{% endif %}"
+      <div class="label-card {% if is_selected %}selected{% endif %} {% if loop.index0 >= max %}is-hidden extra{% endif %}"
            id="card_{{ safe_key }}_{{ item.id }}"
            data-group="{{ group.key }}"
            data-value="{{ item.id }}"
@@ -177,6 +190,15 @@
       </div>
     {% endfor %}
   </div>
+
+  {% if (group.options|length) > max %}
+    <button type="button"
+            class="btn-link"
+            data-target="opts_{{ safe_key }}"
+            onclick="toggleMore(this)">
+      Show more ({{ group.options|length - max }})
+    </button>
+  {% endif %}
 
   <div class="confidence-slider">
     <label for="confidence_{{ safe_key }}">🎯 Confidence:</label><br>
@@ -237,22 +259,33 @@
     <input type="text" class="label-search" placeholder="Search biographies…"
            oninput="filterLabels(this, '{{ sugg_key }}_bio')" data-group="{{ sugg_key }}_bio">
 
-    <div class="label-options">
-      {% for option in (listing or []) %}
-        {% set bio_selected = (option.id == bio_selected_id) %}
-        <div class="label-card{% if bio_selected %} selected{% endif %}"
-             data-group="{{ sugg_key }}_bio"
-             data-value="{{ option.id }}"
-             tabindex="0"
-             onclick="toggleBioSelection(this, '{{ bio_hidden_id }}')"
-             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); this.click();}">
-          <div><strong>{{ option.display or option.id }}</strong></div>
-          {% if option.description %}<div class="label-description">{{ option.description }}</div>{% endif %}
-        </div>
-      {% endfor %}
-      {% if listing|length == 0 %}
-        <div class="muted">No biographies to show for {{ rtype|replace('_',' ')|title }}.</div>
-      {% endif %}
+<div class="label-options" id="bioslist_{{ sugg_key }}" data-expanded="0">
+  {% set maxb = ui_limit_bios|default(3) %}
+  {% for option in (listing or []) %}
+    {% set bio_selected = (option.id == bio_selected_id) %}
+    <div class="label-card{% if bio_selected %} selected{% endif %} {% if loop.index0 >= maxb %}is-hidden extra{% endif %}"
+         data-group="{{ sugg_key }}_bio"
+         data-value="{{ option.id }}"
+         tabindex="0"
+         onclick="toggleBioSelection(this, '{{ bio_hidden_id }}')"
+         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); this.click();}">
+      <div><strong>{{ option.display or option.id }}</strong></div>
+      {% if option.description %}<div class="label-description">{{ option.description }}</div>{% endif %}
+    </div>
+  {% endfor %}
+  {% if (listing|length) == 0 %}
+    <div class="muted">No biographies to show for {{ rtype|replace('_',' ')|title }}.</div>
+  {% endif %}
+</div>
+
+{% if (listing|length) > maxb %}
+  <button type="button"
+          class="btn-link"
+          data-target="bioslist_{{ sugg_key }}"
+          onclick="toggleMore(this)">
+    Show more ({{ listing|length - maxb }})
+  </button>
+{% endif %}
     </div>
 
     <div class="confidence-slider" style="margin-top:10px;">
@@ -662,8 +695,9 @@
     }
 
     const groupSafe = safe(groupKey);
-    const cards = bios.map(b => `
-      <div class="label-card"
+    const limit = UI_LIMIT_BIOS;
+    const cards = bios.map((b,i) => `
+      <div class="label-card ${i>=limit ? 'is-hidden extra' : ''}"
           tabindex="0"
           data-group="${groupSafe}_bio"
           data-value="${b.id}"
@@ -689,7 +723,17 @@
               oninput="filterLabels(this, '${groupSafe}_bio')"
               data-group="${groupSafe}_bio">
 
-        <div class="label-options">${cards}</div>
+        <div class="label-options" id="bioslist_${groupSafe}" data-expanded="0">
+          ${cards}
+          ${bios.length ? '' : `<div class="muted">No biographies to show.</div>`}
+        </div>
+
+        ${bios.length > limit ? `
+          <button type="button" class="btn-link"
+                  data-target="bioslist_${groupSafe}"
+                  onclick="toggleMore(this)">
+            Show more (${bios.length - limit})
+          </button>` : ''}
 
         <div class="confidence-slider" style="margin-top:10px;">
           <label for="confidence_${groupSafe}_bio">🎯 Biography Match Confidence:</label><br>
@@ -911,15 +955,51 @@ function selectChild(groupKey, labelId){
     return arr;
   }
 
-  function filterLabels(input, groupKey){
-    const q = (input.value||"").toLowerCase();
+  function filterLabels(input, groupKey) {
+    const q = (input.value || "").toLowerCase();
+    const cards = qsa(`.label-card[data-group="${groupKey}"]`);
+    const cont = document.getElementById("group_" + safe(groupKey));
+    const expanded = cont && cont.getAttribute("data-expanded") === "1";
+
     let shown = 0;
-    qsa(`.label-card[data-group="${groupKey}"]`).forEach(card=>{
+    cards.forEach(card => {
       const t = card.innerText.toLowerCase();
       const match = t.includes(q);
-      if (match && shown < 12){ card.style.display='flex'; shown++; }
-      else { card.style.display='none'; }
+
+      if (q) {
+        // Searching → show up to 12 matches
+        if (match && shown < 12) {
+          card.style.display = "flex";
+          shown++;
+        } else {
+          card.style.display = "none";
+        }
+      } else {
+        // No search text
+        if (expanded) {
+          // Expanded group → show everything
+          card.style.display = "flex";
+        } else {
+          // Collapsed → show only first 3
+          if (shown < 3) {
+            card.style.display = "flex";
+            shown++;
+          } else {
+            card.style.display = "none";
+          }
+        }
+      }
     });
+
+    // Auto-collapse if search cleared
+    if (!q && cont && cont.getAttribute("data-expanded") === "1") {
+      cont.setAttribute("data-expanded", "0");
+      const toggle = document.querySelector(`button[data-target="${cont.id}"]`);
+      if (toggle) {
+        const hiddenCount = cards.length > 3 ? cards.length - 3 : 0;
+        toggle.textContent = hiddenCount > 0 ? `Show more (${hiddenCount})` : "";
+      }
+    }
   }
 
   function toggleBioSelection(card, hiddenId){
@@ -1273,6 +1353,61 @@ function _renderOptionCard(safeKey, groupKey, opt){
   container.appendChild(div);
 }
 
+function toggleMore(btn){
+  const id = btn.getAttribute('data-target');
+  const root = document.getElementById(id);
+  if (!root) return;
+
+  const expanded = root.getAttribute('data-expanded') === '1';
+  const extras = root.querySelectorAll('.extra');
+
+  if (expanded){
+    // collapse back to capped view
+    const limit = id.startsWith('bioslist_') ? UI_LIMIT_BIOS : UI_LIMIT_LABELS;
+    extras.forEach((el, i) => { if (i >= 0) el.classList.add('is-hidden'); });
+    btn.textContent = 'Show more (' + Math.max(0, extras.length) + ')';
+    root.setAttribute('data-expanded', '0');
+  } else {
+    // expand all
+    extras.forEach(el => el.classList.remove('is-hidden'));
+    btn.textContent = 'Show less';
+    root.setAttribute('data-expanded', '1');
+  }
+}
+
+/* Override your filter to respect the cap unless expanded */
+function filterLabels(input, groupKey){
+  const q = (input.value || '').toLowerCase();
+
+  // Try to resolve a container first (labels or bios list)
+  const sk = (groupKey || '').replaceAll('/','__');
+  const cont = document.getElementById('opts_' + sk) ||
+               document.getElementById('bioslist_' + sk) ||
+               null;
+
+  const expanded = cont ? (cont.getAttribute('data-expanded') === '1') : true;
+  const limit = cont && cont.id.startsWith('bioslist_') ? UI_LIMIT_BIOS : UI_LIMIT_LABELS;
+
+  // Fallback selection if no container found
+  const cards = cont
+    ? Array.from(cont.querySelectorAll('.label-card'))
+    : Array.from(document.querySelectorAll(`.label-card[data-group="${groupKey}"]`));
+
+  let shown = 0;
+  cards.forEach(card => {
+    const match = card.innerText.toLowerCase().includes(q);
+    if (!match) { card.style.display = 'none'; return; }
+
+    // If not expanded, still keep items with "extra" hidden beyond the cap.
+    if (!expanded && card.classList.contains('extra')) {
+      card.style.display = 'none';
+      return;
+    }
+    // otherwise show
+    card.style.display = 'flex';
+    shown++;
+  });
+}
 
 </script>
 

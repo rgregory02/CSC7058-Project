@@ -2891,6 +2891,9 @@ def general_step_labels(type_name, bio_id):
         except Exception:
             linkable_bios[rtype] = []
 
+    UI_LIMIT_LABELS = 3
+    UI_LIMIT_BIOS   = 3
+
     return render_template(
         "label_step.html",
         current_type=type_name,
@@ -2903,7 +2906,9 @@ def general_step_labels(type_name, bio_id):
         bio_id=bio_id,
         time_selection=session.get("time_selection"),
         bio_name=bio_data.get("name", bio_id),
-        skip_allowed=(len(expanded_groups) == 0)
+        skip_allowed=(len(expanded_groups) == 0),
+        ui_limit_labels=UI_LIMIT_LABELS,
+        ui_limit_bios=UI_LIMIT_BIOS,
     )
 
 # ============================== HELPERS (single canonical set) ==============================
