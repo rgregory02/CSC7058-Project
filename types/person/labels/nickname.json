@@ -1,4 +1,18 @@
 {
-    "description":"A first name",
-    "type":"String"
+  "key": "nickname",
+  "label": "Nickname",
+  "description": "A first name",
+  "required": false,
+
+  "input": {
+    "kind": "text",
+    "min_length": 1,
+    "max_length": 80,
+    "pattern": "^[A-Za-z\\-\\s']+$" 
+  },
+
+  "ui": {
+    "placeholder": "e.g. 'Bob' for 'Robert'"
+  }
+
 }
