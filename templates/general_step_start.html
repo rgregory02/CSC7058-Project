@@ -30,6 +30,7 @@
     .list button{display:block;width:100%;text-align:left;padding:8px 10px;border:0;background:#fff;border-radius:8px;margin:4px 0}
     .list button:hover{background:#f8f9ff}
     .muted{color:var(--muted)}
+    .sr-only{position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden}
   </style>
 </head>
 {% set EMBED = request.args.get('embed') in ('1','true','True') %}
@@ -59,23 +60,30 @@
       </div>
 
       <div class="row">
-        <label class="label">Choose existing biography (optional)</label>
-        <div class="stack">
-          <select id="bioSelect" name="bio_id" disabled>
-            <option value="">— none —</option>
-            {% if filtered_bios %}
-              {% for b in filtered_bios %}
-                <option value="{{ b.id }}">{{ b.name }}</option>
-              {% endfor %}
-            {% endif %}
-          </select>
-          <div class="search" id="bioSearchWrap">
-            <input id="bioSearch" type="text" placeholder="Search bios…">
-          </div>
-          <div class="list" id="bioQuickList"></div>
-          <div class="small muted" id="bioEmptyMsg" style="display:none">No biographies for this type yet.</div>
-        </div>
-      </div>
+  <label class="label">Choose existing biography (optional)</label>
+  <div class="stack">
+    <!-- Keep a control named 'bio_id' for form POST, but hide it -->
+    <select id="bioSelect" name="bio_id" class="sr-only" aria-hidden="true" tabindex="-1">
+      <option value="">— none —</option>
+    </select>
+
+    <!-- Search only appears when expanded -->
+    <div class="search" id="bioSearchWrap" style="display:none">
+      <input id="bioSearch" type="text" placeholder="Search bios…">
+    </div>
+
+    <!-- Quick buttons list (first 3, or all when expanded) -->
+    <div class="list" id="bioQuickList" style="display:none"></div>
+
+    <!-- Toolbar for show more/fewer + clear -->
+    <div class="toolbar" id="bioMoreToolbar" style="display:none">
+      <button type="button" class="btn link" id="toggleMoreBtn">Show more</button>
+      <button type="button" class="btn link" id="clearBioBtn">Clear</button>
+    </div>
+
+    <div class="small muted" id="bioEmptyMsg" style="display:none">No biographies for this type yet.</div>
+  </div>
+</div>
 
       <div class="row">
         <label class="label">…or create new biography</label>
@@ -90,85 +98,119 @@
     </form>
   </div>
 
-  <script>
-    (function(){
-      const typeSel = document.getElementById('typeSelect');
-      const bioSel  = document.getElementById('bioSelect');
-      const searchWrap = document.getElementById('bioSearchWrap');
-      const searchInput= document.getElementById('bioSearch');
-      const quickList  = document.getElementById('bioQuickList');
-      const emptyMsg   = document.getElementById('bioEmptyMsg');
+<script>
+(function(){
+  const typeSel     = document.getElementById('typeSelect');
+  const bioSel      = document.getElementById('bioSelect');         // hidden select used for POST
+  const searchWrap  = document.getElementById('bioSearchWrap');
+  const searchInput = document.getElementById('bioSearch');
+  const quickList   = document.getElementById('bioQuickList');
+  const emptyMsg    = document.getElementById('bioEmptyMsg');
+  const moreBar     = document.getElementById('bioMoreToolbar');     // toolbar container
+  const toggleBtn   = document.getElementById('toggleMoreBtn');      // "Show more" / "Show fewer"
+  const clearBtn    = document.getElementById('clearBioBtn');        // Clear
 
-      // Populate bios for a type from API
-      async function loadBiosForType(t){
-        bioSel.innerHTML = '<option value="">— none —</option>';
-        bioSel.disabled = true;
-        searchWrap.style.display = 'none';
-        quickList.style.display = 'none';
-        emptyMsg.style.display = 'none';
+  const COLLAPSE_COUNT = 3;
 
-        if(!t){ return; }
+  let biosAll    = [];
+  let expanded   = false;
+  let selectedId = "";
 
-        try{
-          const res = await fetch(`/api/bios/list?type=${encodeURIComponent(t)}`);
-          const data = await res.json();
-          if(!data.ok) throw new Error(data.error || 'Failed');
+  function setSelected(id){
+    selectedId = id || "";
+    // reflect into the hidden select used for form submit
+    if (!bioSel.querySelector(`option[value="${CSS.escape(selectedId)}"]`)) {
+      const opt = document.createElement('option');
+      opt.value = selectedId;
+      opt.textContent = selectedId;
+      bioSel.appendChild(opt);
+    }
+    bioSel.value = selectedId;
 
-          const items = data.items || [];
-          if(items.length === 0){
-            emptyMsg.style.display = 'block';
-            return;
-          }
+    // update highlight in quick list
+    [...quickList.querySelectorAll('button[data-id]')].forEach(b=>{
+      b.classList.toggle('selected', b.getAttribute('data-id') === selectedId);
+    });
+  }
 
-          // Fill the <select>
-          for(const it of items){
-            const opt = document.createElement('option');
-            opt.value = it.id;
-            opt.textContent = it.name || it.id;
-            bioSel.appendChild(opt);
-          }
-          bioSel.disabled = false;
+  function render(){
+    const q = (searchInput.value || "").trim().toLowerCase();
+    const base = q ? biosAll.filter(b => (b.name||b.id).toLowerCase().includes(q)) : biosAll;
 
-          // Build quick list + search
-          quickList.innerHTML = items.slice(0, 20).map(it =>
-            `<button type="button" data-id="${it.id}">${(it.name||it.id)}</button>`
-          ).join('');
-          quickList.style.display = items.length ? 'block' : 'none';
-          searchWrap.style.display = 'block';
-        }catch(e){
-          console.error(e);
-          emptyMsg.style.display = 'block';
-        }
-      }
+    const items = expanded ? base : base.slice(0, COLLAPSE_COUNT);
+    quickList.innerHTML = items.map(it => `
+      <button type="button" data-id="${it.id}" class="${it.id===selectedId?'selected':''}">
+        ${(it.name || it.id)}
+      </button>
+    `).join("");
 
-      // Quick-list selection mirrors into the <select>
-      quickList.addEventListener('click', (e)=>{
-        const btn = e.target.closest('button[data-id]');
-        if(!btn) return;
-        const id = btn.getAttribute('data-id');
-        bioSel.value = id;
-        bioSel.scrollIntoView({behavior:'smooth', block:'center'});
-      });
+    quickList.style.display = items.length ? 'block' : 'none';
+    emptyMsg.style.display  = biosAll.length ? 'none' : 'block';
 
-      // Filter the <select> and quick list by search
-      function applyBioSearch(){
-        const q = (searchInput.value || '').toLowerCase();
-        [...bioSel.options].forEach((opt, i)=>{
-          if(i===0) return; // keep "none"
-          const show = (opt.textContent || '').toLowerCase().includes(q);
-          opt.hidden = !show;
-        });
-        [...quickList.querySelectorAll('button')].forEach(btn=>{
-          const show = (btn.textContent || '').toLowerCase().includes(q);
-          btn.style.display = show ? '' : 'none';
-        });
-      }
-      searchInput?.addEventListener('input', applyBioSearch);
+    // Toggle / counts
+    const remaining = Math.max(0, base.length - COLLAPSE_COUNT);
+    if (base.length > COLLAPSE_COUNT) {
+      moreBar.style.display = 'flex';
+      toggleBtn.textContent = expanded ? 'Show fewer' : `Show more (${remaining})`;
+    } else {
+      moreBar.style.display = 'none';
+    }
 
-      // Load on change / initial
-      typeSel.addEventListener('change', ()=> loadBiosForType(typeSel.value));
-      if(typeSel.value){ loadBiosForType(typeSel.value); }
-    })();
-  </script>
+    // Search only when expanded and useful
+    searchWrap.style.display = (expanded && biosAll.length > COLLAPSE_COUNT) ? 'block' : 'none';
+  }
+
+  async function loadBiosForType(t){
+    // reset UI
+    biosAll = [];
+    expanded = false;
+    selectedId = "";
+    bioSel.innerHTML = '<option value="">— none —</option>';
+    searchInput.value = "";
+    quickList.innerHTML = "";
+    quickList.style.display = 'none';
+    moreBar.style.display = 'none';
+    searchWrap.style.display = 'none';
+    emptyMsg.style.display = 'none';
+
+    if (!t) return;
+
+    try{
+      const res = await fetch(`/api/bios/list?type=${encodeURIComponent(t)}`);
+      const data = await res.json();
+      if(!data.ok) throw new Error(data.error || 'Failed');
+      biosAll = data.items || [];
+    }catch(e){
+      console.error(e);
+      biosAll = [];
+    }
+    render();
+  }
+
+  // Events
+  typeSel.addEventListener('change', ()=> loadBiosForType(typeSel.value));
+
+  quickList.addEventListener('click', e=>{
+    const btn = e.target.closest('button[data-id]');
+    if (!btn) return;
+    setSelected(btn.getAttribute('data-id'));
+  });
+
+  toggleBtn?.addEventListener('click', ()=>{
+    expanded = !expanded;
+    render();
+  });
+
+  clearBtn?.addEventListener('click', ()=>{
+    setSelected("");
+  });
+
+  searchInput?.addEventListener('input', render);
+
+  // initial load if a type is preselected
+  if (typeSel.value) loadBiosForType(typeSel.value);
+})();
+</script>
+
 </body>
 </html>
