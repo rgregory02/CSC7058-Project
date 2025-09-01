@@ -5,6 +5,7 @@
   "input": { "kind": "date" },
   "ui": {
     "allow_confidence": false,
-    "display_template": "Born on {{date_value}}"
-  }
+    "display_template": "Born on {{id}}"
+  },
+  "required": false
 }

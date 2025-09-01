@@ -1,0 +1,11 @@
+{
+  "key": "closed_on",
+  "label": "Closed On",
+  "description": "Date the organisation ceased operations.",
+  "input": { "kind": "date" },
+  "ui": {
+    "allow_confidence": false,
+    "display_template": "Closed {{id}}"
+  },
+  "order": 11
+}

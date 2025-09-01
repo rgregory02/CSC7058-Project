@@ -1,0 +1,30 @@
+{
+    "id": "tall_building_3",
+    "uid": "26bd17d27fbf4ee9acd842fc8c57fc13",
+    "name": "tall building",
+    "type": "buildings",
+    "created": "2025-09-01T01:09:45.621086+00:00",
+    "updated": "2025-09-01T01:09:55.095909+00:00",
+    "entries": [
+        {
+            "created": "2025-09-01T01:09:55.095909+00:00",
+            "updated": "2025-09-01T01:09:55.095909+00:00",
+            "time": {
+                "label_type": "dob",
+                "confidence": 100,
+                "date_value": "2025-09-24"
+            },
+            "time_normalised": {
+                "kind": "dob",
+                "start_iso": "2025-09-24",
+                "end_iso": "2025-09-24",
+                "start_ts": 1758672000,
+                "end_ts": 1758672000,
+                "precision": "exact",
+                "age_years": null,
+                "notes": "Fallback date parsing from date_value"
+            }
+        }
+    ],
+    "dob": "2025-09-24"
+}

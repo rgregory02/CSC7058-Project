@@ -1,0 +1,11 @@
+{
+  "key": "built_on",
+  "label": "Built On",
+  "description": "Date construction was completed.",
+  "input": { "kind": "date" },
+  "ui": {
+    "allow_confidence": false,
+    "display_template": "Built {{id}}"
+  },
+  "order": 10
+}

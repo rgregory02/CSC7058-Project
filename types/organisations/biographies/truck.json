@@ -1,0 +1,48 @@
+{
+    "id": "truck",
+    "uid": "1fc80b5f65794af28c46a89bfcef0303",
+    "name": "Truck",
+    "type": "organisations",
+    "created": "2025-09-01T01:57:18.027288+00:00",
+    "updated": "2025-09-01T01:58:45.981875+00:00",
+    "entries": [
+        {
+            "created": "2025-09-01T01:57:31.612310+00:00",
+            "updated": "2025-09-01T01:58:45.981875+00:00",
+            "time": {
+                "label_type": "entire_life",
+                "confidence": 100,
+                "subvalue": "entire_life"
+            },
+            "time_normalised": {
+                "kind": "life",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "unknown",
+                "age_years": null,
+                "notes": "Whole span selected; biography has no start/end"
+            },
+            "organisations": [
+                {
+                    "label_type": "closed_on",
+                    "id": "2025-09-17",
+                    "confidence": 100,
+                    "source": "input"
+                },
+                {
+                    "label_type": "founded_on",
+                    "id": "2025-06-11",
+                    "confidence": 100,
+                    "source": "input"
+                },
+                {
+                    "label_type": "wikidata_hospital_orgs_test",
+                    "confidence": 100,
+                    "id": "q644264"
+                }
+            ]
+        }
+    ]
+}

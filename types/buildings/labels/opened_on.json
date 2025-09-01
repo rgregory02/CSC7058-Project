@@ -1,0 +1,11 @@
+{
+  "key": "opened_on",
+  "label": "Opened On",
+  "description": "Date the building first opened for use.",
+  "input": { "kind": "date" },
+  "ui": {
+    "allow_confidence": false,
+    "display_template": "Opened {{id}}"
+  },
+  "order": 11
+}

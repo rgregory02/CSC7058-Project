@@ -1,0 +1,11 @@
+{
+  "key": "renamed_on",
+  "label": "Renamed On",
+  "description": "Date the organisation officially changed its name.",
+  "input": { "kind": "date" },
+  "ui": {
+    "allow_confidence": false,
+    "display_template": "Renamed {{id}}"
+  },
+  "order": 12
+}

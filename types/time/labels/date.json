@@ -1,4 +1,10 @@
 {
-    "description":"A date in time",
-    "type":"Date"
+  "key": "date",
+  "label": "Exact Date",
+  "input": {
+    "kind": "date",
+    "label": "Exact date",
+    "placeholder": "DD-MM-YYYY"
+  },
+  "order": 3
 }

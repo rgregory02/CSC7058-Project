@@ -1,3 +1,7 @@
 {
-    "description":"Entire life period"
+  "key": "entire_life",
+  "label": "Kind",
+  "description": "Span the subject’s entire existence",
+  "source": { "path": "entire_life" },
+  "order": 1
 }

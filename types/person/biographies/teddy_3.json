@@ -1,0 +1,138 @@
+{
+    "id": "teddy_3",
+    "uid": "10d8ea0231414aa6b5d0a8ade675553e",
+    "name": "Teddy",
+    "type": "person",
+    "created": "2025-09-01T00:38:22.738280+00:00",
+    "updated": "2025-09-01T00:57:29.887298+00:00",
+    "entries": [
+        {
+            "created": "2025-09-01T00:38:27.695629+00:00",
+            "updated": "2025-09-01T00:40:53.236416+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 60,
+                "subvalue": "preteen"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 11.5,
+                "notes": "Life stage 'preteen' (no reference date — absolute bounds unknown)"
+            },
+            "person": [
+                {
+                    "label_type": "eye_colour",
+                    "confidence": 100,
+                    "id": "amber"
+                },
+                {
+                    "label_type": "nickname",
+                    "id": "TeddyRobinson",
+                    "confidence": 100,
+                    "source": "input"
+                },
+                {
+                    "label_type": "relationship",
+                    "confidence": 100,
+                    "id": "parent"
+                }
+            ],
+            "events": [
+                {
+                    "group_key": "milestone",
+                    "option_id": "Award",
+                    "option_display": "Award",
+                    "link_type": "organisations",
+                    "linked_bio": "bch",
+                    "confidence": 66,
+                    "time": {
+                        "label_type": "date",
+                        "confidence": 100,
+                        "date_value": "2025-10-01"
+                    },
+                    "time_normalised": {
+                        "kind": "date",
+                        "start_iso": "2025-10-01",
+                        "end_iso": "2025-10-01",
+                        "start_ts": 1759276800,
+                        "end_ts": 1759276800,
+                        "precision": "exact",
+                        "age_years": null,
+                        "notes": "Direct date entry"
+                    },
+                    "created": "2025-09-01T00:39:13.034717+00:00"
+                }
+            ]
+        },
+        {
+            "created": "2025-09-01T00:39:56.629317+00:00",
+            "updated": "2025-09-01T00:40:10.705278+00:00",
+            "time": {
+                "label_type": "date",
+                "confidence": 61,
+                "date_value": "2025-09-18"
+            },
+            "time_normalised": {
+                "kind": "date",
+                "start_iso": "2025-09-18",
+                "end_iso": "2025-09-18",
+                "start_ts": 1758153600,
+                "end_ts": 1758153600,
+                "precision": "approx",
+                "age_years": null,
+                "notes": "Direct date entry"
+            },
+            "person": [
+                {
+                    "label_type": "educational_place",
+                    "confidence": 100,
+                    "id": "school"
+                },
+                {
+                    "label_type": "school",
+                    "confidence": 100,
+                    "id": "blue_primary_school",
+                    "biography": "blue_primary_school",
+                    "biography_confidence": 100
+                }
+            ]
+        },
+        {
+            "created": "2025-09-01T00:48:21.259625+00:00",
+            "updated": "2025-09-01T00:57:29.887298+00:00",
+            "time": {
+                "label_type": "entire_life",
+                "confidence": 56,
+                "subvalue": "entire_life"
+            },
+            "time_normalised": {
+                "kind": "life",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "unknown",
+                "age_years": null,
+                "notes": "Whole-life selected; biography has no DOB/DOD"
+            },
+            "person": [
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 32,
+                    "id": "0"
+                },
+                {
+                    "label_type": "dob",
+                    "id": "2025-09-25",
+                    "confidence": 100,
+                    "source": "input"
+                }
+            ]
+        }
+    ]
+}

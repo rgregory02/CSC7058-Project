@@ -123,6 +123,7 @@ def normalise_time(
     raw: Dict[str, Any],
     *,
     dob_iso: Optional[str] = None,
+    dod_iso: Optional[str] = None,
     ref_iso: Optional[str] = None,
     option_meta: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
@@ -177,6 +178,29 @@ def normalise_time(
         out["end_iso"]   = _iso(e)
         out["start_ts"]  = _ts_utc(s)
         out["end_ts"]    = _ts_utc(e)
+
+    # 0) ENTIRE / WHOLE LIFE → span start→end if available
+    life_slugs = {
+        "entire_life", "whole_life", "life", "lifespan",
+        "entire_history", "whole_history",
+        "entire_period", "whole_period", "whole_span", "entire_span"
+    }
+    label_text = (raw.get("value") or raw.get("label") or "").strip().lower()
+    if lt in life_slugs or (label_text.replace(" ", "_") in life_slugs):
+        s = _parse_iso_date(dob_iso or "")
+        e = _parse_iso_date(dod_iso or "")
+        _commit_bounds(s, e)
+        out["kind"] = "life"          # 'life' == existence span for any type
+        if s and e:
+            out["precision"] = "exact"
+            out["notes"] = "Whole span from biography start→end"
+        elif s or e:
+            out["precision"] = "approx"
+            out["notes"] = "Whole span; only one bound available"
+        else:
+            out["precision"] = "unknown"
+            out["notes"] = "Whole span selected; biography has no start/end"
+        return out
 
     # 1) Explicit DATE
     if lt == "date":
@@ -269,7 +293,6 @@ def normalise_time(
     return out
 
 
-# -------------------- convenience wrapper --------------------
 def normalise_time_for_bio_entry(
     raw: Dict[str, Any],
     *,
@@ -277,13 +300,42 @@ def normalise_time_for_bio_entry(
     option_meta: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
-    Convenience: pulls likely reference dates from a biography object.
-    - Person: biography.get('dob_iso')
-    - Organisation: biography.get('founded_on')
-    - Building: biography.get('built_on') / 'opened_on'
-    Extend the heuristics as your schema evolves.
+    Pulls likely start/end reference dates from a biography, regardless of type.
+    Examples (all optional, first present wins):
+      Start keys: dob_iso, dob, founded_on, established_on, built_on, opened_on,
+                  start_on, start_date, inception_on
+      End   keys: dod_iso, dod, dissolved_on, closed_on, demolished_on,
+                  end_on, end_date, conclusion_on
     """
     bio = biography or {}
-    dob = bio.get("dob_iso")
-    ref = bio.get("reference_date_iso") or bio.get("founded_on") or bio.get("built_on") or bio.get("opened_on")
-    return normalise_time(raw, dob_iso=dob, ref_iso=ref, option_meta=option_meta)
+
+    def _first(keys: list[str]) -> str | None:
+        for k in keys:
+            val = bio.get(k)
+            if isinstance(val, str) and val.strip():
+                return val.strip()
+        return None
+
+    start_iso = _first([
+        "dob_iso", "dob",
+        "founded_on", "established_on",
+        "built_on", "opened_on",
+        "start_on", "start_date", "inception_on",
+    ])
+
+    end_iso = _first([
+        "dod_iso", "dod",
+        "dissolved_on", "closed_on", "demolished_on",
+        "end_on", "end_date", "conclusion_on",
+    ])
+
+    # Keep the generic 'ref' for cases where you select a single date kind
+    ref = _first(["reference_date_iso", "founded_on", "built_on", "opened_on", "start_on", "start_date"])
+
+    return normalise_time(
+        raw,
+        dob_iso=start_iso,   # reuse params: "dob" == existence start
+        dod_iso=end_iso,     # "dod" == existence end
+        ref_iso=ref,
+        option_meta=option_meta,
+    )

@@ -1,3 +1,7 @@
 {
-    "description":"A time period of your life"
+  "key": "life_stage",
+  "label": "Life Stage",
+  "description": "Approximate age band (uses DOB if available)",
+  "source": { "path": "life_stage" },
+  "order": 2
 }

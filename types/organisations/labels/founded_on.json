@@ -1,0 +1,11 @@
+{
+  "key": "founded_on",
+  "label": "Founded On",
+  "description": "Date the organisation was founded or incorporated.",
+  "input": { "kind": "date" },
+  "ui": {
+    "allow_confidence": false,
+    "display_template": "Founded {{id}}"
+  },
+  "order": 10
+}

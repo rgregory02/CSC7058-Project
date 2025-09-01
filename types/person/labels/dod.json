@@ -1,0 +1,10 @@
+{
+  "key": "dod",
+  "label": "Date of Death",
+  "description": "The day a person died.",
+  "input": { "kind": "date" },
+  "ui": {
+    "allow_confidence": false,
+    "display_template": "Died on {{id}}"
+  }
+}

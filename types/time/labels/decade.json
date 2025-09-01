@@ -1,0 +1,6 @@
+{
+  "key": "decade",
+  "label": "Decade",
+  "source": { "path": "decade" },
+  "order": 4
+}

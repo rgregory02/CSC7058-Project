@@ -1,0 +1,11 @@
+{
+  "key": "demolished_on",
+  "label": "Demolished On",
+  "description": "Date the building was demolished.",
+  "input": { "kind": "date" },
+  "ui": {
+    "allow_confidence": false,
+    "display_template": "Demolished {{id}}"
+  },
+  "order": 12
+}
