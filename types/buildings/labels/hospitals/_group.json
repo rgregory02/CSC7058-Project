@@ -1,4 +1,5 @@
 {
     "name": "Hospitals",
-    "description": ""
+    "description": "",
+    "archived": true
 }

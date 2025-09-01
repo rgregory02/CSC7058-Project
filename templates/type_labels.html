@@ -77,27 +77,33 @@
       {% endif %}
     {% endwith %}
 
-    <h1>🏷️ Labels — {{ type_name|replace('_',' ')|title }}</h1>
+    <h1>🏷️ {{ type_name|replace('_',' ')|title }} - Labels</h1>
+    <div class="muted">Configure labels related to this type. Labels can pull from labels folders, APIs, or databases, and optionally link to other property types.</div>
 
-    <div class="toolbar">
-      <div class="left">
-      </div>
-      <div class="right">
-        <input class="search" placeholder="Filter label groups…" oninput="filterGroups(this.value)" aria-label="Filter label groups">
-        <label class="chip" title="Show archived labels & groups">
-          <input id="show_archived" type="checkbox" onchange="toggleArchived(this.checked)"> Archived
-        </label>
-        <a class="btn" href="{{ url_for('dashboard') }}">⬅ Back</a>
-        <a class="btn brand" href="{{ url_for('create_subfolder', type_name=type_name, return_url=request.url) }}">➕ Add Group</a>
-      </div>
-    </div>
+<div class="toolbar">
+  <div class="left">
+    <input id="search" class="search" placeholder="Filter label groups…" oninput="filterLabels(this.value)" aria-label="Filter label groups">
+    <select id="statusFilter" class="select" onchange="applyFilters()" title="Show Active or Archived">
+      <option value="">All statuses</option>
+      <option value="active">Active</option>
+      <option value="archived">Archived</option>
+    </select>
+  </div>
+  <div class="right">
+  <a class="btn brand" href="{{ url_for('create_subfolder', type_name=type_name, return_url=request.url) }}">➕ New Label</a>
+    <a class="btn" href="{{ request.args.get('return_url') or url_for('type_browse', type_name=type_name) }}">⬅ Back to {{ type_name|replace('_',' ')|title }}</a>
+    
+  </div>
+</div>
 
     <div class="grid" id="groups">
       {% for g in groups %}
-        <div class="card group {% if g.archived %}archived{% endif %}"
-             id="group_{{ g.key|replace('/','__') }}"
-             data-archived="{{ '1' if g.archived else '0' }}"
-             data-key="{{ (g.key ~ ' ' ~ g.label ~ ' ' ~ (g.description or ''))|lower }}">
+        {% set is_archived = g.archived %}
+{% set status = 'archived' if is_archived else 'active' %}
+<div class="card group {% if is_archived %}archived{% endif %}"
+     id="group_{{ g.key|replace('/','__') }}"
+     data-key="{{ (g.key ~ ' ' ~ (g.label or '') ~ ' ' ~ (g.description or ''))|lower }}"
+     data-status="{{ status }}">
           <div class="row" style="align-items:flex-start">
             <div style="min-width:0">
               <h3 title="{{ g.label }}">{{ g.label }}</h3>
@@ -200,55 +206,43 @@
     </div>
   </div>
 
-  <script>
-    function filterGroups(q){
-      q = (q||"").toLowerCase();
-      document.querySelectorAll("#groups .group").forEach(card=>{
-        const key = card.getAttribute("data-key") || "";
-        card.style.display = key.includes(q) ? "" : "none";
-      });
-    }
+<script>
+  const grid = document.getElementById('groups');
+  const statusFilter = document.getElementById('statusFilter');
+  let qText = '';
 
-    function toggleArchived(show){
-      document.querySelectorAll('.group[data-archived="1"]').forEach(el=>{
-        el.style.display = show ? "" : "none";
-      });
-      document.querySelectorAll('.option[data-archived="1"]').forEach(el=>{
-        el.style.display = show ? "" : "none";
-      });
-    }
+  function filterLabels(q){
+    qText = (q||'').toLowerCase();
+    applyFilters();
+  }
 
-    (function(){
-      const params = new URLSearchParams(location.search);
-      const focus = params.get('focus');
-      if(focus){
-        let el = document.getElementById('group_' + focus.replace(/\//g,'__'));
-        if(!el){
-          document.querySelectorAll('#groups .group').forEach(card=>{
-            if(!el && (card.getAttribute('data-key')||'').includes(focus.toLowerCase())) el = card;
-          });
-        }
-        if(el){
-          el.classList.add('focused');
-          el.scrollIntoView({behavior:'smooth', block:'center'});
-        }
-      }
-      const showArchived = params.get('show_archived') === '1';
-      const box = document.getElementById('show_archived');
-      if (box) box.checked = showArchived;
-      toggleArchived(showArchived);
-    })();
-
-    // hide card immediately after archive when not showing archived
-    document.querySelectorAll('form[action*="archive_label_group"]').forEach(form=>{
-      form.addEventListener('submit', ()=>{
-        const showBox = document.getElementById('show_archived');
-        if (showBox && !showBox.checked) {
-          const card = form.closest('.group');
-          if (card) card.style.display = 'none';
-        }
-      });
+  function applyFilters(){
+    const stat = (statusFilter?.value || '').toLowerCase();
+    if(!grid) return;
+    grid.querySelectorAll('.group').forEach(card=>{
+      const hay = (card.getAttribute('data-key') || '').toLowerCase();
+      const status = (card.getAttribute('data-status') || '').toLowerCase();
+      const matchText = !qText || hay.includes(qText);
+      const matchStat = !stat || status === stat;
+      card.style.display = (matchText && matchStat) ? '' : 'none';
     });
-  </script>
+  }
+
+  // Focus + apply filters on first load (so default "Active" hides archived)
+  document.addEventListener('DOMContentLoaded', () => {
+    const params = new URLSearchParams(location.search);
+    const focus = params.get('focus');
+    if (focus) {
+      let el = document.getElementById('group_' + focus.replace(/\//g,'__'));
+      if(!el){
+        document.querySelectorAll('#groups .group').forEach(card=>{
+          if(!el && (card.getAttribute('data-key')||'').includes(focus.toLowerCase())) el = card;
+        });
+      }
+      if(el){ el.classList.add('focused'); el.scrollIntoView({behavior:'smooth', block:'center'}); }
+    }
+    applyFilters();
+  });
+</script>
 </body>
 </html>

@@ -4,56 +4,124 @@
   <meta charset="utf-8">
   <title>{{ type_name|replace('_',' ')|title }} – Biographies</title>
   <link rel="stylesheet" href="/static/styles.css">
-  <style>
-    body { background:#f6f7fb; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
-    .box { max-width: 1100px; margin: 40px auto; background:#fff; padding:28px; border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,.06); }
-    h1 { margin: 0 0 14px; }
-    .toolbar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:12px 0 18px; }
-    .toolbar .spacer { flex:1; }
-    .btn{display:inline-block;padding:9px 14px;border-radius:10px;background:#6c63ff;color:#fff;text-decoration:none;font-weight:600}
-    .btn.secondary{background:#eef0f7;color:#333}
-    .btn.ghost{background:transparent;color:#6c63ff;border:1px solid #6c63ff}
-    .btn.mini{ padding:6px 10px; font-size:12px; border-radius:8px; }
-    .controls { display:flex; flex-wrap:wrap; gap:10px; margin:8px 0 18px; }
-    .controls input[type="search"], .controls select {
-      padding:10px 12px; border:1px solid #dfe3ee; border-radius:10px; background:#fff; min-width:220px;
-    }
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+<style>
+  :root{
+    --bg:#f6f7fb; --card:#fff; --ink:#111827; --muted:#657085; --line:#e7e9f2;
+    --brand:#6c63ff; --pill:#eef0f7;
+    --danger:#c62828; --success:#0b6230; --warn:#7a4b00;
+    --arch:#f8fafc;
+  }
+  body{background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;color:var(--ink)}
+  .box{max-width:1100px;margin:36px auto;background:var(--card);padding:24px;
+       border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.06);border:1px solid var(--line)}
+  h1{margin:0 0 8px;font-size:28px;font-weight:750}
+  h2{margin:0 0 6px;font-size:22px;font-weight:730}
+  h3{margin:0 0 6px;font-size:16px;font-weight:700}
+  .muted{color:var(--muted)}
 
-    /* clickable cards */
-    .card-link{ display:block; text-decoration:none; color:inherit; }
-    .card{background:#fff;border:1px solid #e7e9f2;border-radius:12px;padding:16px; transition:transform .12s ease, box-shadow .12s ease; cursor:pointer; position:relative;}
-    .card-link:hover .card{ transform:translateY(-2px); box-shadow:0 8px 18px rgba(0,0,0,.07); }
-    .card h3{margin:0 0 6px;font-size:18px}
-    .muted{color:#657085;font-size:12px}
-    .desc{color:#3a3f4c;font-size:13px;margin:6px 0 10px}
-    .quick{display:flex;flex-wrap:wrap;gap:6px}
-    .empty{padding:24px;border:1px dashed #dfe3ee;border-radius:12px;text-align:center;color:#657085;background:#fafbff}
+  /* toolbar */
+  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between;margin:12px 0 16px}
+  .toolbar .left,.toolbar .right{display:flex;gap:10px;align-items:center}
+  .toolbar .spacer{flex:1}
 
-    .badge { position:absolute; top:10px; right:10px; font-size:11px; padding:3px 8px; border-radius:999px; background:#f3f4f6; color:#374151; border:1px solid #e5e7eb; }
-    .badge.archived { background:#fff1f2; color:#b91c1c; border-color:#fecdd3; }
-    .actions-row { margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; }
-    .action-form { display:inline; }
-  </style>
+  /* inputs */
+  .search,.select{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;min-width:220px}
+  .search{flex:1}
+
+  /* buttons */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+       padding:9px 14px;border-radius:10px;font-weight:600;text-decoration:none;cursor:pointer;
+       background:var(--brand);color:#fff;border:1px solid var(--brand)}
+  .btn.secondary{background:var(--pill);color:#333;border-color:var(--line)}
+  .btn.ghost{background:transparent;color:var(--brand);border:1px solid var(--brand)}
+  .btn.danger{background:var(--danger);color:#fff;border-color:var(--danger)}
+  .btn.archive{background:#f5f7ff;color:#2b2f5e;border:1px solid #d9ddff}
+  .btn.restore{background:#e9fbf0;color:var(--success);border:1px solid #b9efcc}
+  .btn.mini{padding:6px 10px;font-size:12px;border-radius:8px}
+
+  /* grid & cards */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+  .card{border:1px solid var(--line);border-radius:12px;padding:14px;background:#fff;
+        display:flex;flex-direction:column;gap:10px;position:relative;transition:transform .12s,box-shadow .12s}
+  .card-link{display:block;color:inherit;text-decoration:none}
+  .card-link:hover .card{transform:translateY(-2px);box-shadow:0 8px 18px rgba(0,0,0,.07)}
+  .card.archived{background:var(--arch);border-style:dashed;opacity:.85}
+  .title{margin:0;font-size:16px;font-weight:800;line-height:1.2}
+  .desc{color:#4b5563;font-size:13px;line-height:1.35}
+  .actions{display:flex;gap:8px;margin-top:auto;flex-wrap:wrap}
+
+  /* chips & badges */
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+  .chip{font-size:11px;border-radius:999px;padding:3px 8px;background:#f3f4f9;border:1px solid #e6e8f2;color:#445}
+  .chip.badge{background:#fafbff;border-color:#e7e9f2}
+  .chip.path{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,monospace}
+  .chip.archived{background:#fff4e6;border-color:#ffd8a8;color:var(--warn)}
+  .badge{position:absolute;top:10px;right:10px;font-size:11px;padding:3px 8px;border-radius:999px;
+         background:#f3f4f6;color:#374151;border:1px solid #e5e7eb}
+  .badge.archived{background:#fff1f2;color:#b91c1c;border-color:#fecdd3}
+
+  /* misc */
+  .empty{color:var(--muted);font-size:14px;background:#fafbff;border:1px dashed var(--line);
+         border-radius:12px;padding:14px;text-align:center}
+  .flashline{display:inline-block;background:#eef9f1;border:1px solid #b8ebc6;color:#0f5132;
+             border-radius:8px;padding:6px 10px;margin-right:6px;font-size:12px}
+
+  /* --- image safety + consistent thumbs --- */
+.card, .option { overflow: hidden; }            /* keep media inside cards */
+.grid { align-items: start; }                   /* prevent stretched rows */
+
+/* Any image inside cards/options: never overflow */
+.card img,
+.option img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+/* If an image has the 'thumb' class, crop it to a neat banner */
+.thumb {
+  width: 100%;
+  max-height: 180px;        /* change to taste: 140–220px works well */
+  object-fit: cover;        /* crop without distortion */
+  border-radius: 10px;
+}
+
+/* Optional: make long text and media inside options behave */
+details.opts .optwrap { overflow: auto; }
+</style>
 </head>
 <body>
   <div class="box">
-    <h1>{{ type_name|replace('_',' ')|title }} – Biographies</h1>
+    <h1>{{ type_name|replace('_',' ')|title }} - Biographies</h1>
 
-    <div class="toolbar">
-      <a class="btn ghost" href="{{ url_for('dashboard') }}">⬅️ Back to Dashboard</a>
-      <!-- Launch the General Wizard, pre-selecting this type on Start -->
-      <a class="btn" href="{{ url_for('general_iframe_wizard', step='start', type=type_name) }}">➕ New Biography</a>
-      <a class="btn secondary" href="{{ url_for('create_subfolder', type_name=type_name, return_url=request.url) }}">🏷️ Add Label Group</a>
-      <span class="spacer"></span>
-      <!-- View toggles -->
-      <a class="btn secondary{% if show=='' %} ghost{% endif %}"
-         href="{{ url_for('type_browse', type_name=type_name) }}">Active</a>
-      <a class="btn secondary{% if show=='archived' %} ghost{% endif %}"
-         href="{{ url_for('type_browse', type_name=type_name, show='archived') }}">Archived</a>
-      <a class="btn secondary{% if show=='all' %} ghost{% endif %}"
-         href="{{ url_for('type_browse', type_name=type_name, show='all') }}">All</a>
-    </div>
+ <div class="toolbar">
+  <!-- Left controls -->
+  <a class="btn ghost" href="{{ url_for('dashboard') }}">⬅️ Back to Dashboard</a>
+
+  <!-- Launch the wizard with this type preselected, and come back here afterwards -->
+  <a class="btn"
+     href="{{ url_for('general_iframe_wizard',
+                      step='start',
+                      type_name=type_name,
+                      return_url=url_for('type_browse', type_name=type_name)) }}">
+    ➕ New Biography
+  </a>
+
+  <!-- Type-specific manage pages -->
+  <a class="btn secondary" href="{{ url_for('type_properties', type_name=type_name) }}">⚙️ Manage Properties</a>
+  <a class="btn secondary" href="{{ url_for('type_labels', type_name=type_name) }}">🏷️ Manage Labels</a>
+
+  <span class="spacer"></span>
+
+  <!-- View toggles -->
+  <a class="btn secondary{% if show=='' %} ghost{% endif %}"
+     href="{{ url_for('type_browse', type_name=type_name) }}">Active</a>
+  <a class="btn secondary{% if show=='archived' %} ghost{% endif %}"
+     href="{{ url_for('type_browse', type_name=type_name, show='archived') }}">Archived</a>
+  <a class="btn secondary{% if show=='all' %} ghost{% endif %}"
+     href="{{ url_for('type_browse', type_name=type_name, show='all') }}">All</a>
+</div>
 
     <div class="controls">
       <input type="search" id="searchInput" placeholder="Search {{ type_name|replace('_',' ')|title }} biographies…"
