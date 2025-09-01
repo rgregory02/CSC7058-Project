@@ -1,6 +1,6 @@
 {
   "name": "Milestone",
-  "description": "This is a label group about various types of dogs",
+  "description": "This is a label group about various types of milestones",
   "source": {
     "kind": "self_labels",
     "path": "Milestone",
