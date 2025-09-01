@@ -1,9 +1,10 @@
-import re, math, os, json
+import re, math, os, json, uuid, re, shutil, sqlite3, urllib.request, urllib.error, urllib.parse
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from openai import OpenAI
 import glob
-from typing import List, Dict, Any, Optional  
+from typing import List, Dict, Any, Optional
+
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -355,7 +356,7 @@ def resolve_entities(entry_type, entity_list):
             "label_type": label_type
         }
 
-        entry["display"] = eid.capitalize()
+        entry["display"] = eid.capitalise()
         entry["link"] = None
 
         bio_path = f"./types/{entry_type}/biographies/{eid}.json"
@@ -370,7 +371,7 @@ def resolve_entities(entry_type, entity_list):
 
         if os.path.exists(label_json_path):
             label_data = load_json_as_dict(label_json_path)
-            entry["display"] = label_data.get("title") or label_data.get("name", eid.capitalize())
+            entry["display"] = label_data.get("title") or label_data.get("name", eid.capitalise())
             entry["description"] = label_data.get("description", "")
             entry["properties"] = label_data.get("properties", {})
 
@@ -617,7 +618,7 @@ def load_labels_from_folder(folder_path: str):
             try:
                 with open(fpath, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                # normalize a bit
+                # normalise a bit
                 if isinstance(data, dict):
                     _id = (data.get("id") or os.path.splitext(filename)[0]).strip()
                     disp = data.get("display") or _id.replace("_", " ").title()
@@ -638,8 +639,7 @@ def load_labels_from_folder(folder_path: str):
     items.sort(key=lambda x: (x.get("order", 999), (x.get("display") or "").lower()))
     return items
 
-import os, json, uuid
-from datetime import datetime, timezone
+
 
 def list_biographies(type_name):
     """
@@ -747,7 +747,7 @@ def build_suggested_biographies(*args, **kwargs):
 
     Returns: { safe_group_key: [ {id, display, description?}, ... ] }
     """
-    # -------- arg normalization --------
+    # -------- arg normalisation --------
     current_type = None
     label_groups_list = None
     label_base_path = None
@@ -1055,8 +1055,7 @@ def _score_label(prompt: str, item: dict) -> float:
     # weight overlap higher than fuzzy
     return (0.65 * jacc) + (0.35 * fuzz) + id_bonus
 
-import os, re, shutil, json
-from datetime import datetime
+
 
 SAFE_TYPE = re.compile(r"^[a-z0-9_]+$")
 
@@ -1599,9 +1598,7 @@ def collect_label_groups(label_base_path: str, current_type: str):
     groups.sort(key=lambda g: g.get("key", ""))
     return groups
 
-# utils.py
-import os, json, re, sqlite3, urllib.request, urllib.error, urllib.parse
-from datetime import datetime, timezone
+
 
 def slugify_key(s: str) -> str:
     return re.sub(r"[^a-z0-9_]+", "_", (s or "").lower()).strip("_")
@@ -1676,7 +1673,7 @@ def _fetch_api_json(
     Fetch JSON from an external API with retries, proper User-Agent, and optional naive caching.
     - GET: 'query' dict is sent as URL params.
     - POST: 'query' dict is sent as JSON body.
-    - headers_env: if set, we send Authorization: Bearer $ENV_VAL (if present).
+    - headers_env: if set, we send Authorisation: Bearer $ENV_VAL (if present).
     """
     # --- simple cache key ---
     cache_key_src = json.dumps({
@@ -1710,7 +1707,7 @@ def _fetch_api_json(
     if headers_env:
         token = (os.getenv(headers_env) or "").strip()
         if token:
-            headers["Authorization"] = f"Bearer {token}"
+            headers["Authorisation"] = f"Bearer {token}"
 
     try:
         method = (method or "GET").upper()
@@ -1860,7 +1857,7 @@ def _import_labels_from_api(
         if not rid:
             continue
 
-        # normalize id filename
+        # normalise id filename
         oid = sanitise_key(rid)
         doc = {"id": oid, "display": (rdisplay or oid.replace("_", " ").title())}
         if rdesc: doc["description"] = rdesc

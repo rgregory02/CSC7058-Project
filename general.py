@@ -2480,20 +2480,20 @@ def general_step_labels(type_name, bio_id):
         return idx
 
     def _validate_input_group(g: dict, value: str) -> Optional[str]:
-        # normalize input block
+        # normalise input block
         inp = (g or {}).get("input")
         if isinstance(inp, str):
-            # allow shorthand like "text"
             inp = {"kind": inp}
         if not isinstance(inp, dict):
             inp = {}
 
         val = (value or "").strip()
 
-        if g.get("required") and not val:
-            return f"'{g.get('label') or g.get('key')}' is required."
+        # Enforce requiredness only; if optional & blank, it's fine.
+        if not val:
+            return f"'{g.get('label') or g.get('key')}' is required." if g.get("required") else None
 
-        # lengths (be forgiving)
+        # Only check lengths when a value exists
         try:
             mn = int(inp.get("min_length")) if inp.get("min_length") is not None else None
         except Exception:
@@ -2508,12 +2508,12 @@ def general_step_labels(type_name, bio_id):
         if mx is not None and len(val) > mx:
             return f"Must be at most {mx} characters."
 
-        # optional regex
+        # Only check pattern when a value exists
         patt = inp.get("pattern")
         if isinstance(patt, str) and patt:
             try:
                 import re
-                if not re.fullmatch(patt, val or ""):
+                if not re.fullmatch(patt, val):
                     return "Format is invalid."
             except re.error:
                 # ignore bad patterns rather than bombing
@@ -2811,20 +2811,32 @@ def general_step_labels(type_name, bio_id):
             # input-group
             if g.get("input"):
                 val = (request.form.get(f"input_{key}") or "").strip()
+
+                # Validate only if there's a value or the field is required
                 err = _validate_input_group(g, val)
                 if err:
                     try:
                         flash(err, "error")
                     except Exception:
                         print("[WARN] flash unavailable:", err)
-                    return redirect(request.url)
-                if val:
-                    new_entries.append({
-                        "label_type": key.split("/")[-1],
-                        "id": val,
-                        "confidence": conf,
-                        "source": "input",
-                    })
+                    # Preserve any query params like ?embed=1
+                    return redirect(url_for(
+                        "general_step_labels",
+                        type_name=type_name,
+                        bio_id=bio_id,
+                        **request.args
+                    ))
+
+                # Optional blank → no-op (do not add an entry, do not block)
+                if not val:
+                    continue
+
+                new_entries.append({
+                    "label_type": key.split("/")[-1],
+                    "id": val,
+                    "confidence": conf,
+                    "source": "input",
+                })
                 continue
 
             # option / linked biography (MERGED into one entry)
@@ -2853,8 +2865,13 @@ def general_step_labels(type_name, bio_id):
         if next_step not in {"start", "time", "labels", "events", "review"}:
             next_step = "events"
 
-        return redirect(url_for("general_iframe_wizard",
-                                type=type_name, bio_id=bio_id, step=next_step))
+        # ✅ NEW: preserve ?embed=1 (or whatever value) on the redirect
+        embed = request.args.get("embed")
+        dest = dict(type=type_name, bio_id=bio_id, step=next_step)
+        if embed is not None:
+            dest["embed"] = embed
+
+        return redirect(url_for("general_iframe_wizard", **dest))
 
     # ======================= GET (suggest bios + render) =======================
     try:

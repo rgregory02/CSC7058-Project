@@ -47,7 +47,7 @@
   .is-hidden { display: none !important; }
   .btn-link { background:none;border:none;color:#007bff;cursor:pointer;padding:0;text-decoration:underline; }
   .btn-link:hover { text-decoration:none; }
-</style>}
+</style>
 </head>
 {% set EMBED = request.args.get('embed') in ('1','true','True') %}
 {% if EMBED %}<base target="_top">{% endif %}
@@ -66,7 +66,12 @@
     {% endif %}
   </div>
 
-  <form method="POST">
+{% set form_action = url_for('general_step_labels', type_name=current_type, bio_id=bio_id) %}
+<form id="labelsForm"
+      method="POST"
+      target="_self"
+      action="{{ form_action }}{% if request.args.get('embed') %}?embed={{ request.args.get('embed') }}{% endif %}">
+  <input type="hidden" name="next_step" value="events">
     {% for group in label_groups_list %}
       {% set safe_key     = group.key.replace('/', '__') %}
       {% set is_child     = ('/' in group.key) %}
@@ -166,8 +171,9 @@
 
 {% else %}
 {% if group.options %}
+  {# set max BEFORE using it #}
+  {% set max = ui_limit_labels|default(3) %}
   <div class="label-options" id="opts_{{ safe_key }}" data-expanded="0" data-max="{{ max }}">
-    {% set max = ui_limit_labels|default(3) %}
     {% for item in group.options %}
       {% set is_selected = (selected_id == item.id) %}
       {% set img = item.image or item.image_url %}
@@ -178,9 +184,7 @@
            tabindex="0"
            onclick="selectLabel('{{ group.key }}','{{ item.id }}', false)"
            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); selectLabel('{{ group.key }}','{{ item.id }}', false);}">
-        {% if img %}
-          <img src="{{ img }}" alt="{{ item.display or item.id }}">
-        {% endif %}
+        {% if img %}<img src="{{ img }}" alt="{{ item.display or item.id }}">{% endif %}
         <div><strong>{{ item.display or item.id }}</strong></div>
         {% if item.description %}<div class="label-description">{{ item.description }}</div>{% endif %}
       </div>
@@ -478,7 +482,6 @@
 </div>
 
 <script>
-  const AUTO_LINK = Object.create(null);
   const CURRENT_TYPE = "{{ current_type }}";
   const qs  = sel => document.querySelector(sel);
   const qsa = sel => Array.from(document.querySelectorAll(sel));

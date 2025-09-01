@@ -1,0 +1,29 @@
+{
+    "id": "becca_8",
+    "uid": "dd9dd4917a3f40d0b0728c2d7416d398",
+    "name": "Becca",
+    "type": "person",
+    "created": "2025-08-31T23:57:43.716351+00:00",
+    "updated": "2025-08-31T23:57:49.181693+00:00",
+    "entries": [
+        {
+            "created": "2025-08-31T23:57:49.181693+00:00",
+            "updated": "2025-08-31T23:57:49.181693+00:00",
+            "time": {
+                "label_type": "entire_life",
+                "confidence": 54,
+                "subvalue": "entire_life"
+            },
+            "time_normalised": {
+                "kind": "entire_life",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "unknown",
+                "age_years": null,
+                "notes": "Unrecognised time label (no bounds)"
+            }
+        }
+    ]
+}
