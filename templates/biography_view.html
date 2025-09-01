@@ -21,11 +21,10 @@
     .section-title{ margin:0 0 8px; font-size:18px; color:#2f2f36; }
     .pill{ display:inline-block; padding:3px 8px; border-radius:999px; font-size:12px; background:#eef0f7; color:#333; }
     .label-row{ border-left:4px solid #e5e7eb; padding:10px 12px; border-radius:8px; margin:10px 0; background:#fafafa; }
+    .event-row{ border-left:5px solid #cfe0ff; background:#f4f8ff; border-radius:10px; padding:10px 12px; margin:10px 0; }
     .conf{ font-size:12px; font-weight:700; margin-left:6px; }
-    .conf.high{ color:#16a34a; }
-    .conf.med{ color:#f59e0b; }
-    .conf.low{ color:#ef4444; }
-    .biochip{ background:#eef5f2; border-left:4px solid #2e7d32; padding:8px 10px; border-radius:8px; margin-top:8px; }
+    .conf.high{ color:#16a34a; } .conf.med{ color:#f59e0b; } .conf.low{ color:#ef4444; }
+    .biochip{ background:#eef5f2; border-left:4px solid #2e7d32; padding:8px 10px; border-radius:8px; margin-top:6px; }
     .kv{ display:grid; grid-template-columns: 160px 1fr; gap:6px; }
     .small{ font-size:12px; color:#6b7280; }
     .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
@@ -38,7 +37,6 @@
     .chevron{ width:20px; text-align:center; }
     .entry-title{ font-weight:700; }
     .entry-meta{ font-size:12px; color:#6b7280; margin-top:2px; }
-    .entry-actions a{ margin-left:8px; font-size:12px; text-decoration:none; }
     .entry-content{ max-height:0; overflow:hidden; opacity:0; transition:max-height .25s ease, opacity .25s ease; padding:0 14px; }
     .entry-block.expanded .entry-content{ padding:14px; max-height:2000px; opacity:1; }
     .entry-toolbar{ text-align:right; margin-top:6px; }
@@ -53,12 +51,7 @@
       </div>
       <div class="toolbar">
         <a class="btn secondary" href="{{ url_for('type_browse', type_name=type_name) }}">⬅️ Back to {{ type_name|replace('_',' ')|title }}</a>
-        <a class="btn ghost"
-   href="{{ url_for('most_like_type', type_name=type_name, bio_id=bio_id) }}">
-  🔍 Find Similar {{ type_name|replace('_',' ')|title }}
-</a>
-
-
+        <a class="btn ghost" href="{{ url_for('most_like_type', type_name=type_name, bio_id=bio_id) }}">🔍 Find Similar {{ type_name|replace('_',' ')|title }}</a>
       </div>
     </div>
 
@@ -107,50 +100,78 @@
       <div class="card">
         <h3 class="section-title">⚙️ Actions</h3>
         <p class="small">Use the Label Wizard to change labels; add more time entries; or search/edit the raw biography.</p>
-        <ul class="small" style="margin:0 0 0 18px">
+        <div class="small" style="display:flex; gap:8px; flex-wrap:wrap;">
           <a class="btn ghost" href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='time', add=1) }}">⏱️ Add Time Period</a>
-          <a class="btn"
-   href="{{ url_for('general_iframe_wizard',
-                    type=type_name,
-                    bio_id=bio_id,
-                    step='start',
-                    edit_entry_index=(entries|length - 1 if entries else 0)) }}"
-   target="_top">
-  ✏️ Edit (From Start)
-</a>
+          <a class="btn" href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='start', edit_entry_index=(entries|length - 1 if entries else 0)) }}" target="_top">✏️ Edit (From Start)</a>
 
-{% set return_to = request.referrer or request.url %}
-
-{% if bio.get('archived') %}
-  <form method="post"
-        action="{{ url_for('api_unarchive_bio', type_name=type_name, bio_id=bio_id) }}"
-        style="display:inline;">
-    <input type="hidden" name="next" value="{{ return_to }}">
-    <button type="submit" class="btn secondary" style="background:#4CAF50;color:#fff;">
-      ♻️ Unarchive
-    </button>
-  </form>
-{% else %}
-  <form method="post"
-        action="{{ url_for('api_archive_bio', type_name=type_name, bio_id=bio_id) }}"
-        style="display:inline;">
-    <input type="hidden" name="next" value="{{ return_to }}">
-    <button type="submit" class="btn secondary" style="background:#c62828;color:#fff;">
-      🗄️ Archive Biography
-    </button>
-  </form>
-{% endif %}
-
-        </ul>
+          {% set return_to = request.referrer or request.url %}
+          {% if bio.get('archived') %}
+            <form method="post" action="{{ url_for('api_unarchive_bio', type_name=type_name, bio_id=bio_id) }}" style="display:inline;">
+              <input type="hidden" name="next" value="{{ return_to }}">
+              <button type="submit" class="btn secondary" style="background:#4CAF50;color:#fff;">♻️ Unarchive</button>
+            </form>
+          {% else %}
+            <form method="post" action="{{ url_for('api_archive_bio', type_name=type_name, bio_id=bio_id) }}" style="display:inline;">
+              <input type="hidden" name="next" value="{{ return_to }}">
+              <button type="submit" class="btn secondary" style="background:#c62828;color:#fff;">🗄️ Archive Biography</button>
+            </form>
+          {% endif %}
+        </div>
       </div>
     </div>
 
-    <!-- Labels for the current (latest) entry -->
+    {% set latest_events = entry.get('events') or [] %}
+    {% if latest_events %}
+      <div class="card" style="margin-top:16px">
+        <h3 class="section-title">🎯 Events (latest entry)</h3>
+        {% for ev in latest_events %}
+          {% set conf = ev.confidence or 100 %}
+          <div class="event-row">
+            <div>
+              <strong>Option:</strong>
+              {{ (ev.option_display or ev.option_id)|default('Unnamed', true) }}
+              {% if ev.child_option_id %} <span class="muted">→ {{ ev.child_option_id }}</span>{% endif %}
+              <span class="conf {% if conf>=67 %}high{% elif conf>=34 %}med{% else %}low{% endif %}">{{ conf }}%</span>
+            </div>
+
+            {% if ev.link_type or ev.linked_bio %}
+              <div class="small" style="margin-top:4px">
+                <strong>Link:</strong>
+                {{ ev.link_type|replace('_',' ')|title if ev.link_type else '—' }}
+                {% if ev.linked_bio %} → <code class="mono">{{ ev.linked_bio }}</code>{% endif %}
+              </div>
+            {% endif %}
+
+            {% if ev.time %}
+              <div class="small" style="margin-top:4px">
+                <strong>Time:</strong>
+                {% if ev.time.date_value %}
+                  {{ ev.time.date_value|uk_date }}
+                {% elif ev.time.label_id or ev.time.label_free %}
+                  {{ ev.time.label_id or ev.time.label_free }}
+                {% elif ev.time.subvalue %}
+                  {{ ev.time.subvalue|replace('_',' ')|title }}
+                {% elif ev.time.start_date or ev.time.end_date %}
+                  {{ (ev.time.start_date or '')|uk_date }} … {{ (ev.time.end_date or '')|uk_date }}
+                {% else %}—{% endif %}
+                {% if ev.time.confidence is not none %}
+                  <span class="conf {% if (ev.time.confidence or 100) >= 67 %}high{% elif (ev.time.confidence or 100) >= 34 %}med{% else %}low{% endif %}">
+                    {{ ev.time.confidence or 100 }}%
+                  </span>
+                {% endif %}
+              </div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <!-- Labels for the current (latest) entry, excluding events -->
     <div class="card" style="margin-top:16px">
       <h3 class="section-title">🏷️ Labels (latest entry)</h3>
       {% if entry %}
         {% for type_key, type_items in entry.items() %}
-          {% if type_key not in ['time','time_normalised','created','updated','status'] and type_items %}
+          {% if type_key not in ['time','time_normalised','created','updated','status','events'] and type_items %}
             {% if type_items is sequence and not (type_items is string) %}
               <h4 style="margin:18px 0 8px">{{ type_key|replace('_',' ')|title }}</h4>
               {% for label in type_items %}
@@ -222,37 +243,26 @@
                 {% set _ = label_groups.append(k) %}
               {% endif %}
             {% endfor %}
-<li class="entry-block" id="entry-{{ idx }}">
-  <div class="entry-header" role="button" aria-expanded="false">
-<a
-  href="{{ url_for('general_iframe_wizard',
-                   type=type_name,
-                   bio_id=bio_id,
-                   step='time',
-                   edit_entry_index=idx) }}"
-  style="display:flex;gap:12px;align-items:flex-start;justify-content:space-between;width:100%;text-decoration:none;color:inherit"
-  title="Open this entry in the wizard (Time step)"
-  target="_top"
->
-
-      <div class="entry-left">
-        <div class="chevron" aria-hidden="true">▶️</div>
-        <div>
-          <div class="entry-title">
-            {{ (time_label or 'Unknown')|trim|replace('  ', ' ')|uk_date }}
-          </div>
-          <div class="entry-meta">
-            {% if e.created %}Created {{ e.created|uk_datetime }} • {% endif %}
-            {% if e.updated %}Updated {{ e.updated|uk_datetime }} • {% endif %}
-            {{ label_groups|length }} group{{ '' if label_groups|length==1 else 's' }}
-          </div>
-        </div>
-      </div>
-      <div class="entry-actions">
-        <span class="small muted">Open in wizard</span>
-      </div>
-    </a>
-  </div>
+            <li class="entry-block" id="entry-{{ idx }}">
+              <div class="entry-header" role="button" aria-expanded="false" onclick="toggleEntry({{ idx }})">
+                <div class="entry-left">
+                  <div class="chevron" aria-hidden="true">▶️</div>
+                  <div>
+                    <div class="entry-title">{{ (time_label or 'Unknown')|trim|replace('  ', ' ')|uk_date }}</div>
+                    <div class="entry-meta">
+                      {% if e.created %}Created {{ e.created|uk_datetime }} • {% endif %}
+                      {% if e.updated %}Updated {{ e.updated|uk_datetime }} • {% endif %}
+                      {{ label_groups|length }} group{{ '' if label_groups|length==1 else 's' }}
+                    </div>
+                  </div>
+                </div>
+                <div class="entry-actions">
+                  <a class="small" target="_top"
+                     href="{{ url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, step='time', edit_entry_index=idx) }}">
+                    Open in wizard
+                  </a>
+                </div>
+              </div>
 
               <div class="entry-content">
                 {% if e.time_normalised %}
@@ -266,42 +276,78 @@
                   </div>
                 {% endif %}
 
-                {% if label_groups %}
-                  {% for k in label_groups %}
-                    <h4 style="margin:10px 0 6px">{{ k.replace('_',' ')|title }}</h4>
-                    {% for item in e[k] %}
-                      {% if item is mapping %}
-                        {% set conf = item.confidence or 100 %}
-                        <div class="label-row">
-                          <div>
-                            <strong>{{ (item.get('label_type') or 'Label')|replace('_',' ')|title }}</strong> —
-                            {% set disp = item.get('display') or item.get('label') or item.get('id') or 'Unnamed' %}
-                            {{ disp|replace('_',' ')|title }}
-                            <span class="conf {% if conf>=67 %}high{% elif conf>=34 %}med{% else %}low{% endif %}">{{ conf }}%</span>
-                          </div>
-                          {% if item.biography_data %}
-                            <div class="biochip">
-                              📖 <strong>{{ item.biography_data.get('name','') }}</strong>
-                              {% if item.biography_data.get('description') %}
-                                <div class="small">{{ item.biography_data.description }}</div>
-                              {% endif %}
-                            </div>
-                          {% elif item.biography %}
-                            <div class="biochip">📖 Linked biography: <span class="mono">{{ item.biography }}</span></div>
-                          {% endif %}
-                          {% if item.description %}
-                            <div class="small" style="margin-top:6px">{{ item.description }}</div>
-                          {% endif %}
-                          {% if item.image_url %}
-                            <div style="margin-top:8px"><img src="{{ item.image_url }}" style="max-height:90px;border-radius:8px"></div>
+                {% if e.get('events') %}
+                  <h4 style="margin:10px 0 6px">Events</h4>
+                  {% for ev in e.events %}
+                    {% set conf = ev.confidence or 100 %}
+                    <div class="event-row">
+                      <div>
+                        <strong>Option:</strong>
+                        {{ (ev.option_display or ev.option_id)|default('Unnamed', true) }}
+                        {% if ev.child_option_id %}<span class="muted">→ {{ ev.child_option_id }}</span>{% endif %}
+                        <span class="conf {% if conf>=67 %}high{% elif conf>=34 %}med{% else %}low{% endif %}">{{ conf }}%</span>
+                      </div>
+                      {% if ev.link_type or ev.linked_bio %}
+                        <div class="small" style="margin-top:4px">
+                          <strong>Link:</strong>
+                          {{ ev.link_type|replace('_',' ')|title if ev.link_type else '—' }}
+                          {% if ev.linked_bio %} → <code class="mono">{{ ev.linked_bio }}</code>{% endif %}
+                        </div>
+                      {% endif %}
+                      {% if ev.time %}
+                        <div class="small" style="margin-top:4px">
+                          <strong>Time:</strong>
+                          {% if ev.time.date_value %}
+                            {{ ev.time.date_value|uk_date }}
+                          {% elif ev.time.label_id or ev.time.label_free %}
+                            {{ ev.time.label_id or ev.time.label_free }}
+                          {% elif ev.time.subvalue %}
+                            {{ ev.time.subvalue|replace('_',' ')|title }}
+                          {% elif ev.time.start_date or ev.time.end_date %}
+                            {{ (ev.time.start_date or '')|uk_date }} … {{ (ev.time.end_date or '')|uk_date }}
+                          {% else %}—{% endif %}
+                          {% if ev.time.confidence is not none %}
+                            <span class="conf {% if (ev.time.confidence or 100) >= 67 %}high{% elif (ev.time.confidence or 100) >= 34 %}med{% else %}low{% endif %}">
+                              {{ ev.time.confidence or 100 }}%
+                            </span>
                           {% endif %}
                         </div>
                       {% endif %}
-                    {% endfor %}
+                    </div>
                   {% endfor %}
-                {% else %}
-                  <div class="muted small">No labels recorded for this entry.</div>
                 {% endif %}
+
+                {% for k in label_groups if k != 'events' %}
+                  <h4 style="margin:10px 0 6px">{{ k.replace('_',' ')|title }}</h4>
+                  {% for item in e[k] %}
+                    {% if item is mapping %}
+                      {% set conf = item.confidence or 100 %}
+                      <div class="label-row">
+                        <div>
+                          <strong>{{ (item.get('label_type') or 'Label')|replace('_',' ')|title }}</strong> —
+                          {{ (item.get('display') or item.get('label') or item.get('id') or 'Unnamed')|replace('_',' ')|title }}
+                          <span class="conf {% if conf>=67 %}high{% elif conf>=34 %}med{% else %}low{% endif %}">{{ conf }}%</span>
+                        </div>
+                        {% if item.biography_data %}
+                          <div class="biochip">
+                            📖 <strong>{{ item.biography_data.get('name','') }}</strong>
+                            {% if item.biography_data.get('description') %}
+                              <div class="small">{{ item.biography_data.description }}</div>
+                            {% endif %}
+                          </div>
+                        {% elif item.biography %}
+                          <div class="biochip">📖 Linked biography: <span class="mono">{{ item.biography }}</span></div>
+                        {% endif %}
+                        {% if item.description %}
+                          <div class="small" style="margin-top:6px">{{ item.description }}</div>
+                        {% endif %}
+                        {% if item.image_url %}
+                          <div style="margin-top:8px"><img src="{{ item.image_url }}" style="max-height:90px;border-radius:8px"></div>
+                        {% endif %}
+                      </div>
+                    {% endif %}
+                  {% endfor %}
+                {% endfor %}
               </div>
             </li>
           {% endfor %}
