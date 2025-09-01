@@ -973,26 +973,49 @@ function selectChild(groupKey, labelId){
   }
 
   function updateSaveButtonState(){
-    const trackers = document.querySelectorAll('.group-selection-tracker');
-    const gptEl = document.getElementById('gpt_selected_labels_json');
-    const btn = document.getElementById('saveButton');
+  const btn = document.getElementById('saveButton');
+  if (!btn) return;
 
-    const hasManual = Array.from(trackers).some(i => (i.value||'').trim() !== '');
-    let hasGPT = false;
-    try {
-      const arr = JSON.parse(gptEl?.value || '[]');
-      hasGPT = Array.isArray(arr) && arr.length > 0;
-    } catch(_) {}
+  // A) option-style (hidden trackers behind cards/bio links)
+  const trackers   = document.querySelectorAll('.group-selection-tracker');
+  const hasManual  = Array.from(trackers).some(i => (i.value || '').trim() !== '');
 
-    if(!btn) return;
-    if(hasManual || hasGPT){
-      btn.textContent = '✅ Save All Selections';
-      btn.style.backgroundColor = '#4CAF50';
-    }else{
-      btn.textContent = '➡️ Move to next page with no labels selected';
-      btn.style.backgroundColor = '#6c63ff';
+  // B) direct input fields (text/textarea/date/number/select) e.g. name="input_*"
+  const hasInputSelections = Array.from(
+    document.querySelectorAll("[name^='input_']")
+  ).some(el => {
+    if (!el) return false;
+
+    // checkboxes / radios: any checked counts
+    if (el.type === 'checkbox' || el.type === 'radio') {
+      return el.checked;
     }
+
+    // selects: any non-empty value
+    if (el.tagName === 'SELECT') {
+      return (el.value || '').trim() !== '';
+    }
+
+    // inputs/textareas: any non-empty string
+    return (String(el.value ?? '')).trim() !== '';
+  });
+
+  // C) GPT suggestions (unchanged)
+  const gptEl = document.getElementById('gpt_selected_labels_json');
+  let hasGPT = false;
+  try {
+    const arr = JSON.parse(gptEl?.value || '[]');
+    hasGPT = Array.isArray(arr) && arr.length > 0;
+  } catch(_) {}
+
+  if (hasManual || hasInputSelections || hasGPT) {
+    btn.textContent = '✅ Save All Selections';
+    btn.style.backgroundColor = '#4CAF50';
+  } else {
+    btn.textContent = '➡️ Move to next page with no labels selected';
+    btn.style.backgroundColor = '#6c63ff';
   }
+}
 
   function renderGptSuggestions(items) {
     const wrap = document.getElementById('gptSuggestions');
@@ -1396,6 +1419,17 @@ function filterLabels(inputOrText, groupKey){
     }
   }
 }
+
+document.addEventListener('input', (e) => {
+  const t = e.target;
+  if (!t) return;
+  if (
+    t.classList?.contains('group-selection-tracker') ||
+    (t.name && t.name.startsWith('input_'))
+  ) {
+    updateSaveButtonState();
+  }
+});
 
 </script>
 
