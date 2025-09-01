@@ -1,0 +1,28 @@
+{
+    "label": "Work buildiing",
+    "description": "",
+    "order": 999,
+    "ingest": {
+        "kind": "api",
+        "url": "https://www.wikidata.org/w/api.php",
+        "method": "GET",
+        "headers_env": "",
+        "query_json": {
+            "action": "wbsearchentities",
+            "format": "json",
+            "language": "en",
+            "limit": 15,
+            "search": "London hospital"
+        },
+        "array_path": "search",
+        "field_id": "id",
+        "field_display": "label",
+        "field_desc": "description",
+        "field_image": "image",
+        "max_items": 15,
+        "postprocess": {
+            "strip_wikidata_uri": true
+        }
+    },
+    "allow_children": false
+}

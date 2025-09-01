@@ -1,0 +1,29 @@
+{
+    "id": "clara_barton",
+    "uid": "7430c5a9148a4880807db197bff1c571",
+    "name": "Clara Barton",
+    "type": "person",
+    "created": "2025-08-31T22:58:58.281826+00:00",
+    "updated": "2025-08-31T22:59:02.836190+00:00",
+    "entries": [
+        {
+            "created": "2025-08-31T22:59:02.836190+00:00",
+            "updated": "2025-08-31T22:59:02.836190+00:00",
+            "time": {
+                "label_type": "entire_life",
+                "confidence": 100,
+                "subvalue": "entire_life"
+            },
+            "time_normalised": {
+                "kind": "entire_life",
+                "start_iso": null,
+                "end_iso": "2025-08-31",
+                "start_ts": null,
+                "end_ts": 1756598400,
+                "precision": "approx",
+                "age_years": null,
+                "notes": "Entire life with no recorded DOB/DOD; treated as lifetime to present."
+            }
+        }
+    ]
+}

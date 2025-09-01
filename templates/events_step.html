@@ -153,12 +153,36 @@
     let TIME_OPTIONS_BY_KEY = {};
     let OPTIONS = [];
 
-    function biosForTypeOptionHtml(type, bag){
-      const arr = bag[type] || [];
-      return ['<option value="">(none)</option>']
-        .concat(arr.map(b => `<option value="${b.id}">${(b.name||b.id)}</option>`))
-        .join('');
+    function normaliseTypeLabel(s){
+    // "Buildings" -> "buildings", "Link To Orgs" -> "link_to_orgs"
+    return (s||'').trim().toLowerCase().replace(/\s+/g,'_');
+  }
+
+  async function fillTargetsForRow(row){
+    const typeSel = row.querySelector('select[name="row_link_type[]"]');
+    const targetSel = row.querySelector('select[name="row_link_bio[]"]');
+    if (!typeSel || !targetSel) return;
+
+    const type = normaliseTypeLabel(typeSel.value);
+    targetSel.innerHTML = '<option value="">(none)</option>';
+    if (!type) return;
+
+    try{
+      const res  = await fetch(`/api/bios/list?type=${encodeURIComponent(type)}&recursive=1&limit=1000`);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Failed to load');
+
+      (data.items || []).forEach(it => {
+        // Prefer stable nested key if present (e.g. "educational_buildings/blue_primary_school")
+        const value = it.key || it.id;
+        const text  = it.name || it.id;
+        targetSel.add(new Option(text, value));
+      });
+    }catch(err){
+      console.error('[link targets] load failed:', err);
     }
+  }
+
 
     function wireTimeVisibility(row){
       const kindSel   = row.querySelector('select[name="row_time_kind[]"]');
@@ -299,10 +323,8 @@
       document.getElementById('rows').appendChild(row);
 
       const tSel = row.querySelector('select[name="row_link_type[]"]');
-      const bSel = row.querySelector('select[name="row_link_bio[]"]');
-      const setTargets = () => { bSel.innerHTML = biosForTypeOptionHtml(tSel.value, parseJSONFromScript('linkable_payload')); };
-      tSel.addEventListener('change', setTargets);
-      setTargets();
+      tSel.addEventListener('change', () => fillTargetsForRow(row));
+      fillTargetsForRow(row);
 
       wireTimeVisibility(row);
     }

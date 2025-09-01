@@ -2301,19 +2301,78 @@ def general_iframe_wizard():
     )
 
 
-# ---- Small JSON endpoint used by the start page to fetch bios for a type ----
 @app.route("/api/bios/list")
 def api_bios_list():
-    t = (request.args.get("type") or "").strip()
-    if not t:
-        return jsonify({"ok": False, "error": "type required"}), 400
-    try:
-        bios = list_biographies(t)  # expect list of dicts with id & name
-        # keep payload tiny
-        return jsonify({"ok": True, "items": [{"id": b["id"], "name": b.get("name", b["id"])} for b in bios]})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+    type_name = (request.args.get("type") or "").strip()
+    if not type_name:
+        return jsonify(ok=False, error="Missing type"), 400
 
+    recursive = (request.args.get("recursive", "1").lower() in ("1","true","yes"))
+    q         = (request.args.get("q") or "").strip().lower()
+    try:
+        limit = max(1, min(5000, int(request.args.get("limit") or "500")))
+    except Exception:
+        limit = 500
+
+    base = os.path.join("types", type_name, "biographies")
+    if not os.path.isdir(base):
+        return jsonify(ok=True, items=[])
+
+    items = []
+
+    def _maybe_add(file_path: str):
+        # skip non-json and meta files
+        if not file_path.endswith(".json"):
+            return
+        if os.path.basename(file_path) == "_group.json":
+            return
+        try:
+            rel = os.path.relpath(file_path, base)  # e.g. "demo/st_thomas_hospital.json"
+        except Exception:
+            return
+        try:
+            data = load_json_as_dict(file_path) or {}
+        except Exception:
+            data = {}
+
+        stem = os.path.splitext(os.path.basename(file_path))[0]
+        name = (data.get("name") or stem.replace("_"," ").title()).strip()
+        key  = rel[:-5].replace(os.sep, "/")  # "demo/st_thomas_hospital"
+
+        hay = f"{name} {stem} {key}".lower()
+        if q and q not in hay:
+            return
+
+        items.append({
+            "id": stem,                    # legacy
+            "name": name,
+            "key": key,                    # preferred: full relative path key
+            "path": rel.replace(os.sep, "/")
+        })
+
+    if recursive:
+        for root, _, files in os.walk(base):
+            for fn in files:
+                if fn.startswith("."):
+                    continue
+                _maybe_add(os.path.join(root, fn))
+                if len(items) >= limit:
+                    break
+            if len(items) >= limit:
+                break
+    else:
+        for fn in os.listdir(base):
+            if fn.startswith("."):
+                continue
+            full = os.path.join(base, fn)
+            if os.path.isdir(full):
+                continue
+            _maybe_add(full)
+            if len(items) >= limit:
+                break
+
+    items.sort(key=lambda x: x["name"].lower())
+    return jsonify(ok=True, items=items[:limit])
 
 def _time_labels_root_for(type_name: str) -> str:
     # 1) per-type override, else 2) global

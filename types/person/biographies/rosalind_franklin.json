@@ -1,0 +1,29 @@
+{
+    "id": "rosalind_franklin",
+    "uid": "a22f6696ee4c4270933fca7b63e9c1a2",
+    "name": "Rosalind Franklin",
+    "type": "person",
+    "created": "2025-08-31T23:10:43.109593+00:00",
+    "updated": "2025-08-31T23:10:47.666314+00:00",
+    "entries": [
+        {
+            "created": "2025-08-31T23:10:47.666314+00:00",
+            "updated": "2025-08-31T23:10:47.666314+00:00",
+            "time": {
+                "label_type": "entire_life",
+                "confidence": 100,
+                "subvalue": "entire_life"
+            },
+            "time_normalised": {
+                "kind": "entire_life",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "unknown",
+                "age_years": null,
+                "notes": "Unrecognised time label (no bounds)"
+            }
+        }
+    ]
+}
