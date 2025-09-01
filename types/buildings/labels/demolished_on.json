@@ -1,11 +1,15 @@
 {
-  "key": "demolished_on",
-  "label": "Demolished On",
-  "description": "Date the building was demolished.",
-  "input": { "kind": "date" },
-  "ui": {
-    "allow_confidence": false,
-    "display_template": "Demolished {{id}}"
-  },
-  "order": 12
+    "key": "demolished_on",
+    "label": "Demolished On",
+    "description": "Date the building was demolished.",
+    "input": {
+        "kind": "date"
+    },
+    "ui": {
+        "allow_confidence": false,
+        "display_template": "Demolished {{id}}"
+    },
+    "order": 12,
+    "archived": false,
+    "updated": "2025-09-01T19:11:06.702678+00:00"
 }

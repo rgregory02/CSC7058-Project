@@ -1220,7 +1220,23 @@ def scan_cross_references(target_type: str):
 
     return refs
 
-
+def _resolve_property_file(type_name: str, key: str) -> str:
+    """
+    Return the absolute path to the property's JSON file.
+    Preference order:
+      1) types/<type>/labels/<key>.json  (label-backed properties)
+      2) types/<type>/properties/<key>.json  (other property definitions)
+    """
+    base = os.path.join("types", type_name)
+    candidates = [
+        os.path.join(base, "labels", f"{key}.json"),
+        os.path.join(base, "properties", f"{key}.json"),
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    # default: assume it should live in labels
+    return candidates[0]
 
 # def collect_label_groups(label_base_path, current_type):
 #     label_groups_list = []

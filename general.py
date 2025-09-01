@@ -75,6 +75,7 @@ from utils import (
     _collect_all_labels,
     build_label_catalog_for_type,
     resolve_property_options as _utils_resolve_property_options,
+    _resolve_property_file,
     _sibling_image
 )
 
@@ -3829,28 +3830,80 @@ def _safe_json_write(path: str, data: dict):
 # ---------- Properties: list ----------
 @app.route("/type/<type_name>/properties")
 def type_properties(type_name):
-    base = os.path.join("types", type_name, "labels")
+    labels_base = os.path.join("types", type_name, "labels")
     props = []
-    if os.path.isdir(base):
-        for f in sorted(os.listdir(base)):
-            p = os.path.join(base, f)
-            if f.endswith(".json") and os.path.isfile(p):
-                key = os.path.splitext(f)[0]
+
+    if os.path.isdir(labels_base):
+        for fname in sorted(os.listdir(labels_base)):
+            fpath = os.path.join(labels_base, fname)
+            if fname.endswith(".json") and os.path.isfile(fpath):
+                key = os.path.splitext(fname)[0]
                 try:
-                    data = load_json_as_dict(p)
+                    data = load_json_as_dict(fpath) or {}
                 except Exception:
                     data = {}
-                # tolerant read
-                name = (isinstance(data, dict) and (
-                    data.get("name") or data.get("properties", {}).get("name")
-                )) or key.replace("_"," ").title()
-                desc = (isinstance(data, dict) and (
-                    data.get("description") or data.get("properties", {}).get("description", "")
-                )) or ""
-                props.append({"key": key, "name": name, "description": desc})
-    # Show subfolders too, for context (not editable here)
-    subfolders = [d for d in sorted(os.listdir(base)) if os.path.isdir(os.path.join(base, d))] if os.path.isdir(base) else []
-    return render_template("type_properties.html", type_name=type_name, properties=props, subfolders=subfolders)
+
+                # tolerant reads for name/label/description
+                name = (
+                    data.get("name")
+                    or data.get("label")
+                    or data.get("properties", {}).get("name")
+                    or key.replace("_", " ").title()
+                )
+                desc = (
+                    data.get("description")
+                    or data.get("properties", {}).get("description", "")
+                    or ""
+                )
+
+                # IMPORTANT: surface the archived flag so the template can filter
+                archived_flag = bool(data.get("archived", False))
+
+                # Provide a minimal "source" so the template can show chips
+                source = {"kind": "labels", "path": f"labels/{key}.json"}
+
+                props.append({
+                    "key": key,
+                    "name": name,
+                    "description": desc,
+                    "archived": archived_flag,
+                    "source": source,
+                })
+
+    # Optional: also pull non-label property defs, if you keep any there (de-dup by key)
+    props_base = os.path.join("types", type_name, "properties")
+    if os.path.isdir(props_base):
+        seen = {p["key"] for p in props}
+        for fname in sorted(os.listdir(props_base)):
+            fpath = os.path.join(props_base, fname)
+            if fname.endswith(".json") and os.path.isfile(fpath):
+                key = os.path.splitext(fname)[0]
+                if key in seen:
+                    continue
+                try:
+                    data = load_json_as_dict(fpath) or {}
+                except Exception:
+                    data = {}
+                name = data.get("name") or data.get("label") or key.replace("_", " ").title()
+                desc = data.get("description", "")
+                props.append({
+                    "key": key,
+                    "name": name,
+                    "description": desc,
+                    "archived": bool(data.get("archived", False)),
+                    "source": {"kind": data.get("source", {}).get("kind", "property"),
+                               "path": f"properties/{key}.json"},
+                })
+
+    # Show label subfolders for context
+    subfolders = []
+    if os.path.isdir(labels_base):
+        subfolders = [d for d in sorted(os.listdir(labels_base)) if os.path.isdir(os.path.join(labels_base, d))]
+
+    return render_template("type_properties.html",
+                           type_name=type_name,
+                           properties=props,
+                           subfolders=subfolders)
 
 def _extract_input_from_form(frm) -> Optional[Dict[str, Any]]:
     """
@@ -4095,16 +4148,58 @@ def edit_property(type_name, prop_key):
         label_groups_by_type=build_label_groups_by_type(),
     )
 
-# ---------- Properties: delete ----------
-@app.route("/type/<type_name>/properties/<prop_key>/delete", methods=["POST"])
-def delete_property(type_name, prop_key):
-    path = os.path.join("types", type_name, "labels", f"{prop_key}.json")
-    if os.path.exists(path):
-        os.remove(path)
-        flash("Property deleted.", "success")
-    else:
-        flash("Nothing to delete.", "info")
-    return redirect(url_for("type_properties", type_name=type_name))
+# --- helpers you already have ---
+# save_dict_as_json(path, data)
+# load_json_as_dict(path) -> dict
+# now_iso_utc()
+@app.post("/type/<type_name>/properties/archive")
+def api_archive_property(type_name):
+    key = (request.form.get("prop_key") or "").strip()
+    nxt = request.form.get("next") or url_for("type_properties", type_name=type_name)
+    if not key:
+        flash("Missing prop_key.", "error")
+        return redirect(nxt)
+
+    prop_path = _resolve_property_file(type_name, key)
+    if not os.path.exists(prop_path):
+        flash(f"Property “{key}” was not found in labels/ or properties/ for {type_name}.", "error")
+        return redirect(nxt)
+
+    data = load_json_as_dict(prop_path)
+    if not isinstance(data, dict) or not data:
+        flash(f"Could not read JSON for “{key}”. Nothing changed.", "error")
+        return redirect(nxt)
+
+    data["archived"] = True
+    data["updated"]  = now_iso_utc()
+    save_dict_as_json(prop_path, data)
+    flash(f"Archived property “{key}”.", "success")
+    return redirect(nxt)
+
+
+@app.post("/type/<type_name>/properties/unarchive")
+def api_unarchive_property(type_name):
+    key = (request.form.get("prop_key") or "").strip()
+    nxt = request.form.get("next") or url_for("type_properties", type_name=type_name)
+    if not key:
+        flash("Missing prop_key.", "error")
+        return redirect(nxt)
+
+    prop_path = _resolve_property_file(type_name, key)
+    if not os.path.exists(prop_path):
+        flash(f"Property “{key}” was not found in labels/ or properties/ for {type_name}.", "error")
+        return redirect(nxt)
+
+    data = load_json_as_dict(prop_path)
+    if not isinstance(data, dict) or not data:
+        flash(f"Could not read JSON for “{key}”. Nothing changed.", "error")
+        return redirect(nxt)
+
+    data["archived"] = False
+    data["updated"]  = now_iso_utc()
+    save_dict_as_json(prop_path, data)
+    flash(f"Unarchived property “{key}”.", "success")
+    return redirect(nxt)
 
 
 def _bio_path(type_name: str, bio_id: str) -> str:

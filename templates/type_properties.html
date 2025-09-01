@@ -5,29 +5,41 @@
   <title>{{ type_name|replace('_',' ')|title }} — Properties</title>
   <link rel="stylesheet" href="/static/styles.css">
   <style>
-    body{background:#f6f7fb;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
-    .box{max-width:1100px;margin:40px auto;background:#fff;padding:24px;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.06)}
+    :root{
+      --bg:#f6f7fb; --card:#fff; --muted:#657085; --line:#e7e9f2; --ink:#111827;
+      --pill:#eef0f7; --pill-ink:#374151; --accent:#6c63ff; --danger:#c62828;
+      --arch:#f8fafc; --arch-ink:#6b7280;
+    }
+    body{background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    .box{max-width:1100px;margin:36px auto;background:var(--card);padding:24px;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.06);border:1px solid var(--line)}
     h1{margin:0 0 4px;font-weight:750}
-    .muted{color:#657085}
+    .muted{color:var(--muted)}
     .toolbar{display:flex;gap:10px;align-items:center;justify-content:space-between;margin:12px 0 16px}
-    .left{display:flex;gap:8px;align-items:center;flex:1}
+    .left{display:flex;gap:10px;align-items:center;flex:1}
     .right{display:flex;gap:8px;align-items:center}
-    .search{flex:1;min-width:260px;padding:10px;border:1px solid #dfe3ee;border-radius:10px;background:#fff}
-    .btn{display:inline-block;padding:8px 12px;border-radius:10px;background:#6c63ff;color:#fff;text-decoration:none;font-weight:600;border:1px solid #6c63ff;white-space:nowrap}
-    .btn.secondary{background:#eef0f7;color:#333;border-color:#e3e5ee}
-    .btn.danger{background:#c62828;border-color:#c62828;color:#fff}
+    .search{flex:1;min-width:260px;padding:10px;border:1px solid var(--line);border-radius:10px;background:#fff}
+    .select{padding:10px;border:1px solid var(--line);border-radius:10px;background:#fff}
+    .btn{display:inline-block;padding:10px 14px;border-radius:10px;background:var(--accent);color:#fff;text-decoration:none;font-weight:700;border:1px solid var(--accent);white-space:nowrap;cursor:pointer}
+    .btn.secondary{background:var(--pill);color:#333;border-color:var(--line)}
+    .btn.ghost{background:transparent;color:var(--accent);border:1px solid #cfd3ff}
+    .btn.archive{background:#f5f7ff;color:#2b2f5e;border:1px solid #d9ddff}
+    .btn.restore{background:#e9fbf0;color:#0b6230;border:1px solid #b9efcc}
     .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
-    .card{border:1px solid #e3e5ee;border-radius:12px;padding:14px;background:#fff;display:flex;flex-direction:column;gap:10px}
+    .card{border:1px solid var(--line);border-radius:12px;padding:14px;background:#fff;display:flex;flex-direction:column;gap:10px}
+    .card.archived{background:var(--arch);border-style:dashed;opacity:.8}
     .head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
-    .title{margin:0;font-size:16px;font-weight:700}
+    .title{margin:0;font-size:16px;font-weight:800;line-height:1.2}
     .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
     .chip{font-size:11px;border-radius:999px;padding:3px 8px;background:#f3f4f9;border:1px solid #e6e8f2;color:#445}
-    .code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,monospace;font-size:12px;background:#fafbff;border:1px solid #e7e9f2;border-radius:6px;padding:2px 6px}
+    .chip.badge{background:#fafbff;border-color:#e7e9f2}
+    .chip.path{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,monospace}
+    .chip.archived{background:#fff4e6;border-color:#ffd8a8;color:#7a4b00}
     .desc{color:#4b5563;font-size:13px;line-height:1.35}
-    .kv{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .kv .label{font-size:12px;color:#6b7280}
-    .actions{display:flex;gap:8px;margin-top:auto}
+    .actions{display:flex;gap:8px;margin-top:auto;flex-wrap:wrap}
     .empty{color:#657085;font-size:14px;background:#fafbff;border:1px dashed #e4e6f1;border-radius:12px;padding:14px;text-align:center}
+    .flashline{display:inline-block;background:#eef9f1;border:1px solid #b8ebc6;color:#0f5132;border-radius:8px;padding:6px 10px;margin-right:6px;font-size:12px}
+    .seg{display:flex;gap:6px;align-items:center}
+    .seg .select{min-width:150px}
   </style>
 </head>
 <body>
@@ -36,46 +48,79 @@
       {% if messages %}
         <div style="margin-bottom:10px">
           {% for cat, msg in messages %}
-            <span class="chip">{{ msg }}</span>
+            <span class="flashline">{{ msg }}</span>
           {% endfor %}
         </div>
       {% endif %}
     {% endwith %}
 
     <h1>🧩 Properties — {{ type_name|replace('_',' ')|title }}</h1>
+    <div class="muted">Configure fields used by this type. Properties can pull from labels folders, APIs, or databases, and optionally link to other biography types.</div>
 
     <div class="toolbar">
       <div class="left">
-        <input id="search" class="search" placeholder="Filter properties…" oninput="filterProps(this.value)">
+        <input id="search" class="search" placeholder="Filter properties by name, key, description…" oninput="filterProps(this.value)">
+        <select id="sourceFilter" class="select" onchange="applyFilters()">
+          <option value="">All sources</option>
+          <option value="labels">Labels (folder)</option>
+          <option value="api">API</option>
+          <option value="db_sqlite">SQLite</option>
+          <option value="property_link">Property link</option>
+        </select>
+        <select id="statusFilter" class="select" onchange="applyFilters()" title="Show Active or Archived">
+          <option value="">All statuses</option>
+          <option value="active">Active</option>
+          <option value="archived">Archived</option>
+        </select>
       </div>
       <div class="right">
         <a class="btn" href="{{ url_for('new_property', type_name=type_name) }}">➕ New Property</a>
-        <a class="btn secondary" href="{{ url_for('type_browse', type_name=type_name) }}">⬅ Back</a>
+        <a class="btn secondary" href="{{ url_for('type_browse', type_name=type_name) }}">⬅ Back to {{ type_name|replace('_',' ')|title }}</a>
       </div>
     </div>
 
     {% if subfolders %}
-      <div class="muted" style="margin:-4px 0 14px">
+      <div class="muted" style="margin:-2px 0 12px">
         Label subfolders detected:
-        <span class="code">{{ subfolders|join(', ') }}</span>
+        <span class="chip path">{{ subfolders|join(', ') }}</span>
       </div>
     {% endif %}
 
     {% if properties %}
       <div id="grid" class="grid">
         {% for p in properties %}
-          {% set src = p.source if p.source is defined else (p.get('source') if p.get is defined else {}) %}
-          {% set refer = p.refer_to if p.refer_to is defined else (p.get('refer_to') if p.get is defined else {}) %}
-          <div class="card prop"
-               data-key="{{ (p.key ~ ' ' ~ p.name ~ ' ' ~ (p.description or '') ~ ' ' ~ (src.path if src else '') )|lower }}">
+          {% set src = (p.source if p.source is defined else (p.get('source') if p.get is defined else {})) or {} %}
+          {% set ingest = (p.ingest if p.ingest is defined else (p.get('ingest') if p.get is defined else {})) or {} %}
+          {% set refer = (p.refer_to if p.refer_to is defined else (p.get('refer_to') if p.get is defined else {})) or {} %}
+          {% set src_kind = src.get('kind') or ingest.get('kind') or ( 'labels' if src.get('path') else '' ) %}
+          {% set label_path = src.get('path') or src.get('labels_path') or '' %}
+{% set is_archived = (p.get('archived', False) or (p.get('status','active') == 'archived')) %}
+{% set status = 'archived' if is_archived else 'active' %}
+
+          <div class="card prop {% if is_archived %}archived{% endif %}"
+               data-key="{{ (p.key ~ ' ' ~ (p.name or '') ~ ' ' ~ (p.description or '') ~ ' ' ~ (src_kind or '') ~ ' ' ~ label_path )|lower }}"
+               data-source="{{ (src_kind or '')|lower }}"
+               data-status="{{ status|lower }}">
             <div class="head">
               <div>
                 <h3 class="title">{{ p.name or p.key }}</h3>
                 <div class="chips">
-                  <span class="chip">key: <span class="code" style="margin-left:4px">{{ p.key }}</span></span>
-                  {% if src and src.kind %}<span class="chip">source: {{ src.kind }}</span>{% endif %}
-                  {% if src and src.path %}<span class="chip">path: {{ src.path }}</span>{% endif %}
-                  {% if refer and refer.type %}<span class="chip">links to: {{ refer.type }}</span>{% endif %}
+                  <span class="chip badge">key: <span style="font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,monospace; margin-left:4px">{{ p.key }}</span></span>
+                  {% if src_kind %}
+                    <span class="chip badge">source: {{ src_kind }}</span>
+                  {% endif %}
+                  {% if label_path %}
+                    <span class="chip path">labels: {{ label_path }}</span>
+                  {% endif %}
+                  {% if refer and refer.type %}
+                    <span class="chip badge">links to: {{ refer.type }}</span>
+                    {% if refer.path %}
+                      <span class="chip path">path: {{ refer.path }}</span>
+                    {% endif %}
+                  {% endif %}
+                  {% if is_archived %}
+                    <span class="chip archived">Archived</span>
+                  {% endif %}
                 </div>
               </div>
             </div>
@@ -84,13 +129,51 @@
               <div class="desc">{{ p.description }}</div>
             {% endif %}
 
+            {% if src_kind in ['api','db_sqlite'] and ingest %}
+              <details>
+                <summary class="muted" style="cursor:pointer"><strong>Ingest details</strong></summary>
+                <div class="desc" style="margin-top:6px">
+                  {% if src_kind == 'api' %}
+                    <div>URL: <span class="chip path">{{ ingest.get('url','') }}</span></div>
+                    <div>Method: <span class="chip">{{ ingest.get('method','GET') }}</span></div>
+                    {% if ingest.get('array_path') %}<div>Array path: <span class="chip">{{ ingest.get('array_path') }}</span></div>{% endif %}
+                    {% if ingest.get('field_id') %}<div>Fields: <span class="chip">id={{ ingest.get('field_id') }}</span> <span class="chip">display={{ ingest.get('field_display','name') }}</span></div>{% endif %}
+                  {% elif src_kind == 'db_sqlite' %}
+                    <div>DB: <span class="chip path">{{ ingest.get('sqlite_path','') }}</span></div>
+                    <div>SQL: <span class="chip path">{{ (ingest.get('sql','')[:140] ~ ('…' if (ingest.get('sql','')|length) > 140 else '')) }}</span></div>
+                  {% endif %}
+                </div>
+              </details>
+            {% endif %}
+
             <div class="actions">
               <a class="btn" href="{{ url_for('edit_property', type_name=type_name, prop_key=p.key) }}">✏️ Edit</a>
-              <form method="POST"
-                    action="{{ url_for('delete_property', type_name=type_name, prop_key=p.key) }}"
-                    onsubmit="return confirm('Delete property {{ p.key }}? This only removes the property JSON.');">
-                <button class="btn danger" type="submit">🗑️ Delete</button>
-              </form>
+
+              {% if label_path %}
+                <a class="btn ghost" href="{{ url_for('type_labels', type_name=type_name) }}?focus={{ label_path|urlencode }}">📂 Open Labels</a>
+              {% endif %}
+
+              {% if not is_archived %}
+                <!-- ARCHIVE (soft-delete) -->
+<form method="POST"
+      action="{{ url_for('api_archive_property', type_name=type_name) }}"
+      onsubmit="return confirm('Archive property {{ p.key }}? You can restore it later.');"
+      style="margin-left:auto">
+  <input type="hidden" name="prop_key" value="{{ p.key }}">
+  <input type="hidden" name="next" value="{{ request.full_path or url_for('type_properties', type_name=type_name) }}">
+  <button class="btn archive" type="submit">🗄️ Archive</button>
+</form>
+              {% else %}
+                <!-- RESTORE -->
+<form method="POST"
+      action="{{ url_for('api_unarchive_property', type_name=type_name) }}"
+      onsubmit="return confirm('Restore property {{ p.key }} to Active?');"
+      style="margin-left:auto">
+  <input type="hidden" name="prop_key" value="{{ p.key }}">
+  <input type="hidden" name="next" value="{{ request.full_path or url_for('type_properties', type_name=type_name) }}">
+  <button class="btn restore" type="submit">♻️ Restore</button>
+</form>
+              {% endif %}
             </div>
           </div>
         {% endfor %}
@@ -103,13 +186,32 @@
   </div>
 
   <script>
-    function filterProps(q){
-      q = (q||"").toLowerCase();
-      document.querySelectorAll("#grid .prop").forEach(card=>{
-        const key = card.getAttribute("data-key") || "";
-        card.style.display = key.includes(q) ? "" : "none";
-      });
-    }
-  </script>
+  const grid = document.getElementById('grid');
+  const srcFilter = document.getElementById('sourceFilter');
+  const statusFilter = document.getElementById('statusFilter');
+  let qText = '';
+
+  function filterProps(q){
+    qText = (q||'').toLowerCase();
+    applyFilters();
+  }
+  function applyFilters(){
+    const src = (srcFilter?.value || '').toLowerCase();
+    const stat = (statusFilter?.value || '').toLowerCase();
+    if(!grid) return;
+    grid.querySelectorAll('.prop').forEach(card=>{
+      const hay = (card.getAttribute('data-key') || '').toLowerCase();
+      const srcKind = (card.getAttribute('data-source') || '').toLowerCase();
+      const status  = (card.getAttribute('data-status') || '').toLowerCase();
+      const matchText = !qText || hay.includes(qText);
+      const matchSrc  = !src || srcKind === src;
+      const matchStat = !stat || status === stat;
+      card.style.display = (matchText && matchSrc && matchStat) ? '' : 'none';
+    });
+  }
+
+  // ✅ apply once on initial load so the default dropdown ("Active") actually filters
+  document.addEventListener('DOMContentLoaded', applyFilters);
+</script>
 </body>
 </html>
