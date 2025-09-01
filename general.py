@@ -434,19 +434,77 @@ def add_type_prompt():
     return render_template("add_type_prompt.html", existing_types=existing_types)
 
 
+# ---------- Browse biographies (folders + items) ----------
 @app.route("/type/<type_name>")
 def type_browse(type_name):
-    show = (request.args.get("show") or "").lower()   # "", "archived", "all"
-    include_archived = show in ("archived", "all")
-    bios = list_biographies(type_name, include_archived=include_archived)
-    active = [b for b in bios if not b["archived"]]
-    archived = [b for b in bios if b["archived"]]
-    return render_template("type_browse.html",
-                           type_name=type_name,
-                           active_bios=active,
-                           archived_bios=archived,
-                           show=show)
+    base = os.path.join("types", type_name, "biographies")
+    show = (request.args.get("show") or "").lower()  # "", "archived", "all"
 
+    def _title_from_json(p, fallback):
+        try:
+            d = load_json_as_dict(p) or {}
+        except Exception:
+            d = {}
+        title = (
+            d.get("name")
+            or d.get("title")
+            or d.get("display")
+            or d.get("properties", {}).get("name")
+            or fallback
+        )
+        return d, title
+
+    # Tree node: {"folders": {name: node}, "items": [bio dict]}
+    def _ensure_node(tree, parts):
+        node = tree
+        for part in parts:
+            node = node["folders"].setdefault(part, {"folders": {}, "items": [], "name": part})
+        return node
+
+    tree = {"folders": {}, "items": [], "name": ""}
+
+    if os.path.isdir(base):
+        for root, dirs, files in os.walk(base):
+            # stable folder order
+            dirs.sort()
+            files = sorted(files)
+
+            rel = os.path.relpath(root, base)
+            parts = [] if rel == "." else rel.split(os.sep)
+            node = _ensure_node(tree, parts)
+
+            for f in files:
+                if not f.endswith(".json"):
+                    continue
+                full = os.path.join(root, f)
+                key = os.path.splitext(f)[0]
+                fallback = key.replace("_", " ").title()
+                data, title = _title_from_json(full, fallback)
+
+                rel_path = "" if rel == "." else rel
+                path_rel = os.path.join(rel_path, key).replace("\\", "/")
+
+                node["items"].append({
+                    "key": key,
+                    "title": title,
+                    "archived": bool(data.get("archived", False)),
+                    "updated": data.get("updated") or data.get("last_updated") or data.get("created") or "",
+                    "path_rel": path_rel,  # e.g. "house/flat2/flat2"
+                })
+
+    # optional: sort items recent-first, then title
+    def _sort_node(node):
+        node["items"].sort(key=lambda x: (x["updated"] or "", x["title"]), reverse=True)
+        for child in node["folders"].values():
+            _sort_node(child)
+    _sort_node(tree)
+
+    return render_template(
+        "type_browse.html",
+        type_name=type_name,
+        tree=tree,
+        show=show,
+    )
 
 
 @app.route("/global_search")
@@ -1469,6 +1527,47 @@ def api_unarchive_bio(type_name, bio_id):
         return redirect(nxt)
     return ("Not found", 404)
 
+
+# View by folder path (e.g. /type/buildings/bio/house/flat2/flat2)
+@app.get("/type/<type_name>/bio/<path:bio_path>")
+def biography_view_path(type_name, bio_path):
+    # Reuse your existing viewer but load by path instead of id
+    p = os.path.join("types", type_name, "biographies", f"{bio_path}.json")
+    data = load_json_as_dict(p) or {}
+    # If you already have `biography_view` logic, call it here or render directly:
+    return render_template("biography_view.html", type_name=type_name, bio=data, bio_path=bio_path)
+
+# Archive by path
+@app.post("/type/<type_name>/bio/archive_by_path")
+def api_archive_bio_path(type_name):
+    bio_path = (request.form.get("bio_path") or "").strip()
+    nxt = request.form.get("next") or url_for("type_browse", type_name=type_name)
+    if not bio_path:
+        flash("Missing bio_path.", "error")
+        return redirect(nxt)
+    p = os.path.join("types", type_name, "biographies", f"{bio_path}.json")
+    data = load_json_as_dict(p) or {}
+    data["archived"] = True
+    data["updated"] = now_iso_utc()
+    save_dict_as_json(p, data)
+    flash("Biography archived.", "success")
+    return redirect(nxt)
+
+# Unarchive by path
+@app.post("/type/<type_name>/bio/unarchive_by_path")
+def api_unarchive_bio_path(type_name):
+    bio_path = (request.form.get("bio_path") or "").strip()
+    nxt = request.form.get("next") or url_for("type_browse", type_name=type_name)
+    if not bio_path:
+        flash("Missing bio_path.", "error")
+        return redirect(nxt)
+    p = os.path.join("types", type_name, "biographies", f"{bio_path}.json")
+    data = load_json_as_dict(p) or {}
+    data["archived"] = False
+    data["updated"] = now_iso_utc()
+    save_dict_as_json(p, data)
+    flash("Biography unarchived.", "success")
+    return redirect(nxt)
 
 
 @app.route("/<type_name>_step/time/<bio_id>", methods=["GET", "POST"])

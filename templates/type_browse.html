@@ -56,9 +56,26 @@
   .chip.badge{background:#fafbff;border-color:#e7e9f2}
   .chip.path{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,monospace}
   .chip.archived{background:#fff4e6;border-color:#ffd8a8;color:var(--warn)}
-  .badge{position:absolute;top:10px;right:10px;font-size:11px;padding:3px 8px;border-radius:999px;
-         background:#f3f4f6;color:#374151;border:1px solid #e5e7eb}
-  .badge.archived{background:#fff1f2;color:#b91c1c;border-color:#fecdd3}
+  /* Only the direct child badge of .card is positioned in the top-right corner */
+.card > .badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+}
+.card > .badge.archived {
+  background: #fff1f2;
+  color: #b91c1c;
+  border-color: #fecdd3;
+}
+
+/* Chips that also have `.badge` stay inline, not absolute */
+.chip.badge { position: static; }
 
   /* misc */
   .empty{color:var(--muted);font-size:14px;background:#fafbff;border:1px dashed var(--line);
@@ -86,146 +103,158 @@
   object-fit: cover;        /* crop without distortion */
   border-radius: 10px;
 }
-
 /* Optional: make long text and media inside options behave */
 details.opts .optwrap { overflow: auto; }
+
+/* match inputs used on properties/labels */
+.select{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;min-width:180px}
+
+/* folder <details> as cards */
+details.card { border:1px solid var(--line); border-radius:12px; background:#fff; padding:0; }
+details.card > summary { list-style:none; padding:12px 14px; border-radius:12px; }
+details.card > summary::-webkit-details-marker { display:none; }
+details.card[open] > summary { border-bottom:1px dashed var(--line); border-bottom-left-radius:0; border-bottom-right-radius:0; }
+details.card .title { display:flex; align-items:center; gap:8px; }
+details.card .chip.badge { margin-left:auto; }
+
+/* keep grids neat inside folder content */
+details.card > div { padding:12px 14px; }
+
+/* Ensure titles never get ellipsized/clipped */
+.card h3,
+h3.title {
+  display:block;
+  white-space:normal;
+  overflow:visible;
+  text-overflow:clip;
+  margin-bottom: 6px; /* give breathing room above chips/desc */
+}
+
+/* Keep description/chips under the title on a new line */
+.card .desc { margin-top: 4px; }
 </style>
 </head>
 <body>
   <div class="box">
+{% macro render_folder(node, prefix="") %}
+  {# 1) Render biographies in this folder (render ALL; filter in JS) #}
+  {% if node['items'] %}
+    <div class="grid">
+      {% for it in node['items'] %}
+        {% set is_archived = it.archived %}
+        <div class="card-wrap"
+             data-key="{{ (it.title ~ ' ' ~ it.key ~ ' ' ~ prefix)|lower }}"
+             data-status="{{ 'archived' if is_archived else 'active' }}"
+             data-updated="{{ it.updated or '' }}">
+          <a class="card-link"
+             href="{{ url_for('biography_view_path', type_name=type_name, bio_path=it.path_rel) }}">
+            <div class="card {% if is_archived %}archived{% endif %}">
+              {% if is_archived %}<span class="badge archived">Archived</span>{% endif %}
+              <h3 class="title">{{ it.title or it.key }}</h3>
+              <div class="desc">
+                {% if it.updated %}<span class="chip badge">updated: {{ it.updated }}</span>{% endif %}
+                {% if prefix %}<span class="chip path">in: {{ prefix }}</span>{% endif %}
+              </div>
+            </div>
+          </a>
+          <div class="actions-row">
+            <a class="btn mini secondary"
+               href="{{ url_for('biography_view_path', type_name=type_name, bio_path=it.path_rel) }}">🔎 View</a>
+
+            {% if not is_archived %}
+              <form class="action-form" method="post"
+                    action="{{ url_for('api_archive_bio_path', type_name=type_name) }}">
+                <input type="hidden" name="bio_path" value="{{ it.path_rel }}">
+                <input type="hidden" name="next" value="{{ request.full_path or url_for('type_browse', type_name=type_name, show=show) }}">
+                <button class="btn mini secondary" type="submit"
+                        onclick="return confirm('Archive this biography? You can unarchive later.')">🗄️ Archive</button>
+              </form>
+            {% else %}
+              <form class="action-form" method="post"
+                    action="{{ url_for('api_unarchive_bio_path', type_name=type_name) }}">
+                <input type="hidden" name="bio_path" value="{{ it.path_rel }}">
+                <input type="hidden" name="next" value="{{ request.full_path or url_for('type_browse', type_name=type_name, show=show) }}">
+                <button class="btn mini secondary" type="submit">↩️ Unarchive</button>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {# 2) Render child folders recursively #}
+  {% for fname, child in node['folders']|dictsort %}
+    {% set folder_label = fname.replace('_',' ')|title %}
+    <details class="card" open>
+      <summary class="title">
+        <span>📁 {{ folder_label }}</span>
+        <span class="chip badge">{{ child['items']|length }} item{{ '' if child['items']|length == 1 else 's' }}</span>
+      </summary>
+      <div>
+        {{ render_folder(child, (prefix ~ '/' if prefix else '') ~ fname) }}
+      </div>
+    </details>
+  {% endfor %}
+{% endmacro %}
     <h1>{{ type_name|replace('_',' ')|title }} - Biographies</h1>
 
- <div class="toolbar">
-  <!-- Left controls -->
-  <a class="btn ghost" href="{{ url_for('dashboard') }}">⬅️ Back to Dashboard</a>
+<div class="toolbar">
+  <div class="left">
+    <input id="search" class="search"
+           placeholder="Search {{ type_name|replace('_',' ')|title }} biographies…"
+           oninput="filterBios(this.value)">
+    <select id="statusFilter" class="select" onchange="applyFilters()" title="Show Active or Archived">
+      <option value="">All statuses</option>
+      <option value="active" {% if show=='' %}selected{% endif %}>Active</option>
+      <option value="archived" {% if show=='archived' %}selected{% endif %}>Archived</option>
+    </select>
+  </div>
+  <div class="right">
+    <a class="btn ghost" href="{{ url_for('dashboard') }}">⬅️ Back to Dashboard</a>
 
-  <!-- Launch the wizard with this type preselected, and come back here afterwards -->
-  <a class="btn"
-     href="{{ url_for('general_iframe_wizard',
-                      step='start',
-                      type_name=type_name,
-                      return_url=url_for('type_browse', type_name=type_name)) }}">
-    ➕ New Biography
-  </a>
+    <a class="btn"
+       href="{{ url_for('general_iframe_wizard',
+                        step='start',
+                        type_name=type_name,
+                        return_url=url_for('type_browse', type_name=type_name)) }}">
+      ➕ New Biography
+    </a>
 
-  <!-- Type-specific manage pages -->
-  <a class="btn secondary" href="{{ url_for('type_properties', type_name=type_name) }}">⚙️ Manage Properties</a>
-  <a class="btn secondary" href="{{ url_for('type_labels', type_name=type_name) }}">🏷️ Manage Labels</a>
-
-  <span class="spacer"></span>
-
-  <!-- View toggles -->
-  <a class="btn secondary{% if show=='' %} ghost{% endif %}"
-     href="{{ url_for('type_browse', type_name=type_name) }}">Active</a>
-  <a class="btn secondary{% if show=='archived' %} ghost{% endif %}"
-     href="{{ url_for('type_browse', type_name=type_name, show='archived') }}">Archived</a>
-  <a class="btn secondary{% if show=='all' %} ghost{% endif %}"
-     href="{{ url_for('type_browse', type_name=type_name, show='all') }}">All</a>
+    <a class="btn secondary" href="{{ url_for('type_properties', type_name=type_name) }}">⚙️ Manage Properties</a>
+    <a class="btn secondary" href="{{ url_for('type_labels', type_name=type_name,
+                                             return_url=url_for('type_browse', type_name=type_name)) }}">🏷️ Manage Labels</a>
+  </div>
 </div>
 
-    <div class="controls">
-      <input type="search" id="searchInput" placeholder="Search {{ type_name|replace('_',' ')|title }} biographies…"
-             oninput="filterCards()">
-      <select id="sortSelect" onchange="sortAllGrids()">
-        <option value="updated_desc">Sort: Recent first</option>
-        <option value="updated_asc">Sort: Oldest first</option>
-        <option value="name_asc">Sort: Name A–Z</option>
-        <option value="name_desc">Sort: Name Z–A</option>
-      </select>
-    </div>
+ <div class="controls">
+  <select id="sortSelect" onchange="sortAllGrids()">
+    <option value="updated_desc">Sort: Recent first</option>
+    <option value="updated_asc">Sort: Oldest first</option>
+    <option value="name_asc">Sort: Name A–Z</option>
+    <option value="name_desc">Sort: Name Z–A</option>
+  </select>
+</div>
 
-    {% set have_split = active_bios is defined or archived_bios is defined %}
-    {% if have_split %}
-      {# ---------------- Active ---------------- #}
-      {% if show != 'archived' %}
-        <h3 style="margin:8px 0 6px">📚 Active</h3>
-        {% if active_bios and active_bios|length %}
-          <div id="grid_active" class="grid">
-            {% for b in active_bios %}
-              {% set _id = b.get('id') %}
-              {% set _name = b.get('name') or _id.replace('_',' ')|title %}
-              {% set _desc = b.get('description') %}
-              {% set _stamp = b.get('updated') or b.get('created') %}
-              <div class="card-wrap" data-name="{{ _name|lower }}" data-updated="{{ _stamp or '' }}">
-                <a class="card-link" href="{{ url_for('biography_view', type_name=type_name, bio_id=_id) }}">
-                  <div class="card" role="button" aria-label="View {{ _name }}">
-                    <h3>{{ _name }}</h3>
-                    {% if _desc %}<div class="desc">{{ _desc }}</div>{% endif %}
-                    <div class="muted">
-                      {% if _stamp %}
-                        <span class="updated" data-iso="{{ _stamp }}">{{ _stamp }}</span>
-                      {% else %}
-                        No timestamp
-                      {% endif %}
-                    </div>
-                  </div>
-                </a>
-                <div class="actions-row">
-                  <a class="btn mini secondary" href="{{ url_for('biography_view', type_name=type_name, bio_id=_id) }}">🔎 View</a>
-                  <form class="action-form" method="post" action="{{ url_for('api_archive_bio', type_name=type_name, bio_id=_id) }}">
-                    <button class="btn mini secondary" type="submit" onclick="return confirm('Archive this biography? You can unarchive later.')">🗄️ Archive</button>
-                  </form>
-                </div>
-              </div>
-            {% endfor %}
-          </div>
-        {% else %}
-          <div class="empty">No active biographies.</div>
-        {% endif %}
-      {% endif %}
-
-      {# ---------------- Archived ---------------- #}
-      {% if show in ['archived','all'] %}
-        <h3 style="margin:18px 0 6px">🗄️ Archived</h3>
-        {% if archived_bios and archived_bios|length %}
-          <div id="grid_archived" class="grid">
-            {% for b in archived_bios %}
-              {% set _id = b.get('id') %}
-              {% set _name = b.get('name') or _id.replace('_',' ')|title %}
-              {% set _desc = b.get('description') %}
-              {% set _stamp = b.get('updated') or b.get('archived_at') or b.get('created') %}
-              <div class="card-wrap" data-name="{{ _name|lower }}" data-updated="{{ _stamp or '' }}">
-                <a class="card-link" href="{{ url_for('biography_view', type_name=type_name, bio_id=_id) }}">
-                  <div class="card" role="button" aria-label="View {{ _name }}">
-                    <span class="badge archived">Archived</span>
-                    <h3>{{ _name }}</h3>
-                    {% if _desc %}<div class="desc">{{ _desc }}</div>{% endif %}
-                    <div class="muted">
-                      {% if _stamp %}
-                        <span class="updated" data-iso="{{ _stamp }}">{{ _stamp }}</span>
-                      {% else %}
-                        No timestamp
-                      {% endif %}
-                    </div>
-                  </div>
-                </a>
-                <div class="actions-row">
-                  <a class="btn mini secondary" href="{{ url_for('biography_view', type_name=type_name, bio_id=_id) }}">🔎 View</a>
-                  <form class="action-form" method="post" action="{{ url_for('api_unarchive_bio', type_name=type_name, bio_id=_id) }}">
-                    <button class="btn mini secondary" type="submit">↩️ Unarchive</button>
-                  </form>
-                </div>
-              </div>
-            {% endfor %}
-          </div>
-        {% else %}
-          <div class="empty">No archived biographies.</div>
-        {% endif %}
-      {% endif %}
-    {% else %}
-      {# Fallback when only 'bios' is provided #}
-      {% if bios and bios|length > 0 %}
-        <div id="grid_fallback" class="grid">
-          {% for b in bios %}
+    {# If the route provided a folder tree, render that. Otherwise keep the existing flat lists. #}
+{% if tree is defined %}
+  {{ render_folder(tree, "") }}
+{% else %}
+  {% set have_split = active_bios is defined or archived_bios is defined %}
+  {% if have_split %}
+    {# ---------------- Active ---------------- #}
+    {% if show != 'archived' %}
+      <h3 style="margin:8px 0 6px">📚 Active</h3>
+      {% if active_bios and active_bios|length %}
+        <div id="grid_active" class="grid">
+          {% for b in active_bios %}
             {% set _id = b.get('id') %}
             {% set _name = b.get('name') or _id.replace('_',' ')|title %}
             {% set _desc = b.get('description') %}
             {% set _stamp = b.get('updated') or b.get('created') %}
-            {% set _arch = b.get('archived') %}
             <div class="card-wrap" data-name="{{ _name|lower }}" data-updated="{{ _stamp or '' }}">
               <a class="card-link" href="{{ url_for('biography_view', type_name=type_name, bio_id=_id) }}">
                 <div class="card" role="button" aria-label="View {{ _name }}">
-                  {% if _arch %}<span class="badge archived">Archived</span>{% endif %}
                   <h3>{{ _name }}</h3>
                   {% if _desc %}<div class="desc">{{ _desc }}</div>{% endif %}
                   <div class="muted">
@@ -239,48 +268,145 @@ details.opts .optwrap { overflow: auto; }
               </a>
               <div class="actions-row">
                 <a class="btn mini secondary" href="{{ url_for('biography_view', type_name=type_name, bio_id=_id) }}">🔎 View</a>
-                {% if _arch %}
-                  <form class="action-form" method="post" action="{{ url_for('api_unarchive_bio', type_name=type_name, bio_id=_id) }}">
-                    <button class="btn mini secondary" type="submit">↩️ Unarchive</button>
-                  </form>
-                {% else %}
-                  <form class="action-form" method="post" action="{{ url_for('api_archive_bio', type_name=type_name, bio_id=_id) }}">
-                    <button class="btn mini secondary" type="submit" onclick="return confirm('Archive this biography? You can unarchive later.')">🗄️ Archive</button>
-                  </form>
-                {% endif %}
+                <form class="action-form" method="post" action="{{ url_for('api_archive_bio', type_name=type_name, bio_id=_id) }}">
+                  <button class="btn mini secondary" type="submit" onclick="return confirm('Archive this biography? You can unarchive later.')">🗄️ Archive</button>
+                </form>
               </div>
             </div>
           {% endfor %}
         </div>
       {% else %}
-        <div class="empty">
-          No biographies yet for <strong>{{ type_name|replace('_',' ')|title }}</strong>.<br>
-          Click <em>New Biography</em> to create your first one.
-        </div>
+        <div class="empty">No active biographies.</div>
       {% endif %}
     {% endif %}
+
+    {# ---------------- Archived ---------------- #}
+    {% if show in ['archived','all'] %}
+      <h3 style="margin:18px 0 6px">🗄️ Archived</h3>
+      {% if archived_bios and archived_bios|length %}
+        <div id="grid_archived" class="grid">
+          {% for b in archived_bios %}
+            {% set _id = b.get('id') %}
+            {% set _name = b.get('name') or _id.replace('_',' ')|title %}
+            {% set _desc = b.get('description') %}
+            {% set _stamp = b.get('updated') or b.get('archived_at') or b.get('created') %}
+            <div class="card-wrap" data-name="{{ _name|lower }}" data-updated="{{ _stamp or '' }}">
+              <a class="card-link" href="{{ url_for('biography_view', type_name=type_name, bio_id=_id) }}">
+                <div class="card" role="button" aria-label="View {{ _name }}">
+                  <span class="badge archived">Archived</span>
+                  <h3>{{ _name }}</h3>
+                  {% if _desc %}<div class="desc">{{ _desc }}</div>{% endif %}
+                  <div class="muted">
+                    {% if _stamp %}
+                      <span class="updated" data-iso="{{ _stamp }}">{{ _stamp }}</span>
+                    {% else %}
+                      No timestamp
+                    {% endif %}
+                  </div>
+                </div>
+              </a>
+              <div class="actions-row">
+                <a class="btn mini secondary" href="{{ url_for('biography_view', type_name=type_name, bio_id=_id) }}">🔎 View</a>
+                <form class="action-form" method="post" action="{{ url_for('api_unarchive_bio', type_name=type_name, bio_id=_id) }}">
+                  <button class="btn mini secondary" type="submit">↩️ Unarchive</button>
+                </form>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty">No archived biographies.</div>
+      {% endif %}
+    {% endif %}
+  {% else %}
+    {# Fallback when only 'bios' is provided #}
+    {% if bios and bios|length > 0 %}
+      <div id="grid_fallback" class="grid">
+        {% for b in bios %}
+          {% set _id = b.get('id') %}
+          {% set _name = b.get('name') or _id.replace('_',' ')|title %}
+          {% set _desc = b.get('description') %}
+          {% set _stamp = b.get('updated') or b.get('created') %}
+          {% set _arch = b.get('archived') %}
+          <div class="card-wrap" data-name="{{ _name|lower }}" data-updated="{{ _stamp or '' }}">
+            <a class="card-link" href="{{ url_for('biography_view', type_name=type_name, bio_id=_id) }}">
+              <div class="card" role="button" aria-label="View {{ _name }}">
+                {% if _arch %}<span class="badge archived">Archived</span>{% endif %}
+                <h3>{{ _name }}</h3>
+                {% if _desc %}<div class="desc">{{ _desc }}</div>{% endif %}
+                <div class="muted">
+                  {% if _stamp %}
+                    <span class="updated" data-iso="{{ _stamp }}">{{ _stamp }}</span>
+                  {% else %}
+                    No timestamp
+                  {% endif %}
+                </div>
+              </div>
+            </a>
+            <div class="actions-row">
+              <a class="btn mini secondary" href="{{ url_for('biography_view', type_name=type_name, bio_id=_id) }}">🔎 View</a>
+              {% if _arch %}
+                <form class="action-form" method="post" action="{{ url_for('api_unarchive_bio', type_name=type_name, bio_id=_id) }}">
+                  <button class="btn mini secondary" type="submit">↩️ Unarchive</button>
+                </form>
+              {% else %}
+                <form class="action-form" method="post" action="{{ url_for('api_archive_bio', type_name=type_name, bio_id=_id) }}">
+                  <button class="btn mini secondary" type="submit" onclick="return confirm('Archive this biography? You can unarchive later.')">🗄️ Archive</button>
+                </form>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty">
+        No biographies yet for <strong>{{ type_name|replace('_',' ')|title }}</strong>.<br>
+        Click <em>New Biography</em> to create your first one.
+      </div>
+    {% endif %}
+  {% endif %}
+{% endif %}
   </div>
 
-  <script>
-    function filterCards() {
-      const q = (document.getElementById('searchInput').value || '').trim().toLowerCase();
-      document.querySelectorAll('[id^="grid_"] .card-wrap, #grid_fallback .card-wrap').forEach(c => {
-        const name = c.getAttribute('data-name') || '';
-        c.style.display = name.includes(q) ? '' : 'none';
-      });
-    }
+<script>
+  // --- search + status filters (work across ALL grids produced by the macro) ---
+  const statusSelect = document.getElementById('statusFilter');
+  let qText = '';
 
-    function sortGrid(gridId) {
-      const grid = document.getElementById(gridId);
-      if (!grid) return;
-      const mode = document.getElementById('sortSelect').value;
+  function filterBios(q){
+    qText = (q||'').toLowerCase();
+    applyFilters();
+  }
+
+  function applyFilters(){
+    const stat = (statusSelect?.value || '').toLowerCase();
+
+    // filter all bio cards
+    document.querySelectorAll('.card-wrap').forEach(card=>{
+      const hay = (card.getAttribute('data-key') || '').toLowerCase();
+      const status = (card.getAttribute('data-status') || '').toLowerCase();
+      const matchText = !qText || hay.includes(qText);
+      const matchStat = !stat || status === stat;
+      card.style.display = (matchText && matchStat) ? '' : 'none';
+    });
+
+    // hide folder <details> that have no visible cards
+    document.querySelectorAll('details.card').forEach(det=>{
+      const anyVisible = !!det.querySelector('.card-wrap:not([style*="display: none"])');
+      det.style.display = anyVisible ? '' : 'none';
+    });
+  }
+
+  // --- sorting (run for every .grid on the page) ---
+  function sortAllGrids(){
+    const mode = document.getElementById('sortSelect')?.value || 'updated_desc';
+    document.querySelectorAll('.grid').forEach(grid=>{
       const cards = Array.from(grid.querySelectorAll('.card-wrap'));
       cards.sort((a, b) => {
-        const nameA = (a.getAttribute('data-name') || '');
-        const nameB = (b.getAttribute('data-name') || '');
+        const nameA = (a.getAttribute('data-key') || '');
+        const nameB = (b.getAttribute('data-key') || '');
         const dateA = Date.parse(a.getAttribute('data-updated') || '') || 0;
         const dateB = Date.parse(b.getAttribute('data-updated') || '') || 0;
-
         switch (mode) {
           case 'updated_asc':  return dateA - dateB;
           case 'name_asc':     return nameA.localeCompare(nameB);
@@ -290,36 +416,36 @@ details.opts .optwrap { overflow: auto; }
         }
       });
       cards.forEach(c => grid.appendChild(c));
-    }
-
-    function sortAllGrids() {
-      sortGrid('grid_active');
-      sortGrid('grid_archived');
-      sortGrid('grid_fallback');
-    }
-
-    // Format timestamps to UK time (Europe/London) once the DOM is ready
-    function formatUKTimes() {
-      const nodes = document.querySelectorAll('.updated[data-iso]');
-      nodes.forEach(n => {
-        const iso = n.getAttribute('data-iso') || '';
-        const d = new Date(iso);
-        if (!isNaN(d)) {
-          const uk = d.toLocaleString('en-GB', {
-            timeZone: 'Europe/London',
-            dateStyle: 'medium',
-            timeStyle: 'short'
-          });
-          n.textContent = `Last updated: ${uk}`;
-        }
-      });
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-      sortAllGrids();
-      formatUKTimes();
     });
-  </script>
+  }
+
+  // keep your "Sort: Recent first" select working
+  const sortSelect = document.getElementById('sortSelect');
+  if (sortSelect) sortSelect.addEventListener('change', sortAllGrids);
+
+  // UK timestamp formatting (unchanged)
+  function formatUKTimes() {
+    const nodes = document.querySelectorAll('.updated[data-iso]');
+    nodes.forEach(n => {
+      const iso = n.getAttribute('data-iso') || '';
+      const d = new Date(iso);
+      if (!isNaN(d)) {
+        const uk = d.toLocaleString('en-GB', {
+          timeZone: 'Europe/London',
+          dateStyle: 'medium',
+          timeStyle: 'short'
+        });
+        n.textContent = `Last updated: ${uk}`;
+      }
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    sortAllGrids();
+    formatUKTimes();
+    applyFilters(); // apply current status selection on load
+  });
+</script>
 </body>
 </html>
 

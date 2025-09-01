@@ -1,7 +1,9 @@
 {
-  "id": "nightclub",
-  "name": "Nightclub",
-  "description": "Auto-generated biography stub for label: Nightclub",
-  "source": "auto",
-  "entries": []
+    "id": "nightclub",
+    "name": "Nightclub",
+    "description": "Auto-generated biography stub for label: Nightclub",
+    "source": "auto",
+    "entries": [],
+    "archived": true,
+    "updated": "2025-09-01T22:40:55.498009+00:00"
 }

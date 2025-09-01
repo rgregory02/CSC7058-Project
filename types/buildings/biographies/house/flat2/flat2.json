@@ -1,7 +1,9 @@
 {
-  "id": "flat2",
-  "name": "Flat2",
-  "description": "Auto-generated biography stub for label: Flat2",
-  "source": "auto-generated from label",
-  "entries": []
+    "id": "flat2",
+    "name": "Flat2",
+    "description": "Auto-generated biography stub for label: Flat2",
+    "source": "auto-generated from label",
+    "entries": [],
+    "archived": false,
+    "updated": "2025-09-01T22:55:52.182445+00:00"
 }
