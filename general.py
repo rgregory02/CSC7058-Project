@@ -4868,10 +4868,11 @@ def create_subfolder(type_name):
 def _slugify_key(s: str) -> str:
     return "".join([c if c.isalnum() or c == "_" else "_" for c in (s or "").strip().lower()]).strip("_")
 
+
 def _group_paths(base: str, group_key: str):
     """
-    Returns paths for the group's JSON file and its options folder.
-    Handles nested paths like 'parent/child'.
+    Property-centric (e.g. <labels>/<leaf>.json + <labels>/<leaf>/).
+    Returns: parent_rel, leaf, json_path, opts_dir
     """
     parts = [p for p in (group_key or "").split("/") if p]
     if not parts:
@@ -4882,144 +4883,253 @@ def _group_paths(base: str, group_key: str):
     opts_dir  = os.path.join(base, parent_rel, leaf)
     return parent_rel, leaf, json_path, opts_dir
 
+
+def _group_paths_for_folder(base: str, group_key: str):
+    """
+    Folder-centric: <labels>/<leaf>/_group.json is the meta.
+    Returns: parent_rel, leaf, path to _group.json, and the folder path itself.
+    """
+    parts = [p for p in (group_key or "").split("/") if p]
+    if not parts:
+        raise ValueError("Empty group_key")
+    parent_rel = os.path.join(*parts[:-1]) if len(parts) > 1 else ""
+    leaf = parts[-1]
+    folder_dir = os.path.join(base, parent_rel, leaf)
+    json_path = os.path.join(folder_dir, "_group.json")
+    return parent_rel, leaf, json_path, folder_dir
+
+
+def _clear_label_options_folder(folder: str) -> int:
+    """
+    Deletes all option JSON files under a group's folder, except the meta file (_group.json).
+    Returns the number of files deleted.
+    """
+    if not os.path.isdir(folder):
+        return 0
+    removed = 0
+    for fn in os.listdir(folder):
+        if fn.endswith(".json") and fn != "_group.json":
+            try:
+                os.remove(os.path.join(folder, fn))
+                removed += 1
+            except Exception as e:
+                print("[WARN] failed removing", fn, ":", e)
+    return removed
+
 @app.route("/type/<type_name>/labels/group/<path:group_key>/edit", methods=["GET", "POST"])
 def edit_label_group(type_name, group_key):
     """
-    Edit a label group (aka 'label subfolder' metadata).
-    - Supports renaming the leaf key. Moves JSON + options directory.
-    - Lets you update label/description/order and refer_to (biographies) + auto_link.
+    Edit a label group that stores metadata at <types>/<type>/labels/<leaf>/_group.json.
+    Supports renaming the leaf (moves the folder), updating label/description/order,
+    linking to biographies, and configuring ingest (API/DB). Can re-import now with
+    an option to clear existing options first.
     """
-    base = os.path.join("types", type_name, "labels")
-    os.makedirs(base, exist_ok=True)
+    labels_base = os.path.join("types", type_name, "labels")
+    os.makedirs(labels_base, exist_ok=True)
 
-    parent_rel, leaf, json_path, opts_dir = _group_paths(base, group_key)
+    parent_rel, leaf, json_path, folder_dir = _group_paths_for_folder(labels_base, group_key)
     if not os.path.exists(json_path):
         return f"Group '{group_key}' not found for {type_name}. Expected {json_path}", 404
 
     data = load_json_as_dict(json_path) or {}
-    # Ensure minimal shape
-    data.setdefault("key", group_key)
-    data.setdefault("label", leaf.replace("_", " ").title())
-    data.setdefault("description", "")
-    data.setdefault("order", 999)
+    # defaults
+    data.setdefault("label",        leaf.replace("_", " ").title())
+    data.setdefault("description",  "")
+    data.setdefault("order",        999)
 
     if request.method == "POST":
-        new_label = (request.form.get("label") or "").strip() or data.get("label") or leaf
+        # -------- basics --------
+        new_leaf = _slugify_key(request.form.get("key") or leaf) or leaf
+        new_label = (request.form.get("label") or data.get("label") or new_leaf).strip()
         new_desc  = (request.form.get("description") or "").strip()
         try:
             new_order = int(request.form.get("order") or data.get("order") or 999)
         except Exception:
             new_order = 999
 
-        # Rename (leaf only)
-        new_leaf = _slugify_key(request.form.get("key") or leaf) or leaf
-        # refer_to (biographies) block
-        rt_enabled = (request.form.get("refer_to_enabled") == "on")
-        refer_type = (request.form.get("refer_to_type") or "").strip()
-        refer_path = (request.form.get("refer_to_path") or "").strip()
-        refer_mode = (request.form.get("refer_to_mode") or "child_or_parent").strip()
-        auto_link  = (request.form.get("refer_to_auto_link") == "on")
-
-        # allow_children on the options source (if present)
+        # allow children (persist both places so UI stays in sync)
         allow_children = (request.form.get("allow_children") == "on")
+        data["allow_children"] = bool(allow_children)
+        if isinstance(data.get("source"), dict):
+            data["source"]["allow_children"] = bool(allow_children)
 
-        # Update payload
-        data["key"] = "/".join([parent_rel.replace(os.sep, "/"), new_leaf]).strip("/") if parent_rel else new_leaf
-        data["label"] = new_label
-        data["description"] = new_desc
-        data["order"] = new_order
-
-        # ---- INGEST (populate labels) ----
-        ingest_kind = (request.form.get("ingest_kind") or "manual").strip()
-
-        if ingest_kind == "api":
-            data["ingest"] = {
-                "kind": "api",
-                "url": (request.form.get("api_url") or "").strip(),
-                "method": (request.form.get("api_method") or "POST").strip().upper(),
-                "headers_env": (request.form.get("api_headers_env") or "").strip(),
-                "max_items": int(request.form.get("api_max_items") or 200),
-                "array_path": (request.form.get("api_array_path") or "").strip(),
-                "field_id": (request.form.get("api_field_id") or "id").strip(),
-                "field_display": (request.form.get("api_field_display") or "name").strip(),
-                "field_desc": (request.form.get("api_field_desc") or "description").strip(),
-                "field_image": (request.form.get("api_field_image") or "image_url").strip(),
-                # Normalise the JSON body into a single canonical key
-                "query_json": (request.form.get("api_query") or "").strip(),
-            }
-        elif ingest_kind == "db_sqlite":
-            data["ingest"] = {
-                "kind": "db_sqlite",
-                "sqlite_path": (request.form.get("db_sqlite_path") or "").strip(),
-                "sql": (request.form.get("db_sql") or "").strip(),
-                "col_id": (request.form.get("db_col_id") or "id").strip(),
-                "col_display": (request.form.get("db_col_display") or "display").strip(),
-                "col_desc": (request.form.get("db_col_desc") or "description").strip(),
-                "col_image": (request.form.get("db_col_image") or "image_url").strip(),
-                "max_items": int(request.form.get("db_max_items") or 500),
-            }
-        else:
-            # manual (no importer)
-            data["ingest"] = {"kind": "manual"}
-
-        # attach/clear refer_to
-        if rt_enabled and refer_type:
+        # -------- link to biographies --------
+        rt_enabled = (request.form.get("refer_to_enabled") == "on")
+        if rt_enabled and (request.form.get("refer_to_type") or "").strip():
             data["refer_to"] = {
-                "source": "biographies",
-                "type": refer_type,
-                "path": refer_path,
-                "mode": refer_mode,
-                "auto_link": bool(auto_link),
+                "source":    "biographies",
+                "type":      (request.form.get("refer_to_type") or "").strip(),
+                "path":      (request.form.get("refer_to_path") or "").strip(),
+                "mode":      (request.form.get("refer_to_mode") or "child_or_parent").strip(),
+                "auto_link": (request.form.get("refer_to_auto_link") == "on"),
             }
         else:
             data.pop("refer_to", None)
 
-        # Add/patch source.allow_children if a source block exists
-        if isinstance(data.get("source"), dict):
-            data["source"]["allow_children"] = bool(allow_children)
+        # -------- ingest config --------
+        ingest_kind = (request.form.get("ingest_kind") or "manual").strip()
+        ingest_block = None
 
-        # --- persist (handle rename) ---
-        new_parent_rel, _, new_json_path, new_opts_dir = _group_paths(base, data["key"])
+        # run/replace flags
+        run_import_now   = (request.form.get("run_import_now") == "on")
+        replace_existing = (request.form.get("replace_existing") == "on")
 
-        # 1) Move JSON file if needed
-        if new_json_path != json_path:
-            os.makedirs(os.path.dirname(new_json_path), exist_ok=True)
-            try:
-                os.replace(json_path, new_json_path)
-            except Exception as e:
-                flash(f"Failed to rename group file: {e}", "error")
+        if ingest_kind == "api":
+            api_url     = (request.form.get("api_url") or "").strip()
+            if not api_url:
+                flash("API URL is required for API ingest.", "error")
                 return redirect(request.url)
-            json_path = new_json_path  # update local pointer
-
-        # 2) Move options folder if it exists and path changed
-        if os.path.isdir(opts_dir) and new_opts_dir != opts_dir:
-            os.makedirs(os.path.dirname(new_opts_dir), exist_ok=True)
+            api_method  = (request.form.get("api_method") or "GET").strip().upper()
+            headers_env = (request.form.get("api_headers_env") or "").strip()
+            array_path  = (request.form.get("api_array_path") or "").strip()
+            field_id    = (request.form.get("api_field_id") or "id").strip()
+            field_disp  = (request.form.get("api_field_display") or "name").strip()
+            field_desc  = (request.form.get("api_field_desc") or "").strip()
+            field_img   = (request.form.get("api_field_image") or "").strip()
             try:
-                shutil.move(opts_dir, new_opts_dir)
+                max_items = int(request.form.get("api_max_items") or "200")
+            except Exception:
+                max_items = 200
+
+            raw_body = (request.form.get("api_query") or "").strip()
+            query_payload = None
+            if raw_body:
+                try:
+                    query_payload = json.loads(raw_body)
+                except Exception:
+                    # leave None if body isn't valid JSON; importer will just skip sending JSON
+                    query_payload = None
+
+            ingest_block = {
+                "kind":         "api",
+                "url":          api_url,
+                "method":       api_method,
+                "headers_env":  headers_env,
+                "query_json":   query_payload if query_payload is not None else "",
+                "array_path":   array_path,
+                "field_id":     field_id,
+                "field_display":field_disp,
+                "field_desc":   field_desc,
+                "field_image":  field_img,
+                "max_items":    max_items,
+                # convenience for Wikidata IDs in URIs
+                "postprocess":  {"strip_wikidata_uri": True},
+            }
+
+        elif ingest_kind == "db_sqlite":
+            sqlite_path = (request.form.get("db_sqlite_path") or "").strip()
+            sql         = (request.form.get("db_sql") or "").strip()
+            col_id      = (request.form.get("db_col_id") or "id").strip()
+            col_disp    = (request.form.get("db_col_display") or "display").strip()
+            col_desc    = (request.form.get("db_col_desc") or "description").strip()
+            col_img     = (request.form.get("db_col_image") or "image_url").strip()
+            try:
+                max_items = int(request.form.get("db_max_items") or "500")
+            except Exception:
+                max_items = 500
+
+            if not sqlite_path or not sql:
+                flash("SQLite path and SQL are required for DB ingest.", "error")
+                return redirect(request.url)
+
+            ingest_block = {
+                "kind":        "db_sqlite",
+                "sqlite_path": sqlite_path,
+                "sql":         sql,
+                "col_id":      col_id,
+                "col_display": col_disp,
+                "col_desc":    col_desc,
+                "col_image":   col_img,
+                "max_items":   max_items,
+            }
+        else:
+            # manual: remove ingest
+            data.pop("ingest", None)
+
+        # -------- persist core fields --------
+        data["label"]       = new_label
+        data["description"] = new_desc
+        data["order"]       = new_order
+        if ingest_block:
+            data["ingest"] = ingest_block
+
+        # -------- rename folder if leaf changed --------
+        new_folder_dir = os.path.join(labels_base, parent_rel, new_leaf)
+        if new_leaf != leaf:
+            os.makedirs(os.path.dirname(new_folder_dir), exist_ok=True)
+            try:
+                os.replace(folder_dir, new_folder_dir)
             except Exception as e:
-                flash(f"Warning: group renamed, but moving options folder failed: {e}", "error")
-            else:
-                opts_dir = new_opts_dir
+                flash(f"Failed to rename group folder: {e}", "error")
+                return redirect(request.url)
+            folder_dir = new_folder_dir
+            leaf = new_leaf
 
+        # persist meta (after move)
+        json_path = os.path.join(folder_dir, "_group.json")
         save_dict_as_json(json_path, data)
-        flash("Label group saved.", "success")
-        return redirect(url_for("edit_label_group", type_name=type_name, group_key=data["key"]))
 
-    # GET
-    # For the form, expose flattened values
-    refer = data.get("refer_to") if isinstance(data.get("refer_to"), dict) else {}
-    src   = data.get("source") if isinstance(data.get("source"), dict) else {}
+        # -------- replace existing options? --------
+        if run_import_now and replace_existing:
+            removed = _clear_label_options_folder(folder_dir)
+            if removed:
+                flash(f"Cleared {removed} existing option file(s).", "success")
+
+        # -------- run importer now? --------
+        if run_import_now and ingest_block:
+            if ingest_block["kind"] == "api":
+                from utils import _import_labels_from_api as import_labels_from_api_files
+                ok, info = import_labels_from_api_files(
+                    folder_path=folder_dir,
+                    endpoint=ingest_block["url"],
+                    method=ingest_block.get("method", "GET"),
+                    headers_env=ingest_block.get("headers_env", ""),
+                    query=ingest_block.get("query_json"),
+                    list_path=ingest_block.get("array_path", ""),
+                    field_map={
+                        "id":          ingest_block.get("field_id", "id"),
+                        "display":     ingest_block.get("field_display", "name"),
+                        "description": ingest_block.get("field_desc", ""),
+                        "image_url":   ingest_block.get("field_image", ""),
+                    },
+                    cache_seconds=0,
+                )
+                if ok:
+                    flash(f"✅ Imported {info.get('count', 0)} labels from API.", "success")
+                else:
+                    flash(f"⚠️ API import failed: {info.get('error', 'unknown error')}", "error")
+
+            elif ingest_block["kind"] == "db_sqlite":
+                created = _import_labels_from_sqlite(
+                    type_name, leaf, new_label, new_desc,
+                    sqlite_path=ingest_block["sqlite_path"],
+                    sql=ingest_block["sql"],
+                    col_id=ingest_block["col_id"],
+                    col_display=ingest_block["col_display"],
+                    col_desc=ingest_block["col_desc"],
+                    col_img=ingest_block["col_image"],
+                    max_items=ingest_block["max_items"],
+                )
+                flash(f"✅ Imported {len(created)} labels from database.", "success")
+
+        flash("Label group saved.", "success")
+        new_key = (parent_rel.replace(os.sep, "/") + "/" if parent_rel else "") + leaf
+        return redirect(url_for("edit_label_group", type_name=type_name, group_key=new_key))
+
+    # -------- GET --------
+    group_path = (parent_rel.replace(os.sep, "/") + "/" if parent_rel else "") + leaf
+    refer  = data.get("refer_to") if isinstance(data.get("refer_to"), dict) else {}
+    ingest = data.get("ingest")   if isinstance(data.get("ingest"),   dict) else {}
 
     return render_template(
         "label_group_edit.html",
         type_name=type_name,
-        group_key=group_key,
-        data=data,
+        g=data,
         leaf=leaf,
-        parent_rel=parent_rel.replace(os.sep, "/"),
+        group_path=group_path,
         refer=refer,
-        allow_children=bool(src.get("allow_children")),
-        available_types=list_types(),  # reuse your helper
+        ingest=ingest,
+        available_types=list_types(),
     )
 
 @app.route('/iframe_select/<string:type_name>')

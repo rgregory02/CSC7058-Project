@@ -18,19 +18,16 @@
     .btn.ghost{background:transparent;color:#6c63ff;border:1px solid #cfd3ff}
     .section{padding:14px;border:1px solid #e7e9f2;border-radius:12px;background:#fafbff;margin-top:14px}
     .small{font-size:12px;color:#6b7280}
-    details > summary{cursor:pointer;margin:6px 0;font-weight:600}
     .flash{margin:8px 0;padding:10px;border-radius:8px}
     .flash.error{background:#ffecec;border:1px solid #ff8a8a}
     .flash.success{background:#eaffea;border:1px solid #92d992}
+    details > summary{cursor:pointer;margin:6px 0;font-weight:600}
   </style>
 </head>
 <body>
   <div class="box">
     <h1>✏️ Edit Label Group</h1>
-    <div class="muted">
-      {{ type_name }} ·
-      {% if parent_rel %}<code>{{ parent_rel }}/{{ leaf }}</code>{% else %}<code>{{ leaf }}</code>{% endif %}
-    </div>
+    <div class="muted">{{ type_name }} · <code>{{ group_path }}</code></div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -40,28 +37,28 @@
       {% endif %}
     {% endwith %}
 
-    {# make a local alias to what the route passes #}
-    {% set g = data or {} %}
-    {% set ingest = g.get('ingest', {}) %}
+    {# Aliases from route #}
+    {% set g = g or data or {} %}
+    {% set refer = refer or g.get('refer_to', {}) %}
+    {% set ingest = ingest or g.get('ingest', {}) %}
     {% set ingest_kind = ingest.get('kind','manual') %}
-    {% set refer = g.get('refer_to', {}) %}
     {% set order_val = (g.get('order') or 999) %}
 
     <form method="POST" id="editForm">
       <input type="hidden" name="return_url" value="{{ request.args.get('return_url') or url_for('type_labels', type_name=type_name) }}">
 
       <div class="row">
-        <div>
-          <label for="leaf_key">Leaf key</label>
-          <!-- name MUST be 'key' to match the route -->
-          <input id="leaf_key" name="key" type="text" value="{{ leaf }}">
-          <div class="small">Renames this group (moves JSON and its options folder). Parent path stays the same.</div>
-        </div>
-        <div>
-          <label for="order">Order</label>
-          <input id="order" name="order" type="number" value="{{ order_val }}">
-        </div>
-      </div>
+  <div>
+    <label for="leaf_key">Leaf key</label>
+    <!-- IMPORTANT: name="key" (the route reads request.form['key']) -->
+    <input id="leaf_key" name="key" type="text" value="{{ leaf }}">
+    <div class="small">Renames this group (moves JSON and its options folder). Parent path stays the same.</div>
+  </div>
+  <div>
+    <label for="order">Order</label>
+    <input id="order" name="order" type="number" value="{{ order_val }}">
+  </div>
+</div>
 
       <label for="label">Label</label>
       <input id="label" name="label" type="text" value="{{ g.get('label','') }}">
@@ -72,15 +69,25 @@
       <div class="section">
         <label>
           <input type="checkbox" name="allow_children"
-                 {% if (g.get('source',{}) or {}).get('allow_children') or (g.get('allow_children')) %}checked{% endif %}>
+                 {% if (g.get('source',{}) or {}).get('allow_children') or g.get('allow_children') %}checked{% endif %}>
           Allow child folders
         </label>
+      </div>
+
+      <!-- AI helper, same behaviour as create_subfolder -->
+      <div class="section">
+        <label for="ai_desc">AI helper (optional)</label>
+        <textarea id="ai_desc" placeholder="Describe what you need (e.g., 'labels about hospitals in Ireland')"></textarea>
+        <div class="row" style="align-items:center">
+          <button type="button" class="btn" onclick="aiSuggestIngest()">Generate ingest preset</button>
+          <span id="ai_status" class="small" style="margin-left:8px"></span>
+        </div>
+        <div class="small">We’ll fill the API fields below. Works even without an API key for common Wikidata cases.</div>
       </div>
 
       <!-- Link to biographies -->
       <div class="section">
         <label>
-          <!-- name MUST be 'refer_to_enabled' so the route can see it -->
           <input type="checkbox" id="refer_to_enabled" name="refer_to_enabled"
                  {% if refer %}checked{% endif %}
                  onchange="document.getElementById('link_bios_block').style.display=this.checked?'block':'none'">
@@ -119,7 +126,7 @@
         </div>
       </div>
 
-      <!-- Populate / ingest metadata (manual, API, DB) -->
+      <!-- Populate / ingest -->
       <div class="section">
         <label for="ingest_kind">Populate labels</label>
         <select id="ingest_kind" name="ingest_kind" onchange="toggleIngest()">
@@ -139,7 +146,7 @@
           </div>
           <div>
             <label for="api_method">HTTP Method</label>
-            {% set m = api.get('method','POST') %}
+            {% set m = api.get('method','GET') %}
             <select id="api_method" name="api_method">
               <option value="GET"  {{ 'selected' if m=='GET' else '' }}>GET</option>
               <option value="POST" {{ 'selected' if m=='POST' else '' }}>POST</option>
@@ -153,7 +160,7 @@
             <div>
               <label for="api_headers_env">Env var for auth (optional)</label>
               <input id="api_headers_env" name="api_headers_env" type="text" value="{{ api.get('headers_env','') }}" placeholder="ONENET_API_KEY">
-              <div class="small">Backend sends <code>Authorization: Bearer $ENV</code> if set.</div>
+              <div class="small">If set, backend sends <code>Authorization: Bearer $ENV</code>.</div>
             </div>
             <div>
               <label for="api_max_items">Max items to import</label>
@@ -162,10 +169,8 @@
           </div>
 
           <label for="api_query">JSON body / params (optional)</label>
-<textarea id="api_query" name="api_query">
-{{ (api.get('query_json') or api.get('query') or api.get('body') or '') }}
-</textarea>
-          <div class="small">If GET and this is a JSON object, keys are sent as query params.</div>
+          <textarea id="api_query" name="api_query" placeholder='{"query": "...", "format": "json"}'>{{ api.get('query_json')|tojson(indent=2) if api.get('query_json') is mapping else (api.get('query_json') or '') }}</textarea>
+          <div class="small">For GET with params, if this is a JSON object the backend will pass keys as querystring.</div>
         </details>
 
         <label for="api_array_path">Array path (e.g. <code>data.items</code>)</label>
@@ -194,10 +199,22 @@
 
         <div class="row" style="align-items:center;margin-top:8px">
           <div>
-            <button type="button" class="btn ghost" onclick="presetWikidataExample()">Load Wikidata (SPARQL) example</button>
+            <button type="button" class="btn ghost" onclick="presetWikidataSPARQL()">Load Wikidata (SPARQL) example</button>
+            <button type="button" class="btn ghost" style="margin-left:6px" onclick="presetWikidataSearchREST()">Load Wikidata Search (REST) example</button>
           </div>
-          <div class="small">Use as a preset; adjust SPARQL + mappings.</div>
+          <div class="small">Presets — tweak SPARQL/params and mappings as needed.</div>
         </div>
+        <div class="section">
+  <label class="small">
+    <input type="checkbox" id="run_import_now" name="run_import_now" checked> Run importer now
+  </label>
+  <div style="margin-top:8px">
+    <label class="small">
+      <input type="checkbox" id="replace_existing" name="replace_existing">
+      Replace existing options (clear folder first)
+    </label>
+  </div>
+</div>
       </div>
 
       <!-- DB (SQLite) pane -->
@@ -232,48 +249,126 @@
 
         <label for="db_max_items">Max items to import</label>
         <input id="db_max_items" name="db_max_items" type="number" value="{{ db.get('max_items',500) }}" min="1" max="10000">
+     <div class="section">
+  <label class="small">
+    <input type="checkbox" id="run_import_now" name="run_import_now" checked> Run importer now
+  </label>
+  <div style="margin-top:8px">
+    <label class="small">
+      <input type="checkbox" id="replace_existing" name="replace_existing">
+      Replace existing options (clear folder first)
+    </label>
+  </div>
+</div>
+     
       </div>
 
       <div style="display:flex;gap:8px;margin-top:14px">
         <a class="btn secondary" href="{{ request.args.get('return_url') or url_for('type_labels', type_name=type_name) }}">Back</a>
         <button class="btn" type="submit">Save Group</button>
+
+        
       </div>
+
+
     </form>
   </div>
 
 <script>
+  function showBlock(id, on){ var el=document.getElementById(id); if(el){ el.style.display = on ? '' : 'none'; } }
   function toggleIngest(){
-    const kind = document.getElementById('ingest_kind').value;
-    document.getElementById('pane_api').style.display = (kind==='api') ? '' : 'none';
-    document.getElementById('pane_db').style.display  = (kind==='db_sqlite') ? '' : 'none';
+    var kind = document.getElementById('ingest_kind').value;
+    showBlock('pane_api', kind==='api');
+    showBlock('pane_db',  kind==='db_sqlite');
   }
-  function presetWikidataExample(){
+
+  // ---- Presets (same spirit as create_subfolder) ----
+  function presetWikidataSPARQL(){
     document.getElementById('ingest_kind').value = 'api';
     toggleIngest();
     document.getElementById('api_url').value = 'https://query.wikidata.org/sparql';
-    document.getElementById('api_method').value = 'POST';
+    document.getElementById('api_method').value = 'GET';
     const q = {
       query:
-        "SELECT ?item ?itemLabel ?shortDescription WHERE {\\n" +
-        "  ?item wdt:P31/wdt:P279* wd:Q43229 .\\n" +
-        "  SERVICE wikibase:label { bd:serviceParam wikibase:language 'en'. }\\n" +
-        "  OPTIONAL { ?item schema:description ?shortDescription . FILTER(LANG(?shortDescription)='en') }\\n" +
-        "} LIMIT 250",
+        "SELECT ?item ?itemLabel ?shortDescription WHERE {\n" +
+        "  ?item wdt:P31/wdt:P279* wd:Q16917 .  # Hospitals\n" +
+        "  ?item wdt:P17 wd:Q27 .               # Country = Ireland (Q27)\n" +
+        "  SERVICE wikibase:label { bd:serviceParam wikibase:language 'en'. }\n" +
+        "  OPTIONAL { ?item schema:description ?shortDescription . FILTER(LANG(?shortDescription)='en') }\n" +
+        "} LIMIT 15",
       format: "json"
     };
     document.getElementById('api_query').value = JSON.stringify(q, null, 2);
-    document.getElementById('api_array_path').value = 'results.bindings';
-    document.getElementById('api_field_id').value = 'item.value';
+    document.getElementById('api_array_path').value    = 'results.bindings';
+    document.getElementById('api_field_id').value      = 'item.value';
     document.getElementById('api_field_display').value = 'itemLabel.value';
-    document.getElementById('api_field_desc').value = 'shortDescription.value';
-    document.getElementById('api_field_image').value = '';
-    document.getElementById('api_max_items').value = 250;
+    document.getElementById('api_field_desc').value    = 'shortDescription.value';
+    document.getElementById('api_field_image').value   = '';
+    document.getElementById('api_max_items').value     = 15;
   }
+
+  function presetWikidataSearchREST(){
+    document.getElementById('ingest_kind').value = 'api';
+    toggleIngest();
+    document.getElementById('api_url').value    = 'https://www.wikidata.org/w/api.php';
+    document.getElementById('api_method').value = 'GET';
+    const params = {
+      action: 'wbsearchentities',
+      search: 'hospital ireland',
+      language: 'en',
+      format: 'json',
+      limit: 15
+    };
+    document.getElementById('api_query').value       = JSON.stringify(params, null, 2);
+    document.getElementById('api_array_path').value  = 'search';
+    document.getElementById('api_field_id').value    = 'id';
+    document.getElementById('api_field_display').value = 'label';
+    document.getElementById('api_field_desc').value  = 'description';
+    document.getElementById('api_field_image').value = '';
+    document.getElementById('api_max_items').value   = 15;
+  }
+
+  // ---- AI ingest generation (same endpoint as create page) ----
+  async function aiSuggestIngest(){
+    const desc = (document.getElementById('ai_desc').value || '').trim();
+    const status = document.getElementById('ai_status');
+    if(!desc){ status.textContent = 'Please enter a brief description.'; return; }
+    status.textContent = 'Generating…';
+    try{
+      const res = await fetch('/api/ingest/generate', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({description: desc})
+      });
+      const data = await res.json();
+      if(!data.ok){ status.textContent = 'Error: ' + (data.error || 'unknown'); return; }
+      const ing = data.ingest || {};
+      document.getElementById('ingest_kind').value = 'api';
+      toggleIngest();
+      function set(id,val){ const el=document.getElementById(id); if(el!=null){ el.value = (val ?? ''); } }
+      set('api_url',            ing.url);
+      set('api_method',         ing.method || 'GET');
+      set('api_array_path',     ing.array_path || '');
+      set('api_query',          JSON.stringify(ing.query_json || {}, null, 2));
+      set('api_field_id',       ing.field_id || 'id');
+      set('api_field_display',  ing.field_display || 'name');
+      set('api_field_desc',     ing.field_desc || 'description');
+      set('api_field_image',    ing.field_image || '');
+      set('api_max_items',      ing.max_items || 15);
+      status.textContent = 'Preset applied ✔';
+    }catch(e){
+      console.error(e);
+      status.textContent = 'Unexpected error.';
+    }
+  }
+
+  // init
   document.addEventListener('DOMContentLoaded', () => {
     toggleIngest();
     const hasRefer = {{ 'true' if refer else 'false' }};
     document.getElementById('link_bios_block').style.display = hasRefer ? 'block' : 'none';
-    document.getElementById('refer_to_enabled').checked = hasRefer;
+    const toggle = document.getElementById('refer_to_enabled');
+    if (toggle) toggle.checked = hasRefer;
   });
 </script>
 </body>

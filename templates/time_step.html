@@ -12,7 +12,20 @@
     .hint { color:#666; font-size:0.9em; }
     .primary-button { display:inline-block; background:#6c63ff; color:#fff; font-weight:700; padding:10px 20px; border-radius:8px; text-decoration:none; border:none; cursor:pointer; }
     .primary-button:hover { background:#5a54d6; }
-    .clear-btn { background:#fff; border:1px solid #bbb; color:#444; padding:4px 10px; border-radius:6px; cursor:pointer; font-size:.85em; margin-left:10px; }
+    .clear-btn{
+  background:#fff;
+  border:1px solid #bbb;
+  color:#444;
+  padding:10px 20px;      /* match primary-button */
+  border-radius:8px;
+  cursor:pointer;
+  font-weight:700;        /* match primary-button weight */
+  font-size:1rem;         /* match base font size */
+  text-decoration:none;
+  display:inline-block;
+  line-height:1;
+}
+.clear-btn:hover{ background:#f6f6f6; }
     .label-group-box { border:1px solid #ddd; border-radius:10px; padding:18px; margin-top:24px; background:#fff; }
     details { border:1px dashed #ccd; border-radius:10px; padding:10px 12px; background:#fafaff; }
     details > summary { cursor:pointer; font-weight:700; }
@@ -115,14 +128,17 @@
         <br><br>
       {% endif %}
 
-      <div style="margin-top: 20px;">
-        {% if edit_entry_index is not none %}
-          <button type="submit" name="do_save" value="1" class="primary-button">💾 Save Edits</button>
-          <button type="submit" name="cancel_edit" value="true" class="clear-btn">❌ Cancel</button>
-        {% else %}
-          <button type="submit" name="do_save" value="1" class="primary-button">➡️ Continue</button>
-        {% endif %}
-      </div>
+{% set wizard_url = url_for('general_iframe_wizard', type=type_name, bio_id=bio_id, embed=('1' if EMBED else None)) %}
+
+<div style="margin-top: 20px;">
+  {% if edit_entry_index is not none %}
+    <button type="submit" name="do_save" value="1" class="primary-button">💾 Save</button>
+    <a class="clear-btn" href="{{ wizard_url }}">❌ Cancel</a>
+  {% else %}
+    <button type="submit" name="do_save" value="1" class="primary-button">💾 Save</button>
+    <a class="clear-btn" href="{{ wizard_url }}">❌ Cancel</a>
+  {% endif %}
+</div>
     </form>
 
     {% if existing_entries %}
