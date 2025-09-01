@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Edit Label Group</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:#f6f7fb;padding:40px}
+    .box{background:#fff;max-width:720px;margin:auto;padding:28px;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.06)}
+    h1{margin:0 0 6px}
+    .muted{color:#657085;margin-bottom:16px}
+    label{font-weight:600;margin-top:10px;display:block}
+    input[type=text],input[type=number],input[type=search],select,textarea{width:100%;padding:10px;border:1px solid #dfe3ee;border-radius:10px}
+    textarea{min-height:80px}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .btn{display:inline-block;padding:10px 16px;border-radius:10px;background:#6c63ff;color:#fff;text-decoration:none;border:none;cursor:pointer}
+    .btn.secondary{background:#eef0f7;color:#333}
+    .btn.ghost{background:transparent;color:#6c63ff;border:1px solid #cfd3ff}
+    .section{padding:14px;border:1px solid #e7e9f2;border-radius:12px;background:#fafbff;margin-top:14px}
+    .small{font-size:12px;color:#6b7280}
+    details > summary{cursor:pointer;margin:6px 0;font-weight:600}
+    .flash{margin:8px 0;padding:10px;border-radius:8px}
+    .flash.error{background:#ffecec;border:1px solid #ff8a8a}
+    .flash.success{background:#eaffea;border:1px solid #92d992}
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>✏️ Edit Label Group</h1>
+    <div class="muted">
+      {{ type_name }} ·
+      {% if parent_rel %}<code>{{ parent_rel }}/{{ leaf }}</code>{% else %}<code>{{ leaf }}</code>{% endif %}
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for c, m in messages %}
+          <div class="flash {{ c }}">{{ m|safe }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {# make a local alias to what the route passes #}
+    {% set g = data or {} %}
+    {% set ingest = g.get('ingest', {}) %}
+    {% set ingest_kind = ingest.get('kind','manual') %}
+    {% set refer = g.get('refer_to', {}) %}
+    {% set order_val = (g.get('order') or 999) %}
+
+    <form method="POST" id="editForm">
+      <input type="hidden" name="return_url" value="{{ request.args.get('return_url') or url_for('type_labels', type_name=type_name) }}">
+
+      <div class="row">
+        <div>
+          <label for="leaf_key">Leaf key</label>
+          <!-- name MUST be 'key' to match the route -->
+          <input id="leaf_key" name="key" type="text" value="{{ leaf }}">
+          <div class="small">Renames this group (moves JSON and its options folder). Parent path stays the same.</div>
+        </div>
+        <div>
+          <label for="order">Order</label>
+          <input id="order" name="order" type="number" value="{{ order_val }}">
+        </div>
+      </div>
+
+      <label for="label">Label</label>
+      <input id="label" name="label" type="text" value="{{ g.get('label','') }}">
+
+      <label for="description">Description</label>
+      <textarea id="description" name="description">{{ g.get('description','') }}</textarea>
+
+      <div class="section">
+        <label>
+          <input type="checkbox" name="allow_children"
+                 {% if (g.get('source',{}) or {}).get('allow_children') or (g.get('allow_children')) %}checked{% endif %}>
+          Allow child folders
+        </label>
+      </div>
+
+      <!-- Link to biographies -->
+      <div class="section">
+        <label>
+          <!-- name MUST be 'refer_to_enabled' so the route can see it -->
+          <input type="checkbox" id="refer_to_enabled" name="refer_to_enabled"
+                 {% if refer %}checked{% endif %}
+                 onchange="document.getElementById('link_bios_block').style.display=this.checked?'block':'none'">
+          Link to biographies
+        </label>
+
+        <div id="link_bios_block" style="display: {{ 'block' if refer else 'none' }}">
+          <div class="row">
+            <div>
+              <label for="refer_to_type">Biography type</label>
+              <select id="refer_to_type" name="refer_to_type">
+                <option value="">— pick a type —</option>
+                {% for t in available_types %}
+                  <option value="{{ t }}" {{ 'selected' if refer.get('type')==t else '' }}>{{ t }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="refer_to_mode">Link mode</label>
+              {% set mode_val = refer.get('mode','child_or_parent') %}
+              <select id="refer_to_mode" name="refer_to_mode">
+                <option value="child_only"      {{ 'selected' if mode_val=='child_only' else '' }}>child_only</option>
+                <option value="parent_only"     {{ 'selected' if mode_val=='parent_only' else '' }}>parent_only</option>
+                <option value="child_or_parent" {{ 'selected' if mode_val=='child_or_parent' else '' }}>child_or_parent</option>
+              </select>
+            </div>
+          </div>
+
+          <label for="refer_to_path">Biography path (optional)</label>
+          <input id="refer_to_path" name="refer_to_path" type="text" value="{{ refer.get('path','') }}" placeholder="e.g. hospitals">
+
+          <label style="margin-top:10px">
+            <input type="checkbox" name="refer_to_auto_link" {{ 'checked' if refer.get('auto_link') else '' }}>
+            Auto-link exact match
+          </label>
+        </div>
+      </div>
+
+      <!-- Populate / ingest metadata (manual, API, DB) -->
+      <div class="section">
+        <label for="ingest_kind">Populate labels</label>
+        <select id="ingest_kind" name="ingest_kind" onchange="toggleIngest()">
+          <option value="manual"    {{ 'selected' if ingest_kind=='manual' else '' }}>Manual (no importer)</option>
+          <option value="api"       {{ 'selected' if ingest_kind=='api' else '' }}>From API (JSON)</option>
+          <option value="db_sqlite" {{ 'selected' if ingest_kind=='db_sqlite' else '' }}>From Database (SQLite)</option>
+        </select>
+      </div>
+
+      <!-- API pane -->
+      {% set api = ingest if ingest_kind=='api' else {} %}
+      <div id="pane_api" class="section" style="display:none">
+        <div class="row" style="align-items:end">
+          <div>
+            <label for="api_url">API URL</label>
+            <input id="api_url" name="api_url" type="text" value="{{ api.get('url','') }}" placeholder="https://example.com/api/labels">
+          </div>
+          <div>
+            <label for="api_method">HTTP Method</label>
+            {% set m = api.get('method','POST') %}
+            <select id="api_method" name="api_method">
+              <option value="GET"  {{ 'selected' if m=='GET' else '' }}>GET</option>
+              <option value="POST" {{ 'selected' if m=='POST' else '' }}>POST</option>
+            </select>
+          </div>
+        </div>
+
+        <details>
+          <summary>Advanced (auth + body)</summary>
+          <div class="row">
+            <div>
+              <label for="api_headers_env">Env var for auth (optional)</label>
+              <input id="api_headers_env" name="api_headers_env" type="text" value="{{ api.get('headers_env','') }}" placeholder="ONENET_API_KEY">
+              <div class="small">Backend sends <code>Authorization: Bearer $ENV</code> if set.</div>
+            </div>
+            <div>
+              <label for="api_max_items">Max items to import</label>
+              <input id="api_max_items" name="api_max_items" type="number" value="{{ api.get('max_items',200) }}" min="1" max="5000">
+            </div>
+          </div>
+
+          <label for="api_query">JSON body / params (optional)</label>
+          <textarea id="api_query" name="api_query">{{ api.get('query_json','') }}</textarea>
+          <div class="small">If GET and this is a JSON object, keys are sent as query params.</div>
+        </details>
+
+        <label for="api_array_path">Array path (e.g. <code>data.items</code>)</label>
+        <input id="api_array_path" name="api_array_path" type="text" value="{{ api.get('array_path','') }}">
+
+        <div class="row">
+          <div>
+            <label for="api_field_id">Field: id</label>
+            <input id="api_field_id" name="api_field_id" type="text" value="{{ api.get('field_id','id') }}">
+          </div>
+          <div>
+            <label for="api_field_display">Field: display/name</label>
+            <input id="api_field_display" name="api_field_display" type="text" value="{{ api.get('field_display','name') }}">
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="api_field_desc">Field: description</label>
+            <input id="api_field_desc" name="api_field_desc" type="text" value="{{ api.get('field_desc','description') }}">
+          </div>
+          <div>
+            <label for="api_field_image">Field: image_url</label>
+            <input id="api_field_image" name="api_field_image" type="text" value="{{ api.get('field_image','image_url') }}">
+          </div>
+        </div>
+
+        <div class="row" style="align-items:center;margin-top:8px">
+          <div>
+            <button type="button" class="btn ghost" onclick="presetWikidataExample()">Load Wikidata (SPARQL) example</button>
+          </div>
+          <div class="small">Use as a preset; adjust SPARQL + mappings.</div>
+        </div>
+      </div>
+
+      <!-- DB (SQLite) pane -->
+      {% set db = ingest if ingest_kind=='db_sqlite' else {} %}
+      <div id="pane_db" class="section" style="display:none">
+        <label for="db_sqlite_path">SQLite file path</label>
+        <input id="db_sqlite_path" name="db_sqlite_path" type="text" value="{{ db.get('sqlite_path','') }}">
+
+        <label for="db_sql">SQL query</label>
+        <textarea id="db_sql" name="db_sql">{{ db.get('sql','') }}</textarea>
+
+        <div class="row">
+          <div>
+            <label for="db_col_id">Column: id</label>
+            <input id="db_col_id" name="db_col_id" type="text" value="{{ db.get('col_id','id') }}">
+          </div>
+          <div>
+            <label for="db_col_display">Column: display/name</label>
+            <input id="db_col_display" name="db_col_display" type="text" value="{{ db.get('col_display','display') }}">
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="db_col_desc">Column: description</label>
+            <input id="db_col_desc" name="db_col_desc" type="text" value="{{ db.get('col_desc','description') }}">
+          </div>
+          <div>
+            <label for="db_col_image">Column: image_url</label>
+            <input id="db_col_image" name="db_col_image" type="text" value="{{ db.get('col_image','image_url') }}">
+          </div>
+        </div>
+
+        <label for="db_max_items">Max items to import</label>
+        <input id="db_max_items" name="db_max_items" type="number" value="{{ db.get('max_items',500) }}" min="1" max="10000">
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <a class="btn secondary" href="{{ request.args.get('return_url') or url_for('type_labels', type_name=type_name) }}">Back</a>
+        <button class="btn" type="submit">Save Group</button>
+      </div>
+    </form>
+  </div>
+
+<script>
+  function toggleIngest(){
+    const kind = document.getElementById('ingest_kind').value;
+    document.getElementById('pane_api').style.display = (kind==='api') ? '' : 'none';
+    document.getElementById('pane_db').style.display  = (kind==='db_sqlite') ? '' : 'none';
+  }
+  function presetWikidataExample(){
+    document.getElementById('ingest_kind').value = 'api';
+    toggleIngest();
+    document.getElementById('api_url').value = 'https://query.wikidata.org/sparql';
+    document.getElementById('api_method').value = 'POST';
+    const q = {
+      query:
+        "SELECT ?item ?itemLabel ?shortDescription WHERE {\\n" +
+        "  ?item wdt:P31/wdt:P279* wd:Q43229 .\\n" +
+        "  SERVICE wikibase:label { bd:serviceParam wikibase:language 'en'. }\\n" +
+        "  OPTIONAL { ?item schema:description ?shortDescription . FILTER(LANG(?shortDescription)='en') }\\n" +
+        "} LIMIT 250",
+      format: "json"
+    };
+    document.getElementById('api_query').value = JSON.stringify(q, null, 2);
+    document.getElementById('api_array_path').value = 'results.bindings';
+    document.getElementById('api_field_id').value = 'item.value';
+    document.getElementById('api_field_display').value = 'itemLabel.value';
+    document.getElementById('api_field_desc').value = 'shortDescription.value';
+    document.getElementById('api_field_image').value = '';
+    document.getElementById('api_max_items').value = 250;
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    toggleIngest();
+    const hasRefer = {{ 'true' if refer else 'false' }};
+    document.getElementById('link_bios_block').style.display = hasRefer ? 'block' : 'none';
+    document.getElementById('refer_to_enabled').checked = hasRefer;
+  });
+</script>
+</body>
+</html>

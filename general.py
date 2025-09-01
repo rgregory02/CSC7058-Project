@@ -4528,6 +4528,135 @@ def create_subfolder(type_name):
     # GET
     return render_template("create_subfolder.html", type_name=type_name, return_url=return_url)
 
+
+# --- imports you likely already have ---
+import os, shutil
+from flask import request, render_template, redirect, url_for, flash
+
+def _slugify_key(s: str) -> str:
+    return "".join([c if c.isalnum() or c == "_" else "_" for c in (s or "").strip().lower()]).strip("_")
+
+def _group_paths(base: str, group_key: str):
+    """
+    Returns paths for the group's JSON file and its options folder.
+    Handles nested paths like 'parent/child'.
+    """
+    parts = [p for p in (group_key or "").split("/") if p]
+    if not parts:
+        raise ValueError("Empty group_key")
+    parent_rel = os.path.join(*parts[:-1]) if len(parts) > 1 else ""
+    leaf = parts[-1]
+    json_path = os.path.join(base, parent_rel, f"{leaf}.json")
+    opts_dir  = os.path.join(base, parent_rel, leaf)
+    return parent_rel, leaf, json_path, opts_dir
+
+@app.route("/type/<type_name>/labels/group/<path:group_key>/edit", methods=["GET", "POST"])
+def edit_label_group(type_name, group_key):
+    """
+    Edit a label group (aka 'label subfolder' metadata).
+    - Supports renaming the leaf key. Moves JSON + options directory.
+    - Lets you update label/description/order and refer_to (biographies) + auto_link.
+    """
+    base = os.path.join("types", type_name, "labels")
+    os.makedirs(base, exist_ok=True)
+
+    parent_rel, leaf, json_path, opts_dir = _group_paths(base, group_key)
+    if not os.path.exists(json_path):
+        return f"Group '{group_key}' not found for {type_name}. Expected {json_path}", 404
+
+    data = load_json_as_dict(json_path) or {}
+    # Ensure minimal shape
+    data.setdefault("key", group_key)
+    data.setdefault("label", leaf.replace("_", " ").title())
+    data.setdefault("description", "")
+    data.setdefault("order", 999)
+
+    if request.method == "POST":
+        new_label = (request.form.get("label") or "").strip() or data.get("label") or leaf
+        new_desc  = (request.form.get("description") or "").strip()
+        try:
+            new_order = int(request.form.get("order") or data.get("order") or 999)
+        except Exception:
+            new_order = 999
+
+        # Rename (leaf only)
+        new_leaf = _slugify_key(request.form.get("key") or leaf) or leaf
+        # refer_to (biographies) block
+        rt_enabled = (request.form.get("refer_to_enabled") == "on")
+        refer_type = (request.form.get("refer_to_type") or "").strip()
+        refer_path = (request.form.get("refer_to_path") or "").strip()
+        refer_mode = (request.form.get("refer_to_mode") or "child_or_parent").strip()
+        auto_link  = (request.form.get("refer_to_auto_link") == "on")
+
+        # allow_children on the options source (if present)
+        allow_children = (request.form.get("allow_children") == "on")
+
+        # Update payload
+        data["key"] = "/".join([parent_rel.replace(os.sep, "/"), new_leaf]).strip("/") if parent_rel else new_leaf
+        data["label"] = new_label
+        data["description"] = new_desc
+        data["order"] = new_order
+
+        # attach/clear refer_to
+        if rt_enabled and refer_type:
+            data["refer_to"] = {
+                "source": "biographies",
+                "type": refer_type,
+                "path": refer_path,
+                "mode": refer_mode,
+                "auto_link": bool(auto_link),
+            }
+        else:
+            data.pop("refer_to", None)
+
+        # Add/patch source.allow_children if a source block exists
+        if isinstance(data.get("source"), dict):
+            data["source"]["allow_children"] = bool(allow_children)
+
+        # --- persist (handle rename) ---
+        new_parent_rel, _, new_json_path, new_opts_dir = _group_paths(base, data["key"])
+
+        # 1) Move JSON file if needed
+        if new_json_path != json_path:
+            os.makedirs(os.path.dirname(new_json_path), exist_ok=True)
+            try:
+                os.replace(json_path, new_json_path)
+            except Exception as e:
+                flash(f"Failed to rename group file: {e}", "error")
+                return redirect(request.url)
+            json_path = new_json_path  # update local pointer
+
+        # 2) Move options folder if it exists and path changed
+        if os.path.isdir(opts_dir) and new_opts_dir != opts_dir:
+            os.makedirs(os.path.dirname(new_opts_dir), exist_ok=True)
+            try:
+                shutil.move(opts_dir, new_opts_dir)
+            except Exception as e:
+                flash(f"Warning: group renamed, but moving options folder failed: {e}", "error")
+            else:
+                opts_dir = new_opts_dir
+
+        save_dict_as_json(json_path, data)
+        flash("Label group saved.", "success")
+        return redirect(url_for("edit_label_group", type_name=type_name, group_key=data["key"]))
+
+    # GET
+    # For the form, expose flattened values
+    refer = data.get("refer_to") if isinstance(data.get("refer_to"), dict) else {}
+    src   = data.get("source") if isinstance(data.get("source"), dict) else {}
+
+    return render_template(
+        "label_group_edit.html",
+        type_name=type_name,
+        group_key=group_key,
+        data=data,
+        leaf=leaf,
+        parent_rel=parent_rel.replace(os.sep, "/"),
+        refer=refer,
+        allow_children=bool(src.get("allow_children")),
+        available_types=list_types(),  # reuse your helper
+    )
+
 @app.route('/iframe_select/<string:type_name>')
 def iframe_select_type(type_name):
     """
