@@ -438,7 +438,9 @@
       </label>
       <button class="btn" id="wiz_ai_go" type="button">Generate</button>
       <button class="btn gray" id="wiz_ai_close" type="button">Close</button>
-      <button id="wiz_ai_save_all" class="primary-button">Save all as options</button>
+      <button id="wiz_ai_save_all" type="button" class="btn brand">
+  Save all as options
+</button>
     </div>
     <div id="wiz_ai_results" style="margin-top:12px"></div>
   </div>
@@ -479,6 +481,12 @@
       </div>
     </div>
   </form>
+  <!-- Hidden helper form for AI bulk save (must NOT be nested inside labelsForm) -->
+<form id="wiz_ai_save_form" action="" method="post" style="display:none">
+  <input type="hidden" name="return_url" value="{{ request.url }}">
+  <input type="hidden" name="focus" value="">
+  <input type="hidden" name="options_json" value="[]">
+</form>
 </div>
 
 <script>
@@ -1272,30 +1280,53 @@ document.getElementById('wiz_ai_go').addEventListener('click', async () => {
 document.getElementById('wiz_ai_save_all')?.addEventListener('click', async () => {
   const res = document.getElementById('wiz_ai_results');
   const cards = [...res.querySelectorAll('.label-card')];
-  if (!cards.length) { res.innerHTML = '<div class="muted">No suggestions to save.</div>'; return; }
+  if (!cards.length) {
+    res.innerHTML = '<div class="muted">No suggestions to save.</div>';
+    return;
+  }
 
   // Build items array from rendered suggestions
   const items = cards.map(c => {
     const strong = c.querySelector('strong')?.textContent?.trim() || '';
-    const mono   = c.querySelector('.mono')?.textContent?.trim() || ''; // if you kept the id in a mono span
+    const mono   = c.querySelector('.mono')?.textContent?.trim() || ''; // optional id span
     const desc   = c.querySelector('.label-description')?.textContent?.trim() || '';
-    const id     = (mono || strong || '').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+    const id     = (mono || strong || '')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g,'_')
+                    .replace(/^_+|_+$/g,'');
     return { id, display: strong || id.replace(/_/g,' '), description: desc };
   });
 
+  // POST without submitting the wizard form
   try {
     const r = await fetch('/api/labels/create_values', {
       method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ type: WIZ_AI.type, group: WIZ_AI.group, items })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type:  WIZ_AI.type,
+        group: WIZ_AI.group,
+        items,
+        bulk:  true
+      })
     });
     const data = await r.json();
-    if (!data.ok) { res.insertAdjacentHTML('beforeend', `<div class="muted">Save failed.</div>`); return; }
+    if (!data?.ok) {
+      res.insertAdjacentHTML('beforeend', `<div class="muted">Save failed.</div>`);
+      return;
+    }
 
-    console.log('[AI] bulk saved', data.written);
-    // Optionally: refresh the list or inject cards as in A)
+    // Inject saved items into the current group's list immediately (idempotent)
+    items.forEach(it => _renderOptionCard(WIZ_AI.safe, WIZ_AI.group, it));
+
+    // Close modal, keep the user on the same step, and focus the group
+    document.getElementById('wiz_ai_modal').style.display = 'none';
+    const container = document.querySelector(`#group_${WIZ_AI.safe} .label-options`);
+    container?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    if (typeof updateSaveButtonState === 'function') updateSaveButtonState();
   } catch (e) {
     console.warn(e);
+    res.insertAdjacentHTML('beforeend', `<div class="muted">Save failed.</div>`);
   }
 });
 
