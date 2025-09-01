@@ -2300,76 +2300,101 @@ def general_iframe_wizard():
         step=step
     )
 
+# NEW
+@app.route("/api/bios/folders")
+def api_bios_folders():
+    """
+    Return immediate subfolders under a parent for a given type.
+    ?type=buildings&parent=educational_buildings  (parent is relative to /types/<type>/biographies)
+    """
+    type_name = (request.args.get("type") or "").strip()
+    parent    = (request.args.get("parent") or "").strip().strip("/")
+    if not type_name:
+        return jsonify(ok=False, error="Missing type"), 400
 
+    base = os.path.join("types", type_name, "biographies")
+    if not os.path.isdir(base):
+        return jsonify(ok=True, items=[])
+
+    parent_dir = os.path.join(base, parent) if parent else base
+    if not os.path.isdir(parent_dir):
+        return jsonify(ok=True, items=[])
+
+    items = []
+    for name in sorted(os.listdir(parent_dir)):
+        p = os.path.join(parent_dir, name)
+        if os.path.isdir(p):
+            rel   = os.path.relpath(p, base).replace(os.sep, "/")
+            # count JSON files directly in this folder (not recursive)
+            count = len([f for f in os.listdir(p) if f.endswith(".json") and f != "_group.json"])
+            # optional label from _group.json
+            label = name
+            meta  = os.path.join(p, "_group.json")
+            if os.path.exists(meta):
+                try:
+                    d = load_json_as_dict(meta) or {}
+                    label = d.get("label") or d.get("name") or label
+                except Exception:
+                    pass
+            items.append({"name": name, "label": label, "key": rel, "count": count})
+
+    return jsonify(ok=True, items=items)
+
+# UPDATED
 @app.route("/api/bios/list")
 def api_bios_list():
     type_name = (request.args.get("type") or "").strip()
     if not type_name:
         return jsonify(ok=False, error="Missing type"), 400
 
-    recursive = (request.args.get("recursive", "1").lower() in ("1","true","yes"))
+    # NEW: folder filtering
+    folder    = (request.args.get("folder") or "").strip().strip("/")
+    recursive = (request.args.get("recursive", "0").lower() in ("1","true","yes"))
     q         = (request.args.get("q") or "").strip().lower()
-    try:
-        limit = max(1, min(5000, int(request.args.get("limit") or "500")))
-    except Exception:
-        limit = 500
+    limit     = int(request.args.get("limit") or "500")
 
     base = os.path.join("types", type_name, "biographies")
     if not os.path.isdir(base):
         return jsonify(ok=True, items=[])
 
+    search_root = os.path.join(base, folder) if folder else base
+    if not os.path.isdir(search_root):
+        return jsonify(ok=True, items=[])
+
     items = []
 
-    def _maybe_add(file_path: str):
-        # skip non-json and meta files
-        if not file_path.endswith(".json"):
-            return
-        if os.path.basename(file_path) == "_group.json":
-            return
-        try:
-            rel = os.path.relpath(file_path, base)  # e.g. "demo/st_thomas_hospital.json"
-        except Exception:
-            return
+    def _add(file_path: str):
+        if os.path.basename(file_path) == "_group.json": return
+        if not file_path.endswith(".json"): return
+
+        rel  = os.path.relpath(file_path, base)       # e.g. "educational_buildings/red_primary_school.json"
+        stem = os.path.splitext(os.path.basename(file_path))[0]
         try:
             data = load_json_as_dict(file_path) or {}
         except Exception:
             data = {}
 
-        stem = os.path.splitext(os.path.basename(file_path))[0]
-        name = (data.get("name") or stem.replace("_"," ").title()).strip()
-        key  = rel[:-5].replace(os.sep, "/")  # "demo/st_thomas_hospital"
+        name = data.get("name") or stem.replace("_"," ").title()
+        key  = rel[:-5].replace(os.sep, "/")           # e.g. "educational_buildings/red_primary_school"
 
         hay = f"{name} {stem} {key}".lower()
         if q and q not in hay:
             return
 
         items.append({
-            "id": stem,                    # legacy
+            "id": stem,                     # legacy (file stem)
             "name": name,
-            "key": key,                    # preferred: full relative path key
+            "key": key,                     # <folder>/<stem>
             "path": rel.replace(os.sep, "/")
         })
 
     if recursive:
-        for root, _, files in os.walk(base):
+        for root, _, files in os.walk(search_root):
             for fn in files:
-                if fn.startswith("."):
-                    continue
-                _maybe_add(os.path.join(root, fn))
-                if len(items) >= limit:
-                    break
-            if len(items) >= limit:
-                break
+                _add(os.path.join(root, fn))
     else:
-        for fn in os.listdir(base):
-            if fn.startswith("."):
-                continue
-            full = os.path.join(base, fn)
-            if os.path.isdir(full):
-                continue
-            _maybe_add(full)
-            if len(items) >= limit:
-                break
+        for fn in os.listdir(search_root):
+            _add(os.path.join(search_root, fn))
 
     items.sort(key=lambda x: x["name"].lower())
     return jsonify(ok=True, items=items[:limit])

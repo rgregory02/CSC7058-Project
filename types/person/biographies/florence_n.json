@@ -4,7 +4,7 @@
     "name": "Florence N",
     "type": "person",
     "created": "2025-09-01T13:22:07.508040+00:00",
-    "updated": "2025-09-01T16:38:54.806725+00:00",
+    "updated": "2025-09-01T17:52:11.449600+00:00",
     "entries": [
         {
             "created": "2025-09-01T13:22:17.029359+00:00",
@@ -86,6 +86,60 @@
                         "notes": "Direct date entry"
                     },
                     "created": "2025-09-01T16:38:54.806681+00:00"
+                }
+            ]
+        },
+        {
+            "created": "2025-09-01T17:51:36.972379+00:00",
+            "updated": "2025-09-01T17:52:11.449600+00:00",
+            "events": [
+                {
+                    "group_key": "milestone",
+                    "option_id": "Graduation",
+                    "option_display": "Graduation",
+                    "link_type": "buildings",
+                    "linked_bio": "educational_buildings/school/blue_primary_school",
+                    "confidence": 80,
+                    "time": {
+                        "label_type": "date",
+                        "confidence": 100,
+                        "date_value": "2025-09-17"
+                    },
+                    "time_normalised": {
+                        "kind": "date",
+                        "start_iso": "2025-09-17",
+                        "end_iso": "2025-09-17",
+                        "start_ts": 1758067200,
+                        "end_ts": 1758067200,
+                        "precision": "exact",
+                        "age_years": null,
+                        "notes": "Direct date entry"
+                    },
+                    "created": "2025-09-01T17:51:36.990874+00:00"
+                },
+                {
+                    "group_key": "milestone",
+                    "option_id": "Adoption",
+                    "option_display": "Adoption",
+                    "link_type": "person",
+                    "linked_bio": "joseph_lister",
+                    "confidence": 78,
+                    "time": {
+                        "label_type": "date",
+                        "confidence": 100,
+                        "date_value": "2025-09-18"
+                    },
+                    "time_normalised": {
+                        "kind": "date",
+                        "start_iso": "2025-09-18",
+                        "end_iso": "2025-09-18",
+                        "start_ts": 1758153600,
+                        "end_ts": 1758153600,
+                        "precision": "exact",
+                        "age_years": null,
+                        "notes": "Direct date entry"
+                    },
+                    "created": "2025-09-01T17:52:11.449580+00:00"
                 }
             ]
         }

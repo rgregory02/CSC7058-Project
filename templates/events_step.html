@@ -142,222 +142,314 @@
   .child-wrap { display: inline-flex; gap: 8px; align-items: center; }
 </style>
 
-  <script>
-    // --- utilities ---
-    function parseJSONFromScript(id){
-      try{ return JSON.parse((document.getElementById(id)?.textContent) || '{}'); }
-      catch(e){ return {}; }
-    }
+<script>
 
-    // Will be filled AFTER the payload <script> exists in the DOM.
-    let TIME_OPTIONS_BY_KEY = {};
-    let OPTIONS = [];
-
-    function normaliseTypeLabel(s){
-    // "Buildings" -> "buildings", "Link To Orgs" -> "link_to_orgs"
-    return (s||'').trim().toLowerCase().replace(/\s+/g,'_');
+  function prettyName(s){
+    return (s || '')
+      .trim()
+      .replace(/[_-]+/g, ' ')
+      .replace(/\b\w/g, m => m.toUpperCase());
+  }
+  // --- utilities ---
+  function parseJSONFromScript(id){
+    try{ return JSON.parse((document.getElementById(id)?.textContent) || '{}'); }
+    catch(e){ return {}; }
+  }
+  async function fetchJSON(url){
+    const res = await fetch(url);
+    let data = {};
+    try{ data = await res.json(); }catch(_){}
+    if(!res.ok || data.ok === false) throw new Error(data.error || res.statusText);
+    return data;
   }
 
-  async function fillTargetsForRow(row){
-    const typeSel = row.querySelector('select[name="row_link_type[]"]');
-    const targetSel = row.querySelector('select[name="row_link_bio[]"]');
-    if (!typeSel || !targetSel) return;
+  // Will be filled AFTER the payload <script> exists in the DOM.
+  let TIME_OPTIONS_BY_KEY = {};
+  let OPTIONS = [];
 
-    const type = normaliseTypeLabel(typeSel.value);
-    targetSel.innerHTML = '<option value="">(none)</option>';
-    if (!type) return;
+  // ---------- TIME UI (unchanged) ----------
+  function wireTimeVisibility(row){
+    const kindSel   = row.querySelector('select[name="row_time_kind[]"]');
+    const dateBox   = row.querySelector('[data-time="date"]');
+    const rangeBox  = row.querySelector('[data-time="range"]');
+    const subBox    = row.querySelector('[data-time="sub"]');
+    const labelBox  = row.querySelector('[data-time="label"]');
+    const labelSel  = row.querySelector('select[name="row_time_label[]"]');
+    const labelFree = row.querySelector('input[name="row_time_label_free[]"]');
 
-    try{
-      const res  = await fetch(`/api/bios/list?type=${encodeURIComponent(type)}&recursive=1&limit=1000`);
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error || 'Failed to load');
+    const update = () => {
+      const k = (kindSel.value || '').trim();
+      const hasFolder = !!TIME_OPTIONS_BY_KEY[k];
 
-      (data.items || []).forEach(it => {
-        // Prefer stable nested key if present (e.g. "educational_buildings/blue_primary_school")
-        const value = it.key || it.id;
-        const text  = it.name || it.id;
-        targetSel.add(new Option(text, value));
+      // visibility
+      dateBox.classList.toggle('hidden', k !== 'date');
+      rangeBox.classList.toggle('hidden', k !== 'range');
+      labelBox.classList.toggle('hidden', !hasFolder);
+      // sub visible only when not date/range and no folder-backed labels
+      subBox.classList.toggle('hidden', (k === '' || k === 'date' || k === 'range' || hasFolder));
+
+      // populate labels for folder-backed kinds
+      if (hasFolder && labelSel){
+        const opts = TIME_OPTIONS_BY_KEY[k] || [];
+        labelSel.innerHTML = '<option value="">— choose time label —</option>' +
+          opts.map(o => `<option value="${o.id}">${o.display}</option>`).join('');
+      } else if (labelSel){
+        labelSel.innerHTML = '';
+      }
+
+      // optional cleanup when hidden
+      if (labelBox.classList.contains('hidden') && labelFree) labelFree.value = '';
+      if (subBox.classList.contains('hidden')){
+        const subIn = row.querySelector('input[name="row_time_subvalue[]"]');
+        if (subIn) subIn.value = '';
+      }
+    };
+
+    kindSel.addEventListener('change', update);
+    update();
+  }
+
+  // Child option dropdown for some event options (unchanged)
+  function refreshChildSelect(){
+    const optSel = document.getElementById('option_id');
+    const childWrap = document.getElementById('child_wrap');
+    const childSel  = document.getElementById('child_option_id');
+    childSel.innerHTML = '';
+    childWrap.classList.add('hidden');
+
+    if(!optSel) return;
+    const id = optSel.value;
+    const opt = OPTIONS.find(o => o.id === id);
+    if(opt && Array.isArray(opt.children) && opt.children.length){
+      childWrap.classList.remove('hidden');
+      childSel.appendChild(new Option('— choose —', ''));
+      opt.children.forEach(c => {
+        const label = c.label || c.display || c.id;
+        childSel.appendChild(new Option(label, c.id));
       });
-    }catch(err){
-      console.error('[link targets] load failed:', err);
     }
   }
 
+  // Returns the number of bios in a folder, recursively (includes descendants)
+  async function getRecursiveCount(type, folderKey){
+    const u = new URL('/api/bios/list', location.origin);
+    u.searchParams.set('type', type);
+    u.searchParams.set('recursive', '1');   // include descendants
+    u.searchParams.set('limit', '100000');  // practical upper bound
+    if (folderKey) u.searchParams.set('folder', folderKey);
+    const { items = [] } = await fetchJSON(u.toString());
+    return items.length;
+  }
 
-    function wireTimeVisibility(row){
-      const kindSel   = row.querySelector('select[name="row_time_kind[]"]');
-      const dateBox   = row.querySelector('[data-time="date"]');
-      const rangeBox  = row.querySelector('[data-time="range"]');
-      const subBox    = row.querySelector('[data-time="sub"]');
-      const labelBox  = row.querySelector('[data-time="label"]');
-      const labelSel  = row.querySelector('select[name="row_time_label[]"]');
-      const labelFree = row.querySelector('input[name="row_time_label_free[]"]');
+  async function loadFoldersFor(selectEl, type, parentKey){
+    // Always start with a root entry
+    selectEl.innerHTML = '<option value="">(root)</option>';
+    try{
+      const u = new URL('/api/bios/folders', location.origin);
+      u.searchParams.set('type', type);
+      if (parentKey) u.searchParams.set('parent', parentKey);
 
-      const update = () => {
-        const k = (kindSel.value || '').trim();
-        const hasFolder = !!TIME_OPTIONS_BY_KEY[k];
+      // API returns: items: [{ name, label, key, count }]
+      const { items = [] } = await fetchJSON(u.toString());
 
-        // visibility
-        dateBox.classList.toggle('hidden', k !== 'date');
-        rangeBox.classList.toggle('hidden', k !== 'range');
-        labelBox.classList.toggle('hidden', !hasFolder);
-        // sub visible only when not date/range and no folder-backed labels
-        subBox.classList.toggle('hidden', (k === '' || k === 'date' || k === 'range' || hasFolder));
+      const isTopLevel = !parentKey;
 
-        // populate labels for folder-backed kinds
-        if (hasFolder && labelSel){
-          const opts = TIME_OPTIONS_BY_KEY[k] || [];
-          labelSel.innerHTML = '<option value="">— choose time label —</option>' +
-            opts.map(o => `<option value="${o.id}">${o.display}</option>`).join('');
-        } else if (labelSel){
-          labelSel.innerHTML = '';
-        }
-
-        // optional cleanup when hidden
-        if (labelBox.classList.contains('hidden') && labelFree) labelFree.value = '';
-        if (subBox.classList.contains('hidden')){
-          const subIn = row.querySelector('input[name="row_time_subvalue[]"]');
-          if (subIn) subIn.value = '';
-        }
-      };
-
-      kindSel.addEventListener('change', update);
-      update();
-    }
-
-    function refreshChildSelect(){
-      const optSel = document.getElementById('option_id');
-      const childWrap = document.getElementById('child_wrap');
-      const childSel  = document.getElementById('child_option_id');
-      childSel.innerHTML = '';
-      childWrap.classList.add('hidden');
-
-      if(!optSel) return;
-      const id = optSel.value;
-      const opt = OPTIONS.find(o => o.id === id);
-      if(opt && Array.isArray(opt.children) && opt.children.length){
-        childWrap.classList.remove('hidden');
-        childSel.appendChild(new Option('— choose —', ''));
-        opt.children.forEach(c => {
-          const label = c.label || c.display || c.id;
-          childSel.appendChild(new Option(label, c.id));
+      if (isTopLevel){
+        // For top-level, show TOTALS (including descendants)
+        const totals = await Promise.all(items.map(i => getRecursiveCount(type, i.key)));
+        items.forEach((i, idx) => {
+          const nice = prettyName(i.label || i.name || i.key);
+          const cnt  = totals[idx] || 0;
+          selectEl.add(new Option(`${nice}${cnt ? ` (${cnt})` : ''}`, i.key));
+        });
+      } else {
+        // For subfolders, direct counts are fine
+        items.forEach(i => {
+          const nice = prettyName(i.label || i.name || i.key);
+          const cnt  = i.count || 0; // direct count (this level)
+          selectEl.add(new Option(`${nice}${cnt ? ` (${cnt})` : ''}`, i.key));
         });
       }
+    }catch(e){
+      console.warn('[folders] load failed:', e.message);
+      // keep just (root)
+    }
+  }
+
+  async function loadBiosFor(selectEl, type, folderKey){
+    selectEl.innerHTML = '<option value="">(none)</option>';
+    try{
+      const u = new URL('/api/bios/list', location.origin);
+      u.searchParams.set('type', type);
+      if (folderKey) u.searchParams.set('folder', folderKey);
+      u.searchParams.set('recursive', '0');  // only this folder
+      u.searchParams.set('limit', '1000');
+      const {items=[]} = await fetchJSON(u.toString());
+      items.forEach(it => {
+        // prefer stable key when present
+        const val = it.key || it.id;
+        const name = it.name || it.id;
+        selectEl.add(new Option(name, val));
+      });
+    }catch(e){
+      console.warn('[bios] load failed:', e.message);
+    }
+  }
+
+  function wireRowFolderPickers(row){
+    const linkTypesTmpl = document.getElementById('linkTypeTemplate');
+    const typeSel = row.querySelector('.link-type');
+    const f1Sel   = row.querySelector('.folder-1');
+    const f2Wrap  = row.querySelector('.folder2-wrap');
+    const f2Sel   = row.querySelector('.folder-2');
+    const bioSel  = row.querySelector('.link-target');
+
+    // fill link types from template
+    typeSel.innerHTML = Array.from(linkTypesTmpl.options)
+      .map(o => `<option value="${o.value}">${o.text}</option>`).join('');
+
+    async function refreshForType(){
+      const t = (typeSel.value || '').trim();
+      await loadFoldersFor(f1Sel, t, '');
+      f2Wrap.classList.add('hidden');
+      await loadBiosFor(bioSel, t, f1Sel.value || '');
+    }
+    async function refreshForParent(){
+      const t = (typeSel.value || '').trim();
+      await loadFoldersFor(f2Sel, t, f1Sel.value || '');
+      const hasChildren = (f2Sel.options.length > 1);
+      f2Wrap.classList.toggle('hidden', !hasChildren);
+      const folderKey = hasChildren ? f2Sel.value : (f1Sel.value || '');
+      await loadBiosFor(bioSel, t, folderKey);
+    }
+    async function refreshForChild(){
+      const t = (typeSel.value || '').trim();
+      await loadBiosFor(bioSel, t, (f2Sel.value || f1Sel.value || ''));
     }
 
-    function addRowFromSelected(){
-      const linkable = parseJSONFromScript('linkable_payload');
+    typeSel.addEventListener('change', refreshForType);
+    f1Sel.addEventListener('change', refreshForParent);
+    f2Sel.addEventListener('change', refreshForChild);
 
-      const optSel   = document.getElementById('option_id');
-      const childSel = document.getElementById('child_option_id');
-      const optId    = optSel?.value || '';
-      if(!optId){ alert('Pick an option first.'); return; }
-      const optText  = optSel?.options[optSel.selectedIndex]?.text || optId;
+    // initial
+    refreshForType();
+  }
 
-      const childShown = childSel && !childSel.closest('.hidden');
-      const childId    = childShown ? (childSel.value || '') : '';
-      const childText  = childShown ? (childSel.options[childSel.selectedIndex]?.text || childId) : '';
+  // ---------- Build row & wire everything ----------
+  function addRowFromSelected(){
+    const optSel   = document.getElementById('option_id');
+    const childSel = document.getElementById('child_option_id');
+    const optId    = optSel?.value || '';
+    if(!optId){ alert('Pick an option first.'); return; }
+    const optText  = optSel?.options[optSel.selectedIndex]?.text || optId;
 
-      const linkTypesTmpl = document.getElementById('linkTypeTemplate');
-      const timeKindsTmpl = document.getElementById('timeKindsTemplate');
+    const childShown = childSel && !childSel.closest('.hidden');
+    const childId    = childShown ? (childSel.value || '') : '';
+    const childText  = childShown ? (childSel.options[childSel.selectedIndex]?.text || childId) : '';
 
-      const row  = document.createElement('div');
-      row.className = 'event-row';
-      row.innerHTML = `
-        <div class="row">
-          <strong style="min-width:120px">Option:</strong>
-          <span>${optText}${childText ? ' → ' + childText : ''}</span>
-          <input type="hidden" name="row_option_id[]" value="${optId}">
-          <input type="hidden" name="row_option_display[]" value="${(childText||optText)}">
-          <input type="hidden" name="row_child_option_id[]" value="${childId}">
-        </div>
+    const timeKindsTmpl = document.getElementById('timeKindsTemplate');
 
-        <div class="row">
-          <label>Link type</label>
-          <select name="row_link_type[]">
-            ${Array.from(linkTypesTmpl.options).map(o => `<option value="${o.value}">${o.text}</option>`).join('')}
-          </select>
+    const row  = document.createElement('div');
+    row.className = 'event-row';
+    row.innerHTML = `
+      <div class="row">
+        <strong style="min-width:120px">Option:</strong>
+        <span>${optText}${childText ? ' → ' + childText : ''}</span>
+        <input type="hidden" name="row_option_id[]" value="${optId}">
+        <input type="hidden" name="row_option_display[]" value="${(childText||optText)}">
+        <input type="hidden" name="row_child_option_id[]" value="${childId}">
+      </div>
 
-          <label>Target</label>
-          <select name="row_link_bio[]"></select>
+      <div class="row">
+        <label>Link type</label>
+        <select name="row_link_type[]" class="link-type"></select>
 
-          <label>Confidence</label>
-          <input type="range" name="row_confidence[]" min="0" max="100" value="100"
-                 oninput="this.nextElementSibling.textContent=this.value + '%'">
-          <span class="small">100%</span>
+        <label>Folder</label>
+        <select name="row_link_folder1[]" class="folder-1"></select>
 
-          <button type="button" class="btn outline" onclick="this.closest('.event-row').remove()">Remove</button>
-        </div>
+        <span class="child-wrap folder2-wrap hidden">
+          <label>Subfolder</label>
+          <select name="row_link_folder2[]" class="folder-2"></select>
+        </span>
 
-        <div class="row">
-          <strong>Time</strong>
-          <select name="row_time_kind[]">
-            ${Array.from(timeKindsTmpl.options).map(o => `<option value="${o.value}">${o.text}</option>`).join('')}
-          </select>
+        <label>Target</label>
+        <select name="row_link_bio[]" class="link-target"></select>
 
-          <span data-time="date" class="hidden">
-            <input type="date" name="row_date_value[]" placeholder="YYYY-MM-DD">
-          </span>
+        <label>Confidence</label>
+        <input type="range" name="row_confidence[]" min="0" max="100" value="100"
+               oninput="this.nextElementSibling.textContent=this.value + '%'">
+        <span class="small">100%</span>
 
-          <span data-time="range" class="hidden">
-            <input type="text" name="row_start_date[]" placeholder="start (YYYY|YYYY-MM|YYYY-MM-DD)">
-            <input type="text" name="row_end_date[]"   placeholder="end (optional)">
-          </span>
+        <button type="button" class="btn outline" onclick="this.closest('.event-row').remove()">Remove</button>
+      </div>
 
-          <span data-time="sub" class="hidden">
-            <input type="text" name="row_time_subvalue[]" placeholder="e.g. toddler / WW2 / 1990s">
-          </span>
+      <div class="row">
+        <strong>Time</strong>
+        <select name="row_time_kind[]">
+          ${Array.from(timeKindsTmpl.options).map(o => `<option value="${o.value}">${o.text}</option>`).join('')}
+        </select>
 
-          <span data-time="label" class="hidden" style="display:inline-flex; gap:8px; align-items:center;">
-            <!-- NOTE: starts empty; will be populated via TIME_OPTIONS_BY_KEY based on selected kind -->
-            <select name="row_time_label[]"></select>
-            <input type="text" name="row_time_label_free[]" placeholder="or enter custom period">
-          </span>
+        <span data-time="date" class="hidden">
+          <input type="date" name="row_date_value[]" placeholder="YYYY-MM-DD">
+        </span>
 
-          <label>Conf</label>
-          <input type="range" name="row_time_confidence[]" min="0" max="100" value="100"
-                 oninput="this.nextElementSibling.textContent=this.value + '%'">
-          <span class="small">100%</span>
-        </div>
-      `;
-      document.getElementById('rows').appendChild(row);
+        <span data-time="range" class="hidden">
+          <input type="text" name="row_start_date[]" placeholder="start (YYYY|YYYY-MM|YYYY-MM-DD)">
+          <input type="text" name="row_end_date[]"   placeholder="end (optional)">
+        </span>
 
-      const tSel = row.querySelector('select[name="row_link_type[]"]');
-      tSel.addEventListener('change', () => fillTargetsForRow(row));
-      fillTargetsForRow(row);
+        <span data-time="sub" class="hidden">
+          <input type="text" name="row_time_subvalue[]" placeholder="e.g. toddler / WW2 / 1990s">
+        </span>
 
-      wireTimeVisibility(row);
+        <span data-time="label" class="hidden" style="display:inline-flex; gap:8px; align-items:center;">
+          <select name="row_time_label[]"></select>
+          <input type="text" name="row_time_label_free[]" placeholder="or enter custom period">
+        </span>
+
+        <label>Conf</label>
+        <input type="range" name="row_time_confidence[]" min="0" max="100" value="100"
+               oninput="this.nextElementSibling.textContent=this.value + '%'">
+        <span class="small">100%</span>
+      </div>
+    `;
+    document.getElementById('rows').appendChild(row);
+
+    // Wire folder-aware picker + time UI
+    wireRowFolderPickers(row);
+    wireTimeVisibility(row);
+  }
+
+  // ---- prevent auto-post; save only on explicit buttons ----
+  function onGroupChange(sel){
+    const params = new URLSearchParams(window.location.search);
+    params.set('group_key', sel.value || '');
+    params.set('start', '1');
+    window.location.search = params.toString();
+  }
+  function markSaveIntent(val){
+    const el = document.getElementById('do_save');
+    if (el) el.value = val ? '1' : '';
+  }
+  function guardSubmit(e){
+    const el = document.getElementById('do_save');
+    if (!el || el.value !== '1'){
+      e.preventDefault();
+      return false;
     }
+    return true;
+  }
 
-    // ---- prevent auto-post; save only on explicit buttons ----
-    function onGroupChange(sel){
-      const params = new URLSearchParams(window.location.search);
-      params.set('group_key', sel.value || '');
-      params.set('start', '1');
-      window.location.search = params.toString();
-    }
-    function markSaveIntent(val){
-      const el = document.getElementById('do_save');
-      if (el) el.value = val ? '1' : '';
-    }
-    function guardSubmit(e){
-      const el = document.getElementById('do_save');
-      if (!el || el.value !== '1'){
-        e.preventDefault();
-        return false;
-      }
-      return true;
-    }
+  document.addEventListener('DOMContentLoaded', () => {
+    // Load payloads NOW that the script tags exist
+    TIME_OPTIONS_BY_KEY = parseJSONFromScript('time_options_payload');
+    OPTIONS = {{ (options or []) | tojson }};
 
-    document.addEventListener('DOMContentLoaded', () => {
-      // Load payloads NOW that the script tags exist
-      TIME_OPTIONS_BY_KEY = parseJSONFromScript('time_options_payload');
-      OPTIONS = {{ (options or []) | tojson }};
+    refreshChildSelect();
+    document.getElementById('option_id')?.addEventListener('change', refreshChildSelect);
+  });
+</script>
 
-      refreshChildSelect();
-      document.getElementById('option_id')?.addEventListener('change', refreshChildSelect);
-    });
-  </script>
 </head>
 <body>
 <div class="box">
@@ -403,7 +495,7 @@
 {% if not start and not has_events %}
   <section class="hero">
     <h3 style="margin-top:0;font-size:20px">Add your first event</h3>
-    <p class="small">Choose a group, pick an option (and child if offered), then press <strong>+ Add Row</strong> to set link &amp; time.</p>
+    <p class="small">Choose a group, pick an option (and child if offered), then press <strong>+ Add Event Details</strong> to set link &amp; time.</p>
     <div style="margin-top:14px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
       <a class="btn primary" href="{{ url_for('general_step_events', type_name=type_name, bio_id=bio_id) }}?start=1">
         Start adding events
@@ -462,10 +554,10 @@
   <select id="child_option_id" name="child_option_id"></select>
 </span>
 
-          <button type="button" class="btn outline" onclick="addRowFromSelected()">+ Add Row</button>
+          <button type="button" class="btn outline" onclick="addRowFromSelected()">+ Add Event Details</button>
         </div>
         <div class="small muted" style="margin-top:-4px;">
-          After <strong>+ Add Row</strong>, set link &amp; time for this event below.
+          After <strong>+ Add Event Details</strong>, set link &amp; time for this event below.
         </div>
       </div>
 
@@ -533,7 +625,7 @@
       </ul>
     {% else %}
       <div class="small">
-        No events yet in this entry. Build one on the left, click <strong>+ Add Row</strong>, then save.
+        No events yet in this entry. Build one on the left, click <strong>+ Add Event Details</strong>, then save.
         You can add multiple rows before saving.
       </div>
     {% endif %}
