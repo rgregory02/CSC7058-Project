@@ -2,47 +2,114 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>{{ type_name|replace('_',' ')|title }} – Properties</title>
+  <title>{{ type_name|replace('_',' ')|title }} — Properties</title>
   <link rel="stylesheet" href="/static/styles.css">
   <style>
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
-    .card{border:1px solid #e5e7eb;border-radius:12px;padding:14px;background:#fff}
-    .muted{color:#6b7280;font-size:.9em}
-    .btn{display:inline-block;padding:8px 12px;border-radius:8px;background:#6c63ff;color:#fff;text-decoration:none}
-    .btn.secondary{background:#eef0f7;color:#333}
+    body{background:#f6f7fb;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    .box{max-width:1100px;margin:40px auto;background:#fff;padding:24px;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.06)}
+    h1{margin:0 0 4px;font-weight:750}
+    .muted{color:#657085}
+    .toolbar{display:flex;gap:10px;align-items:center;justify-content:space-between;margin:12px 0 16px}
+    .left{display:flex;gap:8px;align-items:center;flex:1}
+    .right{display:flex;gap:8px;align-items:center}
+    .search{flex:1;min-width:260px;padding:10px;border:1px solid #dfe3ee;border-radius:10px;background:#fff}
+    .btn{display:inline-block;padding:8px 12px;border-radius:10px;background:#6c63ff;color:#fff;text-decoration:none;font-weight:600;border:1px solid #6c63ff;white-space:nowrap}
+    .btn.secondary{background:#eef0f7;color:#333;border-color:#e3e5ee}
+    .btn.danger{background:#c62828;border-color:#c62828;color:#fff}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+    .card{border:1px solid #e3e5ee;border-radius:12px;padding:14px;background:#fff;display:flex;flex-direction:column;gap:10px}
+    .head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+    .title{margin:0;font-size:16px;font-weight:700}
+    .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+    .chip{font-size:11px;border-radius:999px;padding:3px 8px;background:#f3f4f9;border:1px solid #e6e8f2;color:#445}
+    .code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,monospace;font-size:12px;background:#fafbff;border:1px solid #e7e9f2;border-radius:6px;padding:2px 6px}
+    .desc{color:#4b5563;font-size:13px;line-height:1.35}
+    .kv{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .kv .label{font-size:12px;color:#6b7280}
+    .actions{display:flex;gap:8px;margin-top:auto}
+    .empty{color:#657085;font-size:14px;background:#fafbff;border:1px dashed #e4e6f1;border-radius:12px;padding:14px;text-align:center}
   </style>
 </head>
 <body>
   <div class="box">
-    <h1>{{ type_name|replace('_',' ')|title }} — Properties</h1>
-    <div style="margin:10px 0 16px">
-      <a class="btn" href="{{ url_for('new_property', type_name=type_name) }}">➕ New Property</a>
-      <a class="btn secondary" href="{{ url_for('type_browse', type_name=type_name) }}">📂 Back to {{ type_name|title }}</a>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div style="margin-bottom:10px">
+          {% for cat, msg in messages %}
+            <span class="chip">{{ msg }}</span>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <h1>🧩 Properties — {{ type_name|replace('_',' ')|title }}</h1>
+
+    <div class="toolbar">
+      <div class="left">
+        <input id="search" class="search" placeholder="Filter properties…" oninput="filterProps(this.value)">
+      </div>
+      <div class="right">
+        <a class="btn" href="{{ url_for('new_property', type_name=type_name) }}">➕ New Property</a>
+        <a class="btn secondary" href="{{ url_for('type_browse', type_name=type_name) }}">⬅ Back</a>
+      </div>
     </div>
 
     {% if subfolders %}
-      <p class="muted">Label subfolders detected: {{ subfolders|join(', ') }}</p>
+      <div class="muted" style="margin:-4px 0 14px">
+        Label subfolders detected:
+        <span class="code">{{ subfolders|join(', ') }}</span>
+      </div>
     {% endif %}
 
     {% if properties %}
-      <div class="grid">
+      <div id="grid" class="grid">
         {% for p in properties %}
-          <div class="card">
-            <strong>{{ p.name }}</strong>
-            <div class="muted">key: {{ p.key }}</div>
-            {% if p.description %}<div style="margin:6px 0">{{ p.description }}</div>{% endif %}
-            <div style="margin-top:8px">
-              <a class="btn" href="{{ url_for('edit_property', type_name=type_name, prop_key=p.key) }}">Edit</a>
-              <form method="POST" action="{{ url_for('delete_property', type_name=type_name, prop_key=p.key) }}" style="display:inline" onsubmit="return confirm('Delete property {{ p.key }}? This only removes the property JSON.')">
-                <button class="btn secondary" type="submit">Delete</button>
+          {% set src = p.source if p.source is defined else (p.get('source') if p.get is defined else {}) %}
+          {% set refer = p.refer_to if p.refer_to is defined else (p.get('refer_to') if p.get is defined else {}) %}
+          <div class="card prop"
+               data-key="{{ (p.key ~ ' ' ~ p.name ~ ' ' ~ (p.description or '') ~ ' ' ~ (src.path if src else '') )|lower }}">
+            <div class="head">
+              <div>
+                <h3 class="title">{{ p.name or p.key }}</h3>
+                <div class="chips">
+                  <span class="chip">key: <span class="code" style="margin-left:4px">{{ p.key }}</span></span>
+                  {% if src and src.kind %}<span class="chip">source: {{ src.kind }}</span>{% endif %}
+                  {% if src and src.path %}<span class="chip">path: {{ src.path }}</span>{% endif %}
+                  {% if refer and refer.type %}<span class="chip">links to: {{ refer.type }}</span>{% endif %}
+                </div>
+              </div>
+            </div>
+
+            {% if p.description %}
+              <div class="desc">{{ p.description }}</div>
+            {% endif %}
+
+            <div class="actions">
+              <a class="btn" href="{{ url_for('edit_property', type_name=type_name, prop_key=p.key) }}">✏️ Edit</a>
+              <form method="POST"
+                    action="{{ url_for('delete_property', type_name=type_name, prop_key=p.key) }}"
+                    onsubmit="return confirm('Delete property {{ p.key }}? This only removes the property JSON.');">
+                <button class="btn danger" type="submit">🗑️ Delete</button>
               </form>
             </div>
           </div>
         {% endfor %}
       </div>
     {% else %}
-      <p>No properties yet. Create your first one.</p>
+      <div class="empty">
+        No properties yet. Click <strong>New Property</strong> to create one that points to a labels folder or external source.
+      </div>
     {% endif %}
   </div>
+
+  <script>
+    function filterProps(q){
+      q = (q||"").toLowerCase();
+      document.querySelectorAll("#grid .prop").forEach(card=>{
+        const key = card.getAttribute("data-key") || "";
+        card.style.display = key.includes(q) ? "" : "none";
+      });
+    }
+  </script>
 </body>
 </html>
