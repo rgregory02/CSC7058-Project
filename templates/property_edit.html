@@ -4,24 +4,26 @@
   <meta charset="utf-8">
   <title>{{ 'New' if mode=='new' else 'Edit' }} Property – {{ type_name|replace('_',' ')|title }}</title>
   <link rel="stylesheet" href="/static/styles.css">
-  <style>
-    body{background:#f6f7fb;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
-    .wrap{max-width:1000px;margin:30px auto;background:#fff;border:1px solid #e7e9f2;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.05);padding:24px}
-    h1{margin:0 0 8px}
-    .muted{color:#657085}
-    form{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-    .full{grid-column:1/-1}
-    label{font-weight:600;display:block;margin-bottom:6px}
-    input[type=text], textarea, select{width:100%;padding:10px;border:1px solid #d9dbe7;border-radius:8px}
-    textarea{min-height:90px}
-    .row{display:flex;gap:12px;align-items:center}
-    .btn{display:inline-block;background:#6c63ff;color:#fff;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:600;border:none;cursor:pointer}
-    .btn.secondary{background:#eef0f7;color:#333}
-    .actions{grid-column:1/-1;display:flex;gap:10px;justify-content:flex-end;margin-top:8px}
-    small.help{display:block;color:#8b90a0;margin-top:4px}
-    .pill{display:inline-block;background:#f2f4ff;border:1px solid #dfe3ff;padding:4px 8px;border-radius:999px;font-size:12px;color:#495}
-    .twoCols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  </style>
+<style>
+  body{background:#f6f7fb;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+  .wrap{max-width:1000px;margin:30px auto;background:#fff;border:1px solid #e7e9f2;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.05);padding:24px}
+  h1{margin:0 0 8px}
+  .muted{color:#657085}
+  form{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .full{grid-column:1/-1}
+  label{font-weight:600;display:block;margin-bottom:6px}
+  input[type=text], textarea, select{width:100%;padding:10px;border:1px solid #d9dbe7;border-radius:8px}
+  textarea{min-height:90px}
+  .row{display:flex;gap:12px;align-items:center}
+  .btn{display:inline-block;background:#6c63ff;color:#fff;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:600;border:none;cursor:pointer}
+  .btn.secondary{background:#eef0f7;color:#333}
+  .actions{grid-column:1/-1;display:flex;gap:10px;justify-content:flex-end;margin-top:8px}
+  small.help{display:block;color:#8b90a0;margin-top:4px;grid-column:auto}  /* ⟵ guard against global grid span */
+  .pill{display:inline-block;background:#f2f4ff;border:1px solid #dfe3ff;padding:4px 8px;border-radius:999px;font-size:12px;color:#495}
+  .twoCols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .hint{display:block;margin-top:6px;color:#666;font-size:.85em}
+  .is-disabled{opacity:.6;pointer-events:none}
+</style>
 </head>
 <body>
   <div class="wrap">
@@ -62,12 +64,67 @@
       </div>
 
       <div>
-        <label for="input">Input type (optional)</label>
-        <input type="text" id="input" name="input"
-               placeholder="e.g. select, multi, free_text"
-               value="{{ prop.input if prop and prop.input is defined else '' }}">
-        <small class="help">Purely informational for now; helpful for UI hints.</small>
-      </div>
+<div class="field">
+  <label for="input_kind">Input kind</label>
+  {% set _inp = (prop.input if prop and prop.input is defined else {}) %}
+  {% set _kind = _inp.kind if _inp and _inp.kind is defined else '' %}
+  <select id="input_kind" name="input_kind">
+    <option value="" {{ '' if _kind else 'selected' }}>— none — (use option files below)</option>
+    <option value="text"           {% if _kind=='text' %}selected{% endif %}>Text</option>
+    <option value="textarea"       {% if _kind=='textarea' %}selected{% endif %}>Textarea</option>
+    <option value="number"         {% if _kind=='number' %}selected{% endif %}>Number</option>
+    <option value="date"           {% if _kind=='date' %}selected{% endif %}>Date (calendar)</option>
+    <option value="month"          {% if _kind=='month' %}selected{% endif %}>Month</option>
+    <option value="datetime-local" {% if _kind=='datetime-local' %}selected{% endif %}>Date & time</option>
+    <option value="email"          {% if _kind=='email' %}selected{% endif %}>Email</option>
+    <option value="tel"            {% if _kind=='tel' %}selected{% endif %}>Telephone</option>
+    <option value="select"         {% if _kind=='select' %}selected{% endif %}>Single select (inline)</option>
+  </select>
+  <small class="hint">Choose a direct input. Leave blank to use an options group (Source section).</small>
+</div>
+
+<div id="input_extras" class="field-grid" style="display:none;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
+  <div class="field">
+    <label for="input_placeholder">Placeholder</label>
+    <input id="input_placeholder" name="input_placeholder" type="text"
+           value="{{ _inp.placeholder if _inp and _inp.placeholder is defined else '' }}">
+  </div>
+  <div class="field" style="display:flex;align-items:end">
+    <label style="display:flex;gap:8px;align-items:center;margin:0">
+      <input type="checkbox" name="input_required"
+             {% if _inp and _inp.required %}checked{% endif %}>
+      Required
+    </label>
+  </div>
+  <div class="field">
+    <label for="input_min_length">Min length</label>
+    <input id="input_min_length" name="input_min_length" type="number" min="0"
+           value="{{ _inp.min_length if _inp and _inp.min_length is defined else '' }}">
+  </div>
+  <div class="field">
+    <label for="input_max_length">Max length</label>
+    <input id="input_max_length" name="input_max_length" type="number" min="0"
+           value="{{ _inp.max_length if _inp and _inp.max_length is defined else '' }}">
+  </div>
+  <div class="field" style="grid-column:1/-1">
+    <label for="input_pattern">Pattern (regex)</label>
+    <input id="input_pattern" name="input_pattern" type="text"
+           placeholder="e.g. ^[A-Za-z\\s-]{2,50}$"
+           value="{{ _inp.pattern if _inp and _inp.pattern is defined else '' }}">
+    <small class="hint">Optional. Used for validation when present.</small>
+  </div>
+</div>
+
+<!-- Only when kind = select -->
+<div id="input_select_opts" class="field" style="display:none">
+  <label for="input_select_options">Select options (one per line)</label>
+  <textarea id="input_select_options" name="input_select_options" rows="4"
+            placeholder="id | Display | Description">{% if _kind=='select' and _inp.options is defined %}
+{% for o in _inp.options %}{{ o.id }}{% if o.display %} | {{ o.display }}{% endif %}{% if o.description %} | {{ o.description }}{% endif %}
+{% endfor %}{% endif %}</textarea>
+  <small class="hint">Saved into <code>input.options</code> on the property JSON.</small>
+</div>
+</div>
 
       <div class="full">
         <label for="description">Description</label>
@@ -337,6 +394,37 @@
     // Ensure visibility is correct on load
     refreshAutoLinkVisibility();
   });
+
+(function(){
+  const kindSel = document.getElementById('input_kind');
+  const extras  = document.getElementById('input_extras');
+  const selBox  = document.getElementById('input_select_opts');
+
+  // Likely ids/names from your “Source” area – disable them when using an input
+  const srcKind = document.querySelector('[name="source_kind"]');
+  const srcType = document.querySelector('[name="source_type"]');
+  const srcPath = document.querySelector('[name="source_path"]');
+  const pickGrp = document.querySelector('[name="pick_group"]');
+
+  function setDisabled(el, on){ if (!el) return; el.disabled = on; el.closest('.field')?.classList.toggle('is-disabled', on); }
+
+  function refresh(){
+    const k = kindSel.value || '';
+    const usingInput = !!k;
+    extras.style.display = usingInput ? 'grid' : 'none';
+    selBox.style.display = (k === 'select') ? 'block' : 'none';
+
+    // Disable “Source” only when an input kind is chosen
+    setDisabled(srcKind, usingInput);
+    setDisabled(srcType, usingInput);
+    setDisabled(srcPath, usingInput);
+    setDisabled(pickGrp, usingInput);
+  }
+  kindSel.addEventListener('change', refresh);
+  // Initial state based on loaded value
+  refresh();
+})();
+
 </script>
 
 </body>

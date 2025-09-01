@@ -1,0 +1,11 @@
+{
+    "name": "Nickname",
+    "description": "",
+    "input": {
+        "kind": "text"
+    },
+    "ui": {
+        "allow_confidence": true,
+        "display_template": "{{ value }}"
+    }
+}

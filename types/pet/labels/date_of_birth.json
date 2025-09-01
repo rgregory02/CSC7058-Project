@@ -1,0 +1,11 @@
+{
+    "name": "Date of Birth",
+    "description": "",
+    "input": {
+        "kind": "date"
+    },
+    "ui": {
+        "allow_confidence": true,
+        "display_template": "On {{ value }}"
+    }
+}
