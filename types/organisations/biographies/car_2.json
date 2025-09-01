@@ -1,0 +1,29 @@
+{
+    "id": "car_2",
+    "uid": "37e656543fa0457abeeba5e2f5973d46",
+    "name": "Car",
+    "type": "organisations",
+    "created": "2025-09-01T05:57:08.615815+00:00",
+    "updated": "2025-09-01T05:57:14.264696+00:00",
+    "entries": [
+        {
+            "created": "2025-09-01T05:57:14.264696+00:00",
+            "updated": "2025-09-01T05:57:14.264696+00:00",
+            "time": {
+                "label_type": "life_stage",
+                "confidence": 100,
+                "subvalue": "preteen"
+            },
+            "time_normalised": {
+                "kind": "life_stage",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "approx",
+                "age_years": 11.5,
+                "notes": "Life stage 'preteen' (no reference date — absolute bounds unknown)"
+            }
+        }
+    ]
+}

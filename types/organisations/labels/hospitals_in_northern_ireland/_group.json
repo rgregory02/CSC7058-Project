@@ -1,0 +1,24 @@
+{
+    "label": "Hospitals in Northern Ireland",
+    "description": "",
+    "order": 999,
+    "ingest": {
+        "kind": "api",
+        "url": "https://query.wikidata.org/sparql",
+        "method": "GET",
+        "headers_env": "",
+        "query_json": {
+            "format": "json",
+            "query": "SELECT ?hospital ?hospitalLabel WHERE { ?hospital wdt:P31 wd:Q16917; wdt:P17 wd:Q27. SERVICE wikibase:label { bd:serviceParam wikibase:language 'en'. } } LIMIT 15"
+        },
+        "array_path": "results.bindings",
+        "field_id": "hospital.value",
+        "field_display": "hospitalLabel.value",
+        "field_desc": "A hospital located in Northern Ireland.",
+        "field_image": "image_url",
+        "max_items": 15,
+        "postprocess": {
+            "strip_wikidata_uri": true
+        }
+    }
+}

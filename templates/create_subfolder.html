@@ -61,12 +61,22 @@
       </div>
 
       <div class="section">
+  <label for="ai_desc">AI helper (optional)</label>
+  <textarea id="ai_desc" placeholder="Describe what you need (e.g., 'labels about hospitals in Ireland')"></textarea>
+  <div class="row" style="align-items:center">
+    <button type="button" class="btn" onclick="aiSuggestIngest()">Generate ingest preset</button>
+    <span id="ai_status" class="small" style="margin-left:8px"></span>
+  </div>
+  <div class="small">We’ll fill the API fields below. Works even without an API key for common Wikidata cases.</div>
+</div>
+
+      <div class="section">
         <label for="populate_mode">Populate labels</label>
-        <select id="populate_mode" name="populate_mode" onchange="togglePopulate()">
-          <option value="manual">Manual (add one now)</option>
-          <option value="api">From API (JSON)</option>
-          <option value="db_sqlite">From Database (SQLite)</option>
-        </select>
+       <select id="populate_mode" name="populate_mode" onchange="togglePopulate()">
+  <option value="manual" selected>Manual (add one now)</option>
+  <option value="api">From API (JSON)</option>
+  <option value="db_sqlite">From Database (SQLite)</option>
+</select>
       </div>
 
       <!-- Manual -->
@@ -104,8 +114,8 @@
           <div>
             <label for="api_method">HTTP Method</label>
             <select id="api_method" name="api_method">
-              <option value="GET">GET</option>
-              <option value="POST" selected>POST</option>
+              <option value="GET" selected>GET</option>
+              <option value="POST">POST</option>
             </select>
           </div>
         </div>
@@ -162,9 +172,13 @@
     <button type="button" class="btn ghost" onclick="presetWikidataExample()">
       Load Wikidata (SPARQL) example
     </button>
+    <button type="button" class="btn ghost" onclick="presetWikidataSearchREST()">
+  Load Wikidata Search (REST) example
+</button>
   </div>
   <div class="small">Example preset only — works for any type if you change the SPARQL and field mappings.</div>
 </div>
+      </div>
 
       <!-- DB (SQLite) -->
       <div id="pane_db" class="section" style="display:none">
@@ -216,45 +230,146 @@
     return true;
   }
   function toggleFirstLabel(){
-    const on = document.getElementById('create_first_label').checked;
-    document.getElementById('firstLabelFields').style.display = on ? '' : 'none';
+    const box = document.getElementById('create_first_label');
+    const on  = !!(box && box.checked);
+    const fld = document.getElementById('firstLabelFields');
+    if (fld) fld.style.display = on ? '' : 'none';
   }
   function updateConf(){
-    const v = document.getElementById('first_label_conf').value;
-    document.getElementById('conf_val').textContent = v + '%';
+    const el = document.getElementById('first_label_conf');
+    const out = document.getElementById('conf_val');
+    if (el && out) out.textContent = (el.value || '0') + '%';
   }
-  function togglePopulate(){
-    const mode = document.getElementById('populate_mode').value;
-    document.getElementById('pane_manual').style.display = (mode === 'manual')     ? ''  : 'none';
-    document.getElementById('pane_api').style.display    = (mode === 'api')        ? ''  : 'none';
-    document.getElementById('pane_db').style.display     = (mode === 'db_sqlite')  ? ''  : 'none';
+
+  function showBlock(id, on) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.style.display = on ? '' : 'none';
   }
-  document.addEventListener('DOMContentLoaded', () => { updateConf(); togglePopulate(); });
+
+  function togglePopulate() {
+    var sel  = document.getElementById('populate_mode');
+    var mode = (sel && sel.value) ? sel.value : 'manual';
+
+    showBlock('pane_manual',   mode === 'manual');
+    showBlock('pane_api',      mode === 'api');
+    showBlock('pane_db',       mode === 'db_sqlite');
+
+    var targetId = (mode === 'api') ? 'pane_api' : (mode === 'db_sqlite' ? 'pane_db' : null);
+    if (targetId) {
+      var t = document.getElementById(targetId);
+      if (t && !t._scrolledOnce) {
+        t._scrolledOnce = true;
+        t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    updateConf();
+    toggleFirstLabel();   // ✅ ensure manual pane matches initial checkbox state
+    togglePopulate();     // ✅ ensure the right pane shows initially
+
+    var sel = document.getElementById('populate_mode');
+    if (sel) ['change','input','click','keyup'].forEach(function(ev){
+      sel.addEventListener(ev, togglePopulate);
+    });
+
+    var conf = document.getElementById('first_label_conf');
+    if (conf) conf.addEventListener('input', updateConf);
+
+    var box = document.getElementById('create_first_label');
+    if (box) box.addEventListener('change', toggleFirstLabel);
+  });
 
   function presetWikidataExample(){
+    var pm = document.getElementById('populate_mode');  // ✅ no optional chaining
+    if (pm) pm.value = 'api';
+    togglePopulate();
+
     document.getElementById('api_url').value = 'https://query.wikidata.org/sparql';
-    document.getElementById('api_method').value = 'POST';
+    document.getElementById('api_method').value = 'GET';
 
     const q = {
-      // Example query; edit to suit ANY type
       query:
         "SELECT ?item ?itemLabel ?shortDescription WHERE {\n" +
-        "  ?item wdt:P31/wdt:P279* wd:Q43229 .  # <-- change QID to target a different class\n" +
+        "  ?item wdt:P31/wdt:P279* wd:Q16917 .  # Hospitals\n" +
+        "  ?item wdt:P17 wd:Q27 .               # Country = Ireland\n" +
         "  SERVICE wikibase:label { bd:serviceParam wikibase:language 'en'. }\n" +
         "  OPTIONAL { ?item schema:description ?shortDescription . FILTER(LANG(?shortDescription)='en') }\n" +
-        "} LIMIT 250",
+        "} LIMIT 15",
       format: "json"
     };
-    document.getElementById('api_query').value = JSON.stringify(q, null, 2);
-
-    document.getElementById('api_array_path').value = 'results.bindings';
-    document.getElementById('api_field_id').value = 'item.value';
+    document.getElementById('api_query').value         = JSON.stringify(q, null, 2);
+    document.getElementById('api_array_path').value    = 'results.bindings';
+    document.getElementById('api_field_id').value      = 'item.value';
     document.getElementById('api_field_display').value = 'itemLabel.value';
-    document.getElementById('api_field_desc').value = 'shortDescription.value';
-    document.getElementById('api_field_image').value = '';
-    document.getElementById('api_max_items').value = 250;
+    document.getElementById('api_field_desc').value    = 'shortDescription.value';
+    document.getElementById('api_field_image').value   = '';
+    document.getElementById('api_max_items').value     = 15;
   }
 
+  function presetWikidataSearchREST(){
+    var pm = document.getElementById('populate_mode');  // ✅ no optional chaining
+    if (pm) pm.value = 'api';
+    togglePopulate();
+
+    document.getElementById('api_url').value    = 'https://www.wikidata.org/w/api.php';
+    document.getElementById('api_method').value = 'GET';
+
+    const params = {
+      action: 'wbsearchentities',
+      search: 'hospital ireland',
+      language: 'en',
+      format: 'json',
+      limit: 15
+    };
+    document.getElementById('api_query').value         = JSON.stringify(params, null, 2);
+    document.getElementById('api_array_path').value    = 'search';
+    document.getElementById('api_field_id').value      = 'id';
+    document.getElementById('api_field_display').value = 'label';
+    document.getElementById('api_field_desc').value    = 'description';
+    document.getElementById('api_field_image').value   = '';
+    document.getElementById('api_max_items').value     = 15;
+  }
+
+  async function aiSuggestIngest(){
+    const desc = (document.getElementById('ai_desc').value || '').trim();
+    const status = document.getElementById('ai_status');
+    if(!desc){ status.textContent = 'Please enter a brief description.'; return; }
+
+    status.textContent = 'Generating…';
+    try{
+      const res = await fetch('/api/ingest/generate', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({description: desc})
+      });
+      const data = await res.json();
+      if(!data.ok){ status.textContent = 'Error: ' + (data.error || 'unknown'); return; }
+      const ing = data.ingest || {};
+
+      var pm = document.getElementById('populate_mode');
+      if (pm) pm.value = 'api';
+      togglePopulate();
+
+      function set(id, val){ const el = document.getElementById(id); if(el){ el.value = (val ?? ''); } }
+      set('api_url',            ing.url);
+      set('api_method',         ing.method || 'GET');
+      set('api_array_path',     ing.array_path || '');
+      set('api_query',          JSON.stringify(ing.query_json || {}, null, 2));
+      set('api_field_id',       ing.field_id || 'id');
+      set('api_field_display',  ing.field_display || 'name');
+      set('api_field_desc',     ing.field_desc || 'description');
+      set('api_field_image',    ing.field_image || '');
+      set('api_max_items',      ing.max_items || 15);
+
+      status.textContent = 'Preset applied ✔';
+    }catch(e){
+      console.error(e);
+      status.textContent = 'Unexpected error.';
+    }
+  }
 </script>
 </body>
 </html>

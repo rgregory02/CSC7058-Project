@@ -1,9 +1,25 @@
 {
-  "name": "Wikidata Hospital Orgs test",
+  "label": "Wikidata Hospital Orgs Test",
   "description": "",
-  "source": {
-    "kind": "self_labels",
-    "path": "wikidata_hospital_orgs_test",
-    "allow_children": true
+  "order": 999,
+  "ingest": {
+    "kind": "api",
+    "url": "https://query.wikidata.org/sparql",
+    "method": "POST",
+    "headers_env": "",
+
+    "query_json": {
+      "query": "SELECT ?item ?itemLabel ?shortDescription WHERE {\n  ?item wdt:P31/wdt:P279* wd:Q43229 .  # Hospitals; change QID to target other classes\n  SERVICE wikibase:label { bd:serviceParam wikibase:language 'en'. }\n  OPTIONAL { ?item schema:description ?shortDescription . FILTER(LANG(?shortDescription)='en') }\n} LIMIT 250",
+      "format": "json"
+    },
+
+    "array_path": "results.bindings",
+    "field_id": "item.value",
+    "field_display": "itemLabel.value",
+    "field_desc": "shortDescription.value",
+    "field_image": "",
+    "max_items": 20,
+
+    "postprocess": { "strip_wikidata_uri": true }
   }
 }

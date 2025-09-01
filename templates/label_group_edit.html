@@ -162,7 +162,9 @@
           </div>
 
           <label for="api_query">JSON body / params (optional)</label>
-          <textarea id="api_query" name="api_query">{{ api.get('query_json','') }}</textarea>
+<textarea id="api_query" name="api_query">
+{{ (api.get('query_json') or api.get('query') or api.get('body') or '') }}
+</textarea>
           <div class="small">If GET and this is a JSON object, keys are sent as query params.</div>
         </details>
 

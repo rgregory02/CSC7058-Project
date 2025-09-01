@@ -1,0 +1,9 @@
+{
+  "id": "q4923313",
+  "display": "Blackrock Clinic",
+  "description": "hospital in Ireland",
+  "image_url": {
+    "type": "uri",
+    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/BlackrockClinic.jpg"
+  }
+}

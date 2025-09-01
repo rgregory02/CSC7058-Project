@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 import json
 import shutil  
@@ -15,6 +16,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from requests import get
 from typing import Optional, Dict, Any, List
+
 
 load_dotenv()
 oai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -2014,6 +2016,146 @@ def api_labels_admin_create_option():
     return {"ok": True, "id": opt_id}
 
 
+def _pluck(obj, dotted):
+    """Safe dotted-path getter."""
+    cur = obj
+    for part in (dotted or "").split("."):
+        if isinstance(cur, dict):
+            cur = cur.get(part)
+        else:
+            return None
+    return cur
+
+def _maybe_qid(s):
+    m = re.search(r'(Q[1-9]\d*)$', str(s or ""))
+    return m.group(1) if m else s
+
+@app.get("/api/labels/group/<type_name>/<path:group_key>/options")
+def api_list_group_options(type_name, group_key):
+    base = os.path.join("types", type_name, "labels")
+    parent_rel, leaf, json_path, opts_dir = _group_paths(base, group_key)
+    if not os.path.exists(json_path):
+        return jsonify(ok=False, error="Group not found"), 404
+
+    out = []
+    if os.path.isdir(opts_dir):
+        for fname in sorted(os.listdir(opts_dir)):
+            if not fname.endswith(".json"): continue
+            d = load_json_as_dict(os.path.join(opts_dir, fname)) or {}
+            out.append({
+                "id": d.get("id") or os.path.splitext(fname)[0],
+                "display": d.get("display"),
+                "description": d.get("description"),
+                "image_url": d.get("image_url")
+            })
+    return jsonify(ok=True, items=out)
+
+@app.get("/api/labels/group/<type_name>/<path:group_key>/ingest/test")
+def api_ingest_test(type_name, group_key):
+    base = os.path.join("types", type_name, "labels")
+    parent_rel, leaf, json_path, _ = _group_paths(base, group_key)
+    g = load_json_as_dict(json_path) or {}
+    ing = g.get("ingest") or {}
+    if ing.get("kind") != "api":
+        return jsonify(ok=False, error="No API ingest configured"), 400
+
+    # prepare request
+    method = (ing.get("method") or "POST").upper()
+    url    = ing.get("url")
+    body   = ing.get("query_json")
+    arrpth = ing.get("array_path") or ""
+    fid    = ing.get("field_id") or "id"
+    fdisp  = ing.get("field_display") or "name"
+    fdesc  = ing.get("field_desc") or "description"
+    fimg   = ing.get("field_image") or "image_url"
+    limit  = int(request.args.get("limit", ing.get("max_items", 50)))
+
+    import requests
+    headers = {"Accept": "application/sparql-results+json, application/json"}
+    # optional bearer from env
+    envk = (ing.get("headers_env") or "").strip()
+    if envk and os.getenv(envk):
+        headers["Authorization"] = f"Bearer {os.getenv(envk)}"
+
+    if method == "GET":
+        params = {}
+        try:
+            if isinstance(body, dict):
+                params = body
+            elif body:
+                params = json.loads(body)
+        except Exception:
+            pass
+        r = requests.get(url, params=params, headers=headers, timeout=30)
+    else:
+        data = body if isinstance(body, (dict, list)) else body
+        r = requests.post(url, json=data if isinstance(data, (dict, list)) else None,
+                          data=None if isinstance(data, (dict, list)) else data,
+                          headers=headers, timeout=30)
+
+    r.raise_for_status()
+    payload = r.json()
+
+    # resolve array
+    arr = payload
+    for p in arrpth.split("."):
+        if not p: continue
+        arr = arr.get(p, []) if isinstance(arr, dict) else []
+    items = []
+    pp = ing.get("postprocess", {}) or {}
+
+    for raw in arr[:limit]:
+        idv   = _pluck(raw, fid)
+        namev = _pluck(raw, fdisp)
+        descv = _pluck(raw, fdesc)
+        imgv  = _pluck(raw, fimg)
+        if pp.get("strip_wikidata_uri"):
+            idv = _maybe_qid(idv)
+        items.append({
+            "id": str(idv or "").strip(),
+            "display": str(namev or "").strip(),
+            "description": str(descv or "").strip(),
+            "image_url": str(imgv or "").strip() or None
+        })
+
+    return jsonify(ok=True, preview=items, count=len(items))
+
+@app.post("/api/labels/group/<type_name>/<path:group_key>/ingest/apply")
+def api_ingest_apply(type_name, group_key):
+    base = os.path.join("types", type_name, "labels")
+    parent_rel, leaf, json_path, opts_dir = _group_paths(base, group_key)
+    os.makedirs(opts_dir, exist_ok=True)
+
+    # reuse test logic to fetch/shape items
+    with app.test_request_context(
+        f"/api/labels/group/{type_name}/{group_key}/ingest/test",
+        query_string={"limit": request.json.get("limit", 1000)}
+    ):
+        preview = api_ingest_test(type_name, group_key).json
+    if not preview.get("ok"):
+        return preview, 400
+
+    if request.json.get("clear_existing"):
+        for f in os.listdir(opts_dir):
+            if f.endswith(".json"):
+                try: os.remove(os.path.join(opts_dir, f))
+                except Exception: pass
+
+    # write option files
+    wrote = 0
+    for it in preview["preview"]:
+        oid = it["id"]
+        if not oid: continue
+        path = os.path.join(opts_dir, f"{oid.lower()}.json")
+        save_dict_as_json(path, {
+            "id": oid,
+            "display": it.get("display") or oid,
+            "description": it.get("description") or "",
+            "image_url": it.get("image_url") or ""
+        })
+        wrote += 1
+
+    return jsonify(ok=True, wrote=wrote, folder=opts_dir)
 
 @app.route("/general_iframe_wizard", methods=["GET", "POST"])
 def general_iframe_wizard():
@@ -4003,7 +4145,6 @@ def api_create_label_values():
 
     return {"ok": True, "written": written}, 200
 
-# in general.py
 @app.route("/diag/llm")
 def diag_llm():
     try:
@@ -4368,6 +4509,127 @@ def add_label(type_name, subfolder_name):
     )
 
 
+# --- AI ingest preset generator ---------------------------------------------
+import os, json, re
+from flask import request, jsonify
+
+def _coerce_ingest(d: dict) -> dict:
+    """Validate/normalize an ingest block coming from the AI."""
+    d = d or {}
+    kind   = (d.get("kind") or "api").strip().lower()
+    url    = (d.get("url") or "").strip()
+    method = (d.get("method") or "GET").strip().upper()
+    if method not in {"GET","POST"}: method = "GET"
+    array_path = (d.get("array_path") or "").strip()
+
+    # field map
+    field_id      = (d.get("field_id") or "id").strip()
+    field_display = (d.get("field_display") or "name").strip()
+    field_desc    = (d.get("field_desc") or "description").strip()
+    field_image   = (d.get("field_image") or "image_url").strip()
+
+    # query/body
+    qj = d.get("query_json")
+    if isinstance(qj, str):
+        try:
+            qj = json.loads(qj)
+        except Exception:
+            qj = None
+    if not isinstance(qj, dict):
+        qj = {}
+
+    try:
+        max_items = int(d.get("max_items", 15))
+    except Exception:
+        max_items = 15
+    max_items = max(1, min(max_items, 500))
+
+    return {
+        "kind": "api",
+        "url": url,
+        "method": method,
+        "query_json": qj,
+        "array_path": array_path,
+        "field_id": field_id,
+        "field_display": field_display,
+        "field_desc": field_desc,
+        "field_image": field_image,
+        "max_items": max_items,
+    }
+
+def _deterministic_wikidata_fallback(desc: str) -> dict | None:
+    """If user mentions hospitals/Ireland, produce a safe default without LLM."""
+    s = desc.lower()
+    if ("hospital" in s) and ("ireland" in s) and ("wikidata" in s or True):
+        # REST search preset (no SPARQL) – easy to test
+        return {
+            "kind": "api",
+            "url": "https://www.wikidata.org/w/api.php",
+            "method": "GET",
+            "query_json": {
+                "action": "wbsearchentities",
+                "search": "hospital ireland",
+                "language": "en",
+                "format": "json",
+                "limit": 15
+            },
+            "array_path": "search",
+            "field_id": "id",
+            "field_display": "label",
+            "field_desc": "description",
+            "field_image": "",
+            "max_items": 15
+        }
+    return None
+
+@app.post("/api/ingest/generate")
+def api_ingest_generate():
+    data = request.get_json(silent=True) or {}
+    desc = (data.get("description") or "").strip()
+    if not desc:
+        return jsonify({"ok": False, "error": "Missing description"}), 400
+
+    # 1) deterministic fallback (works w/o API key)
+    fb = _deterministic_wikidata_fallback(desc)
+    if fb:
+        return jsonify({"ok": True, "ingest": _coerce_ingest(fb)})
+
+    # 2) LLM path (optional)
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return jsonify({"ok": False, "error": "Set OPENAI_API_KEY to use the AI helper."}), 400
+
+    try:
+        # Minimal OpenAI call; install: pip install openai
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+
+        system_msg = (
+            "You generate API ingest presets for a label-import tool.\n"
+            "Return ONLY one JSON object with keys: kind,url,method,query_json,array_path,"
+            "field_id,field_display,field_desc,field_image,max_items.\n"
+            "Prefer public APIs; if Wikidata suits, offer either SPARQL (query at 'https://query.wikidata.org/sparql' "
+            "with ?format=json) or REST ('https://www.wikidata.org/w/api.php' wbsearchentities). "
+            "Use max_items <= 15 for testing."
+        )
+        user_msg = f"User description: {desc}"
+
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0.2,
+            messages=[
+                {"role":"system","content":system_msg},
+                {"role":"user","content":user_msg}
+            ]
+        )
+        raw = resp.choices[0].message.content or "{}"
+        # Extract JSON (in case model adds text)
+        m = re.search(r"\{[\s\S]*\}", raw)
+        doc = json.loads(m.group(0) if m else raw)
+        return jsonify({"ok": True, "ingest": _coerce_ingest(doc)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"AI error: {e}"}), 500
+
 @app.route("/create_subfolder/<type_name>", methods=["GET", "POST"])
 def create_subfolder(type_name):
     labels_root = os.path.join("types", type_name, "labels")
@@ -4395,29 +4657,36 @@ def create_subfolder(type_name):
         subfolder_group_meta = os.path.join(subfolder_path, "_group.json")
         bios_base_path       = os.path.join(bios_root, internal_name)
 
-        # Make group folder & meta (folder-only definition)
+        # Ensure group folder
         os.makedirs(subfolder_path, exist_ok=True)
-        if not os.path.exists(subfolder_group_meta):
-            save_dict_as_json(subfolder_group_meta, {"name": display_label, "description": group_desc})
 
-        # ---- NEW: property JSON is OPTIONAL ---------------------------------
+        # ----- load/update group meta (so we can persist ingest) -----
+        meta = load_json_as_dict(subfolder_group_meta) if os.path.exists(subfolder_group_meta) else {}
+        if not isinstance(meta, dict):
+            meta = {}
+        meta["label"]       = display_label
+        meta["description"] = group_desc
+        # keep a stable default sort order unless user introduces UI control later
+        meta["order"]       = int(meta.get("order", 999))
+
+        # ---- property JSON is OPTIONAL (no change to behaviour) ----
         make_property = (request.form.get("make_property") in ("on", "1", "true", "True"))
         if make_property:
-            # Ensure a top-level {key}.json that points to this folder (preferred 'property' definition)
             _ensure_property_self_labels(type_name, internal_name, display_label, group_desc)
-        # ---------------------------------------------------------------------
 
         # Optionally make biographies root
         if request.form.get("also_make_bio_root") == "on":
             os.makedirs(bios_base_path, exist_ok=True)
 
         # --- Population mode ---
-        populate_mode = request.form.get("populate_mode") or "manual"
+        populate_mode = (request.form.get("populate_mode") or "manual").strip()
+        ingest_block = None
 
         if populate_mode == "api":
             # --- read form fields ---
             api_url         = (request.form.get("api_url") or "").strip()
             api_method      = (request.form.get("api_method") or "GET").strip().upper()
+            api_max_items   = int(request.form.get("api_max_items") or 15)  # <= keep small for testing
             api_headers_env = (request.form.get("api_headers_env") or "").strip()
             api_cache_secs  = int(request.form.get("api_cache_seconds") or "0")
 
@@ -4427,41 +4696,72 @@ def create_subfolder(type_name):
             field_desc  = (request.form.get("api_field_desc") or "").strip()
             field_img   = (request.form.get("api_field_image") or "").strip()
 
-            # optional JSON body / params
-            raw_body = (request.form.get("api_body_json") or request.form.get("api_query") or "").strip()
+            # optional JSON body / params (same field names your HTML uses)
+            raw_body = (request.form.get("api_query") or request.form.get("api_body_json") or "").strip()
             query_payload = None
             if raw_body:
                 try:
                     query_payload = json.loads(raw_body)
                 except Exception:
-                    # If not valid JSON, leave None; backend will just not send a body/params
+                    # leave as string-less/None if not valid JSON
                     query_payload = None
 
             if not api_url:
                 flash("API URL is required for API population.", "error")
                 return redirect(request.url)
 
-            # --- call the utils helper with the CORRECT signature ---
-            from utils import _import_labels_from_api as import_labels_from_api_files
+            # ---- persist ingest metadata on the group (NEW) ----
+            ingest_block = {
+                "kind": "api",
+                "url": api_url,
+                "method": api_method,
+                "headers_env": api_headers_env,
+                "query_json": query_payload if query_payload is not None else "",
+                "array_path": array_path,
+                "field_id": field_id,
+                "field_display": field_name,
+                "field_desc": field_desc,
+                "field_image": field_img,
+                "max_items": api_max_items,
+                "postprocess": {"strip_wikidata_uri": True}
+            }
+            meta["ingest"] = ingest_block
 
+            # If we also created a property JSON, write a tiny pointer so
+            # the Edit screen opened from the property can find the folder meta.
+            if make_property:
+                try:
+                    prop_path = os.path.join(labels_root, f"{internal_name}.json")
+                    prop = load_json_as_dict(prop_path) if os.path.exists(prop_path) else {}
+                    if isinstance(prop, dict):
+                        prop.setdefault("source", {
+                            "kind": "self_labels",
+                            "path": internal_name,
+                            "allow_children": True
+                        })
+                        # Pointer, not a duplicate copy:
+                        prop["ingest_ref"] = {"kind": "folder_meta", "path": internal_name}
+                        save_dict_as_json(prop_path, prop)
+                except Exception as e:
+                    print("[WARN] could not mirror ingest_ref to property JSON:", e)
+
+            # ---- do the import now (behaviour preserved) ----
+            from utils import _import_labels_from_api as import_labels_from_api_files
             ok, info = import_labels_from_api_files(
-                folder_path=subfolder_path,        # where label files will be written
-                endpoint=api_url,                  # URL
-                method=api_method,                 # GET or POST
-                headers_env=api_headers_env,       # env var name for Authorization Bearer (optional)
-                query=query_payload,               # dict -> params (GET) or JSON body (POST)
-                list_path=array_path,              # dotted array path (e.g. "search" or "results.bindings")
+                folder_path=subfolder_path,
+                endpoint=api_url,
+                method=api_method,
+                headers_env=api_headers_env,
+                query=query_payload,
+                list_path=array_path,
                 field_map={
                     "id":          field_id,
                     "display":     field_name,
                     "description": field_desc,
                     "image_url":   field_img,
                 },
-                cache_seconds=api_cache_secs,      # optional naive cache in your helper
+                cache_seconds=api_cache_secs,
             )
-
-            print("[API IMPORT]", ok, info)
-
             if not ok:
                 flash(f"⚠️ API import failed: {info.get('error','unknown error')}", "error")
             else:
@@ -4474,12 +4774,44 @@ def create_subfolder(type_name):
             col_name    = (request.form.get("db_col_display") or "name").strip()
             col_desc    = (request.form.get("db_col_desc") or "description").strip()
             col_img     = (request.form.get("db_col_image") or "image_url").strip()
-            max_items   = int(request.form.get("db_max_items") or "500")
+            max_items   = int(request.form.get("db_max_items") or "15")
 
             if not sqlite_path or not sql:
                 flash("SQLite path and SQL are required for DB population.", "error")
                 return redirect(request.url)
 
+            # ---- persist ingest metadata on the group (NEW) ----
+            ingest_block = {
+                "kind": "db_sqlite",
+                "sqlite_path": sqlite_path,
+                "sql": sql,
+                "col_id": col_id,
+                "col_display": col_name,
+                "col_desc": col_desc,
+                "col_image": col_img,
+                "max_items": max_items
+            }
+            meta["ingest"] = ingest_block
+
+            # If we also created a property JSON, write a tiny pointer so
+            # the Edit screen opened from the property can find the folder meta.
+            if make_property:
+                try:
+                    prop_path = os.path.join(labels_root, f"{internal_name}.json")
+                    prop = load_json_as_dict(prop_path) if os.path.exists(prop_path) else {}
+                    if isinstance(prop, dict):
+                        prop.setdefault("source", {
+                            "kind": "self_labels",
+                            "path": internal_name,
+                            "allow_children": True
+                        })
+                        # Pointer, not a duplicate copy:
+                        prop["ingest_ref"] = {"kind": "folder_meta", "path": internal_name}
+                        save_dict_as_json(prop_path, prop)
+                except Exception as e:
+                    print("[WARN] could not mirror ingest_ref to property JSON:", e)
+
+            # do the import now (existing behaviour)
             created = _import_labels_from_sqlite(
                 type_name, internal_name, display_label, group_desc,
                 sqlite_path=sqlite_path, sql=sql,
@@ -4489,7 +4821,9 @@ def create_subfolder(type_name):
             flash(f"✅ Imported {len(created)} labels from database.", "success")
 
         else:
-            # manual path: optionally create first label as before
+            # manual / no importer
+            meta.pop("ingest", None)
+
             if request.form.get("create_first_label") == "on":
                 raw_label_name = (request.form.get("first_label_name") or "").strip()
                 if raw_label_name:
@@ -4517,7 +4851,9 @@ def create_subfolder(type_name):
                             })
                     flash(f"✅ Created first label “{item['display']}”.", "success")
 
-        # UX nudge: let the user know whether a property JSON was created
+        # persist meta (including NEW ingest) *after* any import so it reflects what you used
+        save_dict_as_json(subfolder_group_meta, meta)
+
         if make_property:
             flash("🧩 Property JSON created (points to this folder).", "success")
         else:
@@ -4528,10 +4864,6 @@ def create_subfolder(type_name):
     # GET
     return render_template("create_subfolder.html", type_name=type_name, return_url=return_url)
 
-
-# --- imports you likely already have ---
-import os, shutil
-from flask import request, render_template, redirect, url_for, flash
 
 def _slugify_key(s: str) -> str:
     return "".join([c if c.isalnum() or c == "_" else "_" for c in (s or "").strip().lower()]).strip("_")
@@ -4596,6 +4928,39 @@ def edit_label_group(type_name, group_key):
         data["label"] = new_label
         data["description"] = new_desc
         data["order"] = new_order
+
+        # ---- INGEST (populate labels) ----
+        ingest_kind = (request.form.get("ingest_kind") or "manual").strip()
+
+        if ingest_kind == "api":
+            data["ingest"] = {
+                "kind": "api",
+                "url": (request.form.get("api_url") or "").strip(),
+                "method": (request.form.get("api_method") or "POST").strip().upper(),
+                "headers_env": (request.form.get("api_headers_env") or "").strip(),
+                "max_items": int(request.form.get("api_max_items") or 200),
+                "array_path": (request.form.get("api_array_path") or "").strip(),
+                "field_id": (request.form.get("api_field_id") or "id").strip(),
+                "field_display": (request.form.get("api_field_display") or "name").strip(),
+                "field_desc": (request.form.get("api_field_desc") or "description").strip(),
+                "field_image": (request.form.get("api_field_image") or "image_url").strip(),
+                # Normalise the JSON body into a single canonical key
+                "query_json": (request.form.get("api_query") or "").strip(),
+            }
+        elif ingest_kind == "db_sqlite":
+            data["ingest"] = {
+                "kind": "db_sqlite",
+                "sqlite_path": (request.form.get("db_sqlite_path") or "").strip(),
+                "sql": (request.form.get("db_sql") or "").strip(),
+                "col_id": (request.form.get("db_col_id") or "id").strip(),
+                "col_display": (request.form.get("db_col_display") or "display").strip(),
+                "col_desc": (request.form.get("db_col_desc") or "description").strip(),
+                "col_image": (request.form.get("db_col_image") or "image_url").strip(),
+                "max_items": int(request.form.get("db_max_items") or 500),
+            }
+        else:
+            # manual (no importer)
+            data["ingest"] = {"kind": "manual"}
 
         # attach/clear refer_to
         if rt_enabled and refer_type:
