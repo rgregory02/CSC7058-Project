@@ -4,66 +4,135 @@
   <meta charset="utf-8">
   <title>{{ type_name|replace('_',' ')|title }} — Labels</title>
   <link rel="stylesheet" href="/static/styles.css">
-  <style>
-    :root{
-      --bg:#f6f7fb;
-      --card:#fff;
-      --ink:#1f2937;
-      --muted:#657085;
-      --line:#e6e8f1;
-      --chip:#f3f4f9;
-      --chip-ink:#445;
-      --brand:#6c63ff;
-      --brand-ink:#fff;
-      --danger:#c62828;
-      --success:#2e7d32;
-    }
-    body{background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;color:var(--ink)}
-    .box{max-width:1100px;margin:32px auto;background:var(--card);padding:22px;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.06)}
-    h1{margin:0 0 4px;font-weight:750}
-    /* toolbar */
-    .toolbar{display:flex;gap:10px;align-items:center;justify-content:space-between;margin:6px 0 14px}
-    .left, .right{display:flex;gap:10px;align-items:center}
-    .search{width:360px;max-width:52vw;padding:10px 12px 10px 36px;border:1px solid var(--line);border-radius:10px;background:#fff url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="%23657085" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>') 10px 50% no-repeat}
-    .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;background:var(--chip);color:var(--chip-ink);border:1px solid var(--line);border-radius:999px;padding:4px 8px}
-    .btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);text-decoration:none;font-weight:600}
-    .btn.brand{background:var(--brand);border-color:var(--brand);color:#fff}
-    .btn.ghost{background:transparent}
-    .btn.small{padding:6px 9px;font-weight:600}
-    .btn.danger{background:#fff;border-color:#f4c9cf;color:#a11}
-    .btn.success{background:#fff;border-color:#c8e9cc;color:#2e7d32}
+<style>
+  :root{
+    --bg:#f6f7fb; --card:#fff; --ink:#1f2937; --muted:#657085; --line:#e6e8f1;
+    --chip:#f3f4f9; --chip-ink:#445;
+    --brand:#6c63ff; --brand-ink:#fff;
+    --danger:#c62828; --success:#2e7d32;
+  }
 
-    /* grid */
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px}
-    .card{border:1px solid var(--line);border-radius:12px;padding:14px;background:#fff;position:relative;display:flex;flex-direction:column;gap:8px}
-    .card.archived{opacity:.75}
-    .card.focused{box-shadow:0 0 0 3px rgba(108,99,255,.2)}
-    .card h3{margin:0 0 2px;font-size:16px}
-    .meta{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center}
-    .note{color:var(--muted);font-size:12px}
-    .badge{display:inline-flex;align-items:center;padding:2px 6px;border-radius:7px;border:1px solid var(--line);background:var(--chip);font-size:11px;color:#495}
-    .badge.arch{background:#fff0f5;border-color:#f5ccd8;color:#a11}
-    .actions{display:flex;gap:8px;margin-left:auto}
-    .divider{height:1px;background:var(--line);margin:6px 0}
+  body{background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;color:var(--ink)}
+  .box{max-width:1100px;margin:32px auto;background:var(--card);padding:22px;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.06)}
+  h1{margin:0 0 4px;font-weight:750}
 
-    /* options panel */
-    details.opts{border:1px dashed var(--line);border-radius:10px;background:#fafbff}
-    details.opts>summary{cursor:pointer;list-style:none;padding:8px 10px;font-weight:700}
-    details.opts>summary::marker, details.opts>summary::-webkit-details-marker{display:none}
-    .optwrap{padding:8px 10px;max-height:320px;overflow:auto}
-    .option{border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0;background:#fff}
-    .option.is-archived{opacity:.6}
-    .opt-head{display:flex;justify-content:space-between;gap:8px}
-    .opt-title{font-weight:700}
-    .opt-desc{color:var(--muted);font-size:12px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-    .thumb{max-height:36px;max-width:72px;vertical-align:middle;margin-left:8px;border-radius:6px}
-    .children{margin:8px 0 0 12px;border-left:3px solid var(--line);padding-left:10px}
+  /* toolbar */
+  .toolbar{display:flex;gap:10px;align-items:center;justify-content:space-between;margin:6px 0 14px}
+  .left,.right{display:flex;gap:10px;align-items:center}
+  .search{width:360px;max-width:52vw;padding:10px 12px 10px 36px;border:1px solid var(--line);border-radius:10px;background:#fff url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="%23657085" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>') 10px 50% no-repeat}
 
-    /* helpers */
-    .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-    .empty{color:var(--muted);font-size:13px}
-    a.inline{color:var(--brand);text-decoration:none}
-  </style>
+  /* badges/chips */
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;background:var(--chip);color:var(--chip-ink);border:1px solid var(--line);border-radius:999px;padding:4px 8px}
+  .badge{display:inline-flex;align-items:center;padding:2px 6px;border-radius:7px;border:1px solid var(--line);background:var(--chip);font-size:11px;color:#495}
+  .badge.arch{background:#fff0f5;border-color:#f5ccd8;color:#a11}
+
+  /* base button */
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    padding:8px 12px;border-radius:10px;border:1px solid var(--line);
+    background:#fff;color:var(--ink);text-decoration:none;font-weight:600;
+    transition:all .15s ease;
+  }
+  .btn.ghost{background:transparent}
+  .btn.secondary{ background:#f3f4f6; border-color:#e5e7eb; color:#111827; } /* for “Back to …” etc. */
+
+  /* grid & cards */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px}
+  .card{
+    border:1px solid var(--line);border-radius:12px;padding:14px;background:#fff;
+    position:relative;display:flex;flex-direction:column;gap:8px;
+    transition:transform .12s,box-shadow .12s,border-color .12s;
+  }
+  .card:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(0,0,0,.08);border-color:#dfe3f1}
+  .card.archived{opacity:.75}
+  .card.focused{box-shadow:0 0 0 3px rgba(108,99,255,.2)}
+  .card h3{margin:0 0 2px;font-size:16px}
+  .meta{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center}
+  .note{color:var(--muted);font-size:12px}
+  .divider{height:1px;background:var(--line);margin:6px 0}
+
+  /* options panel */
+  details.opts{border:1px dashed var(--line);border-radius:10px;background:#fafbff}
+  details.opts>summary{cursor:pointer;list-style:none;padding:8px 10px;font-weight:700}
+  details.opts>summary::marker,details.opts>summary::-webkit-details-marker{display:none}
+  .optwrap{padding:8px 10px;max-height:320px;overflow:auto}
+  .option{border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0;background:#fff}
+  .option.is-archived{opacity:.6}
+  .opt-head{display:flex;justify-content:space-between;gap:8px}
+  .opt-title{font-weight:700}
+  .opt-desc{color:var(--muted);font-size:12px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .thumb{max-height:36px;max-width:72px;vertical-align:middle;margin-left:8px;border-radius:6px}
+  .children{margin:8px 0 0 12px;border-left:3px solid var(--line);padding-left:10px}
+
+  /* helpers */
+  .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .empty{color:var(--muted);font-size:13px}
+  a.inline{color:var(--brand);text-decoration:none}
+
+ .card .actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;         /* spacing between buttons */
+  margin-top: 10px;
+}
+
+.card .actions a,
+.card .actions form {
+  display: inline-flex;   /* keep them inline */
+  margin: 0;              /* remove default form margin */
+}
+
+.btn.action {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;       /* smaller padding */
+  min-width: 120px;        /* narrower buttons */
+  height: 38px;            /* reduced height */
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color .15s ease,
+              border-color .15s ease,
+              box-shadow .15s ease,
+              transform .05s ease;
+}
+  
+  .btn.action:active{ transform: translateY(1px); }
+
+  /* Edit = brand */
+  .btn.action.brand{ background:var(--brand); border-color:var(--brand); color:#fff; }
+  .btn.action.brand:hover{ background:#5a52ff; }
+
+  /* Archive = outline red */
+  .btn.action.danger{ background:#fff; color:#8b2c2c; border-color:#f3c7cd; }
+  .btn.action.danger:hover{ background:#fff5f6; border-color:#eaa6af; }
+
+  /* Unarchive = outline green */
+  .btn.action.success{ background:#fff; color:#0b6230; border-color:#b9efcc; }
+  .btn.action.success:hover{ background:#f1fdf6; border-color:#8fe3b2; }
+
+  /* ensure older “small/danger/success” variants don’t override these */
+  .btn.small, .btn.danger, .btn.success{ all:unset; }
+
+  /* Top-bar primary buttons (e.g., “New Label”) */
+.btn.brand{
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+.btn.brand:hover{
+  background: #5a52ff;
+}
+</style>
 </head>
 <body>
   <div class="box">
@@ -91,7 +160,7 @@
   </div>
   <div class="right">
   <a class="btn brand" href="{{ url_for('create_subfolder', type_name=type_name, return_url=request.url) }}">➕ New Label</a>
-    <a class="btn" href="{{ request.args.get('return_url') or url_for('type_browse', type_name=type_name) }}">⬅ Back to {{ type_name|replace('_',' ')|title }}</a>
+    <a class="btn secondary" href="{{ request.args.get('return_url') or url_for('type_browse', type_name=type_name) }}">⬅ Back to {{ type_name|replace('_',' ')|title }}</a>
     
   </div>
 </div>
@@ -133,18 +202,20 @@
               {% endif %}
             </div>
 
-            <div class="actions">
-              <a class="btn small ghost" href="{{ url_for('edit_label_group', type_name=type_name, group_key=g.key) }}" title="Edit group">✏️ Edit</a>
+<div class="actions">
+  <a class="btn action brand"
+     href="{{ url_for('edit_label_group', type_name=type_name, group_key=g.key) }}"
+     title="Edit group">✏️ Edit</a>
 
-              {% set grp_action = 'api_unarchive_label_group' if g.archived else 'api_archive_label_group' %}
-              <form method="post" action="{{ url_for(grp_action, type_name=type_name) }}">
-                <input type="hidden" name="group_key" value="{{ g.key }}">
-                <input type="hidden" name="next" value="{{ request.url }}">
-                <button class="btn small {% if g.archived %}success{% else %}danger{% endif %}" type="submit">
-                  {% if g.archived %}♻️ Unarchive{% else %}🗄️ Archive{% endif %}
-                </button>
-              </form>
-            </div>
+  {% set grp_action = 'api_unarchive_label_group' if g.archived else 'api_archive_label_group' %}
+  <form method="post" action="{{ url_for(grp_action, type_name=type_name) }}" style="margin:0">
+    <input type="hidden" name="group_key" value="{{ g.key }}">
+    <input type="hidden" name="next" value="{{ request.url }}">
+    <button class="btn action {% if g.archived %}restore{% else %}archive{% endif %}" type="submit">
+      {% if g.archived %}♻️ Unarchive{% else %}🗄️ Archive{% endif %}
+    </button>
+  </form>
+</div>
           </div>
 
           {% if g.options and g.options|length > 0 %}
