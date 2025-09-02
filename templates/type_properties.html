@@ -41,55 +41,51 @@
   .btn.mini{padding:6px 10px;font-size:12px;border-radius:8px}
 
   /* grid & cards */
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
-  .card{border:1px solid var(--line);border-radius:12px;padding:14px;background:#fff;
-        display:flex;flex-direction:column;gap:10px;position:relative;transition:transform .12s,box-shadow .12s}
-  .card-link{display:block;color:inherit;text-decoration:none}
-  .card-link:hover .card{transform:translateY(-2px);box-shadow:0 8px 18px rgba(0,0,0,.07)}
-  .card.archived{background:var(--arch);border-style:dashed;opacity:.85}
-  .title{margin:0;font-size:16px;font-weight:800;line-height:1.2}
-  .desc{color:#4b5563;font-size:13px;line-height:1.35}
-  .actions{display:flex;gap:8px;margin-top:auto;flex-wrap:wrap}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+  .card{
+    border:1px solid var(--line);border-radius:12px;padding:16px;background:#fff;
+    display:flex;flex-direction:column;gap:12px;position:relative;
+    transition:transform .14s ease,box-shadow .14s ease,border-color .14s ease;
+  }
+  .card:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(0,0,0,.08)}
+  .card.archived{background:var(--arch);border-style:dashed;opacity:.92}
 
-  /* chips & badges */
+  /* header + chips */
+  .head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+  .title{margin:0 0 4px;font-size:16px;font-weight:800;line-height:1.25}
   .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
   .chip{font-size:11px;border-radius:999px;padding:3px 8px;background:#f3f4f9;border:1px solid #e6e8f2;color:#445}
   .chip.badge{background:#fafbff;border-color:#e7e9f2}
   .chip.path{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,monospace}
   .chip.archived{background:#fff4e6;border-color:#ffd8a8;color:var(--warn)}
-  .badge{position:absolute;top:10px;right:10px;font-size:11px;padding:3px 8px;border-radius:999px;
-         background:#f3f4f6;color:#374151;border:1px solid #e5e7eb}
-  .badge.archived{background:#fff1f2;color:#b91c1c;border-color:#fecdd3}
 
-  /* misc */
+  /* IMPORTANT: scope absolute badge to only top-right badges placed directly under .card */
+  .card > .badge{
+    position:absolute;top:10px;right:10px;font-size:11px;padding:3px 8px;border-radius:999px;
+    background:#f3f4f6;color:#374151;border:1px solid #e5e7eb
+  }
+  .card > .badge.archived{background:#fff1f2;color:#b91c1c;border-color:#fecdd3}
+
+  .desc{color:#4b5563;font-size:13px;line-height:1.45}
+
+  /* actions row */
+  .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:auto}
+  .actions .btn{height:38px}
+  .actions .spacer{flex:1}
+
+  /* empty + flashes */
   .empty{color:var(--muted);font-size:14px;background:#fafbff;border:1px dashed var(--line);
          border-radius:12px;padding:14px;text-align:center}
   .flashline{display:inline-block;background:#eef9f1;border:1px solid #b8ebc6;color:#0f5132;
              border-radius:8px;padding:6px 10px;margin-right:6px;font-size:12px}
 
-  /* --- image safety + consistent thumbs --- */
-.card, .option { overflow: hidden; }            /* keep media inside cards */
-.grid { align-items: start; }                   /* prevent stretched rows */
+  /* image safety */
+  .card, .option { overflow:hidden }
+  .grid { align-items:start }
+  .card img,.option img{display:block;max-width:100%;height:auto;border-radius:8px}
+  .thumb{width:100%;max-height:180px;object-fit:cover;border-radius:10px}
 
-/* Any image inside cards/options: never overflow */
-.card img,
-.option img {
-  display: block;
-  max-width: 100%;
-  height: auto;
-  border-radius: 8px;
-}
-
-/* If an image has the 'thumb' class, crop it to a neat banner */
-.thumb {
-  width: 100%;
-  max-height: 180px;        /* change to taste: 140–220px works well */
-  object-fit: cover;        /* crop without distortion */
-  border-radius: 10px;
-}
-
-/* Optional: make long text and media inside options behave */
-details.opts .optwrap { overflow: auto; }
+  details.opts .optwrap{overflow:auto}
 </style>
 
 </head>
@@ -145,33 +141,26 @@ details.opts .optwrap { overflow: auto; }
           {% set refer = (p.refer_to if p.refer_to is defined else (p.get('refer_to') if p.get is defined else {})) or {} %}
           {% set src_kind = src.get('kind') or ingest.get('kind') or ( 'labels' if src.get('path') else '' ) %}
           {% set label_path = src.get('path') or src.get('labels_path') or '' %}
-{% set is_archived = (p.get('archived', False) or (p.get('status','active') == 'archived')) %}
-{% set status = 'archived' if is_archived else 'active' %}
+          {% set is_archived = (p.get('archived', False) or (p.get('status','active') == 'archived')) %}
+          {% set status = 'archived' if is_archived else 'active' %}
 
           <div class="card prop {% if is_archived %}archived{% endif %}"
                data-key="{{ (p.key ~ ' ' ~ (p.name or '') ~ ' ' ~ (p.description or '') ~ ' ' ~ (src_kind or '') ~ ' ' ~ label_path )|lower }}"
                data-source="{{ (src_kind or '')|lower }}"
                data-status="{{ status|lower }}">
+
             <div class="head">
               <div>
                 <h3 class="title">{{ p.name or p.key }}</h3>
                 <div class="chips">
                   <span class="chip badge">key: <span style="font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,monospace; margin-left:4px">{{ p.key }}</span></span>
-                  {% if src_kind %}
-                    <span class="chip badge">source: {{ src_kind }}</span>
-                  {% endif %}
-                  {% if label_path %}
-                    <span class="chip path">labels: {{ label_path }}</span>
-                  {% endif %}
+                  {% if src_kind %}<span class="chip badge">source: {{ src_kind }}</span>{% endif %}
+                  {% if label_path %}<span class="chip path">labels: {{ label_path }}</span>{% endif %}
                   {% if refer and refer.type %}
                     <span class="chip badge">links to: {{ refer.type }}</span>
-                    {% if refer.path %}
-                      <span class="chip path">path: {{ refer.path }}</span>
-                    {% endif %}
+                    {% if refer.path %}<span class="chip path">path: {{ refer.path }}</span>{% endif %}
                   {% endif %}
-                  {% if is_archived %}
-                    <span class="chip archived">Archived</span>
-                  {% endif %}
+                  {% if is_archived %}<span class="chip archived">Archived</span>{% endif %}
                 </div>
               </div>
             </div>
@@ -199,31 +188,24 @@ details.opts .optwrap { overflow: auto; }
 
             <div class="actions">
               <a class="btn" href="{{ url_for('edit_property', type_name=type_name, prop_key=p.key) }}">✏️ Edit</a>
-
-              {% if label_path %}
-                <a class="btn ghost" href="{{ url_for('type_labels', type_name=type_name) }}?focus={{ label_path|urlencode }}">📂 Open Labels</a>
-              {% endif %}
+              <span class="spacer"></span>
 
               {% if not is_archived %}
-                <!-- ARCHIVE (soft-delete) -->
-<form method="POST"
-      action="{{ url_for('api_archive_property', type_name=type_name) }}"
-      onsubmit="return confirm('Archive property {{ p.key }}? You can restore it later.');"
-      style="margin-left:auto">
-  <input type="hidden" name="prop_key" value="{{ p.key }}">
-  <input type="hidden" name="next" value="{{ request.full_path or url_for('type_properties', type_name=type_name) }}">
-  <button class="btn archive" type="submit">🗄️ Archive</button>
-</form>
+                <form method="POST"
+                      action="{{ url_for('api_archive_property', type_name=type_name) }}"
+                      onsubmit="return confirm('Archive property {{ p.key }}? You can restore it later.');">
+                  <input type="hidden" name="prop_key" value="{{ p.key }}">
+                  <input type="hidden" name="next" value="{{ request.full_path or url_for('type_properties', type_name=type_name) }}">
+                  <button class="btn archive" type="submit">🗄️ Archive</button>
+                </form>
               {% else %}
-                <!-- RESTORE -->
-<form method="POST"
-      action="{{ url_for('api_unarchive_property', type_name=type_name) }}"
-      onsubmit="return confirm('Restore property {{ p.key }} to Active?');"
-      style="margin-left:auto">
-  <input type="hidden" name="prop_key" value="{{ p.key }}">
-  <input type="hidden" name="next" value="{{ request.full_path or url_for('type_properties', type_name=type_name) }}">
-  <button class="btn restore" type="submit">♻️ Restore</button>
-</form>
+                <form method="POST"
+                      action="{{ url_for('api_unarchive_property', type_name=type_name) }}"
+                      onsubmit="return confirm('Restore property {{ p.key }} to Active?');">
+                  <input type="hidden" name="prop_key" value="{{ p.key }}">
+                  <input type="hidden" name="next" value="{{ request.full_path or url_for('type_properties', type_name=type_name) }}">
+                  <button class="btn restore" type="submit">♻️ Restore</button>
+                </form>
               {% endif %}
             </div>
           </div>
@@ -237,32 +219,31 @@ details.opts .optwrap { overflow: auto; }
   </div>
 
   <script>
-  const grid = document.getElementById('grid');
-  const srcFilter = document.getElementById('sourceFilter');
-  const statusFilter = document.getElementById('statusFilter');
-  let qText = '';
+    const grid = document.getElementById('grid');
+    const srcFilter = document.getElementById('sourceFilter');
+    const statusFilter = document.getElementById('statusFilter');
+    let qText = '';
 
-  function filterProps(q){
-    qText = (q||'').toLowerCase();
-    applyFilters();
-  }
-  function applyFilters(){
-    const src = (srcFilter?.value || '').toLowerCase();
-    const stat = (statusFilter?.value || '').toLowerCase();
-    if(!grid) return;
-    grid.querySelectorAll('.prop').forEach(card=>{
-      const hay = (card.getAttribute('data-key') || '').toLowerCase();
-      const srcKind = (card.getAttribute('data-source') || '').toLowerCase();
-      const status  = (card.getAttribute('data-status') || '').toLowerCase();
-      const matchText = !qText || hay.includes(qText);
-      const matchSrc  = !src || srcKind === src;
-      const matchStat = !stat || status === stat;
-      card.style.display = (matchText && matchSrc && matchStat) ? '' : 'none';
-    });
-  }
+    function filterProps(q){
+      qText = (q||'').toLowerCase();
+      applyFilters();
+    }
+    function applyFilters(){
+      const src = (srcFilter?.value || '').toLowerCase();
+      const stat = (statusFilter?.value || '').toLowerCase();
+      if(!grid) return;
+      grid.querySelectorAll('.prop').forEach(card=>{
+        const hay = (card.getAttribute('data-key') || '').toLowerCase();
+        const srcKind = (card.getAttribute('data-source') || '').toLowerCase();
+        const status  = (card.getAttribute('data-status') || '').toLowerCase();
+        const matchText = !qText || hay.includes(qText);
+        const matchSrc  = !src || srcKind === src;
+        const matchStat = !stat || status === stat;
+        card.style.display = (matchText && matchSrc && matchStat) ? '' : 'none';
+      });
+    }
 
-  // ✅ apply once on initial load so the default dropdown ("Active") actually filters
-  document.addEventListener('DOMContentLoaded', applyFilters);
-</script>
+    document.addEventListener('DOMContentLoaded', applyFilters);
+  </script>
 </body>
 </html>
