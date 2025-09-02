@@ -40,11 +40,14 @@
   .btn.mini{padding:6px 10px;font-size:12px;border-radius:8px}
 
   /* grid & cards */
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
-  .card{border:1px solid var(--line);border-radius:12px;padding:14px;background:#fff;
-        display:flex;flex-direction:column;gap:10px;position:relative;transition:transform .12s,box-shadow .12s}
-  .card-link{display:block;color:inherit;text-decoration:none}
-  .card-link:hover .card{transform:translateY(-2px);box-shadow:0 8px 18px rgba(0,0,0,.07)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;align-items:start}
+
+  .card{
+    border:1px solid var(--line);border-radius:12px;padding:14px;background:#fff;
+    display:flex;flex-direction:column;gap:10px;position:relative;
+    transition:transform .12s,box-shadow .12s;
+  }
+  .card:hover{transform:translateY(-2px);box-shadow:0 8px 18px rgba(0,0,0,.07)}
   .card.archived{background:var(--arch);border-style:dashed;opacity:.85}
   .title{margin:0;font-size:16px;font-weight:800;line-height:1.2}
   .desc{color:#4b5563;font-size:13px;line-height:1.35}
@@ -56,130 +59,314 @@
   .chip.badge{background:#fafbff;border-color:#e7e9f2}
   .chip.path{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,monospace}
   .chip.archived{background:#fff4e6;border-color:#ffd8a8;color:var(--warn)}
-  /* Only the direct child badge of .card is positioned in the top-right corner */
-.card > .badge {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  font-size: 11px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: #f3f4f6;
-  color: #374151;
-  border: 1px solid #e5e7eb;
-}
-.card > .badge.archived {
-  background: #fff1f2;
-  color: #b91c1c;
-  border-color: #fecdd3;
-}
+  .card > .badge {
+    position: absolute;top: 10px;right: 10px;font-size: 11px;
+    padding: 3px 8px;border-radius: 999px;background: #f3f4f6;color: #374151;
+    border: 1px solid #e5e7eb;
+  }
+  .card > .badge.archived { background: #fff1f2; color: #b91c1c; border-color: #fecdd3; }
 
-/* Chips that also have `.badge` stay inline, not absolute */
-.chip.badge { position: static; }
+  /* special case: folder <details> */
+  details.card { border:1px solid var(--line); border-radius:12px; background:#fff; padding:0; }
+  details.card > summary { list-style:none; padding:12px 14px; border-radius:12px; cursor:pointer; }
+  details.card > summary::-webkit-details-marker { display:none; }
+  details.card[open] > summary { border-bottom:1px dashed var(--line); border-bottom-left-radius:0; border-bottom-right-radius:0; }
+  details.card .title { display:flex; align-items:center; gap:8px; }
+  details.card .chip.badge { margin-left:auto; }
+  details.card > div { padding:12px 14px; }
 
-  /* misc */
-  .empty{color:var(--muted);font-size:14px;background:#fafbff;border:1px dashed var(--line);
-         border-radius:12px;padding:14px;text-align:center}
-  .flashline{display:inline-block;background:#eef9f1;border:1px solid #b8ebc6;color:#0f5132;
-             border-radius:8px;padding:6px 10px;margin-right:6px;font-size:12px}
+  /* tip banners */
+  .tip-banner{
+    display:flex;align-items:flex-start;gap:10px;
+    background:linear-gradient(270deg,#e0e7ff,#f3e8ff,#e0e7ff);
+    background-size:600% 600%;
+    border:1px solid #c7d2fe;
+    color:#1e1b4b;
+    padding:12px 14px;
+    border-radius:10px;
+    animation: shimmer 8s ease infinite, tipEnter .6s ease;
+  }
+  @keyframes shimmer{
+    0%{background-position:0% 50%}
+    50%{background-position:100% 50%}
+    100%{background-position:0% 50%}
+  }
+  .tip-dot{
+    width:10px;height:10px;border-radius:999px;background:#6366f1;margin-top:4px;
+    box-shadow:0 0 0 0 rgba(99,102,241,.6);animation:tipPulse 1.8s ease-in-out infinite;flex:0 0 auto;
+  }
+  .muted-small{color:#6b7280;font-size:12px;}
+  @keyframes tipEnter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes tipPulse{
+    0%{box-shadow:0 0 0 0 rgba(59,130,246,.6)}
+    70%{box-shadow:0 0 0 10px rgba(59,130,246,0)}
+    100%{box-shadow:0 0 0 0 rgba(59,130,246,0)}
+  }
 
-  /* --- image safety + consistent thumbs --- */
-.card, .option { overflow: hidden; }            /* keep media inside cards */
-.grid { align-items: start; }                   /* prevent stretched rows */
+  /* ====== Card robustness overrides (fight global link styles) ====== */
+  .card-link{display:block}
+  a.card-link, .card-link * { text-decoration:none !important; color:inherit !important; }
+  .card-link:hover .card { transform:translateY(-2px); box-shadow:0 8px 18px rgba(0,0,0,.07); }
 
-/* Any image inside cards/options: never overflow */
-.card img,
-.option img {
-  display: block;
-  max-width: 100%;
-  height: auto;
-  border-radius: 8px;
-}
+  /* Optional: neat button row below each card */
+  .actions-row{ display:flex; gap:8px; flex-wrap:wrap; padding:10px 0 2px; }
 
-/* If an image has the 'thumb' class, crop it to a neat banner */
-.thumb {
-  width: 100%;
-  max-height: 180px;        /* change to taste: 140–220px works well */
-  object-fit: cover;        /* crop without distortion */
+  /* Make the title-link behave like plain text inside the card */
+.title-link { text-decoration: none; color: inherit; }
+.title-link:focus-visible { outline: 2px solid #c7d2fe; border-radius: 6px; }
+
+/* Spacing for actions row when it's inside the card */
+.card .actions-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+
+/* Normalise anchors + buttons that use .btn */
+.btn {
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;            /* kill default button font */
+  line-height: 1.15;        /* consistent height */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 14px;
   border-radius: 10px;
-}
-/* Optional: make long text and media inside options behave */
-details.opts .optwrap { overflow: auto; }
-
-/* match inputs used on properties/labels */
-.select{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;min-width:180px}
-
-/* folder <details> as cards */
-details.card { border:1px solid var(--line); border-radius:12px; background:#fff; padding:0; }
-details.card > summary { list-style:none; padding:12px 14px; border-radius:12px; }
-details.card > summary::-webkit-details-marker { display:none; }
-details.card[open] > summary { border-bottom:1px dashed var(--line); border-bottom-left-radius:0; border-bottom-right-radius:0; }
-details.card .title { display:flex; align-items:center; gap:8px; }
-details.card .chip.badge { margin-left:auto; }
-
-/* keep grids neat inside folder content */
-details.card > div { padding:12px 14px; }
-
-/* Ensure titles never get ellipsized/clipped */
-.card h3,
-h3.title {
-  display:block;
-  white-space:normal;
-  overflow:visible;
-  text-overflow:clip;
-  margin-bottom: 6px; /* give breathing room above chips/desc */
+  text-decoration: none;
+  cursor: pointer;
+  border-width: 1px;
+  border-style: solid;
 }
 
-/* Keep description/chips under the title on a new line */
-.card .desc { margin-top: 4px; }
+/* Make the mini buttons equal width and neatly centered in the card */
+.card .actions-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;  /* center inside the card */
+  margin-top: 8px;
+}
+
+.actions-row .btn.mini {
+  padding: 8px 12px;        /* same vertical rhythm */
+  min-width: 110px;         /* equal visual width */
+  text-align: center;
+}
+
+/* Remove default form margins that push things around */
+.action-form { margin: 0; }
+
+/* --- Equalize size & center the two action buttons inside cards --- */
+.card .actions-row{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  justify-content:center;
+  margin-top:12px;
+}
+
+/* One rule for *both* buttons so they are identical size */
+.actions-row > a.btn.mini.secondary,
+.actions-row form .btn.mini.secondary{
+  font: inherit;                 /* kill UA button font */
+  line-height: 1.15;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+
+  /* hard-size so they match exactly */
+  height: 44px;
+  min-width: 120px;
+  padding: 0 14px;
+
+  border-radius:12px;
+  border-width:1px;
+  border-style:solid;
+  text-decoration:none;
+}
+
+/* View (anchor) – indigo tint */
+.actions-row > a.btn.mini.secondary{
+  background:#eef2ff;
+  border-color:#c7d2fe;
+  color:#3730a3;
+}
+.actions-row > a.btn.mini.secondary:hover{
+  background:#e0e7ff;
+}
+
+/* Archive (button in form) – warm amber tint */
+.actions-row form .btn.mini.secondary{
+  background:#fff7ed;
+  border-color:#fed7aa;
+  color:#7c2d12;
+}
+.actions-row form .btn.mini.secondary:hover{
+  background:#ffedd5;
+}
+
+/* Remove any stray spacing from the form wrapper */
+.action-form{ margin:0; }
+
+/* Center the row and align items on the same baseline */
+.card .actions-row{
+  display:flex;
+  justify-content:center;
+  align-items:center;     /* <- keep both buttons on the same vertical line */
+  gap:12px;
+  margin-top:12px;
+}
+
+/* Make both the anchor and the button share the exact same box model */
+.actions-row > a.btn.mini.secondary,
+.actions-row form .btn.mini.secondary{
+  box-sizing:border-box;  /* identical sizing */
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+
+  height:44px;            /* identical height */
+  min-width:120px;        /* identical width */
+  padding:0 14px;         /* identical padding */
+  line-height:1;          /* kill text baseline differences */
+  vertical-align:middle;  /* belt-and-braces for inline-flex */
+  border-radius:12px;
+  border-width:1px;
+  border-style:solid;
+  text-decoration:none;
+  font: inherit;          /* same font metrics */
+}
+
+/* View – indigo tint */
+.actions-row > a.btn.mini.secondary{
+  background:#eef2ff;
+  border-color:#c7d2fe;
+  color:#3730a3;
+}
+.actions-row > a.btn.mini.secondary:hover{ background:#e0e7ff; }
+
+/* Archive – warm amber tint */
+.actions-row form .btn.mini.secondary{
+  background:#fff7ed;
+  border-color:#fed7aa;
+  color:#7c2d12;
+}
+.actions-row form .btn.mini.secondary:hover{ background:#ffedd5; }
+
+/* Ensure the wrapper form doesn't introduce offset */
+.action-form{ margin:0; padding:0; }
+
 </style>
 </head>
 <body>
   <div class="box">
+{# ---- reusable biography card ---- #}
+{% macro bio_card(b, type_name, is_archived=None) %}
+  {# Extract fields regardless of shape (tree item vs flat bio) #}
+  {% set _id    = b.get('id') or b.get('key') %}
+  {% set _name  = b.get('title') or b.get('name') or (_id and _id.replace('_',' ')|title) %}
+  {% set _desc  = b.get('description') %}
+  {% set _stamp = b.get('updated') or b.get('archived_at') or b.get('created') %}
+  {% set _arch  = (is_archived if is_archived is not none else b.get('archived')) %}
+  {% set _path  = b.get('path_rel') %}
+
+  {# Build URLs: folder tree uses bio_path; flat lists use bio_id #}
+  {% if _path %}
+    {% set view_url      = url_for('biography_view_path', type_name=type_name, bio_path=_path) %}
+    {% set archive_url   = url_for('api_archive_bio_path',   type_name=type_name) %}
+    {% set unarchive_url = url_for('api_unarchive_bio_path', type_name=type_name) %}
+  {% else %}
+    {% set view_url      = url_for('biography_view', type_name=type_name, bio_id=_id) %}
+    {% set archive_url   = url_for('api_archive_bio',   type_name=type_name, bio_id=_id) %}
+    {% set unarchive_url = url_for('api_unarchive_bio', type_name=type_name, bio_id=_id) %}
+  {% endif %}
+
+  <div class="card-wrap"
+       data-key="{{ (_name ~ ' ' ~ (_id or '') ~ ' ' ~ (b.get('path_rel') or ''))|lower }}"
+       data-status="{{ 'archived' if _arch else 'active' }}"
+       data-updated="{{ _stamp or '' }}">
+    <a class="card-link" href="{{ view_url }}">
+      <div class="card {% if _arch %}archived{% endif %}" role="button" aria-label="View {{ _name }}">
+        {% if _arch %}<span class="badge archived">Archived</span>{% endif %}
+        <h3 class="title">{{ _name }}</h3>
+        {% if _desc %}<div class="desc">{{ _desc }}</div>{% endif %}
+        <div class="muted">
+          {% if _stamp %}
+            <span class="updated" data-iso="{{ _stamp }}">{{ _stamp }}</span>
+          {% else %}No timestamp{% endif %}
+        </div>
+      </div>
+    </a>
+    <div class="actions-row">
+      <a class="btn mini secondary" href="{{ view_url }}">🔎 View</a>
+
+      {% if not _arch %}
+        <form class="action-form" method="post" action="{{ archive_url }}">
+          {% if _path %}<input type="hidden" name="bio_path" value="{{ _path }}">{% endif %}
+          <input type="hidden" name="next" value="{{ request.full_path or url_for('type_browse', type_name=type_name, show=show) }}">
+          <button class="btn mini secondary" type="submit"
+                  onclick="return confirm('Archive this biography? You can unarchive later.')">🗄️ Archive</button>
+        </form>
+      {% else %}
+        <form class="action-form" method="post" action="{{ unarchive_url }}">
+          {% if _path %}<input type="hidden" name="bio_path" value="{{ _path }}">{% endif %}
+          <input type="hidden" name="next" value="{{ request.full_path or url_for('type_browse', type_name=type_name, show=show) }}">
+          <button class="btn mini secondary" type="submit">↩️ Unarchive</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+{% endmacro %}
+
 {% macro render_folder(node, prefix="") %}
   {# 1) Render biographies in this folder (render ALL; filter in JS) #}
   {% if node['items'] %}
     <div class="grid">
-      {% for it in node['items'] %}
-        {% set is_archived = it.archived %}
-        <div class="card-wrap"
-             data-key="{{ (it.title ~ ' ' ~ it.key ~ ' ' ~ prefix)|lower }}"
-             data-status="{{ 'archived' if is_archived else 'active' }}"
-             data-updated="{{ it.updated or '' }}">
-          <a class="card-link"
-             href="{{ url_for('biography_view_path', type_name=type_name, bio_path=it.path_rel) }}">
-            <div class="card {% if is_archived %}archived{% endif %}">
-              {% if is_archived %}<span class="badge archived">Archived</span>{% endif %}
-              <h3 class="title">{{ it.title or it.key }}</h3>
-              <div class="desc">
-                {% if it.updated %}<span class="chip badge">updated: {{ it.updated }}</span>{% endif %}
-                {% if prefix %}<span class="chip path">in: {{ prefix }}</span>{% endif %}
-              </div>
-            </div>
-          </a>
-          <div class="actions-row">
-            <a class="btn mini secondary"
-               href="{{ url_for('biography_view_path', type_name=type_name, bio_path=it.path_rel) }}">🔎 View</a>
+  {% for it in node['items'] %}
+  {% set is_archived = it.archived %}
+  <div class="card-wrap"
+       data-key="{{ (it.title ~ ' ' ~ it.key ~ ' ' ~ prefix)|lower }}"
+       data-status="{{ 'archived' if is_archived else 'active' }}"
+       data-updated="{{ it.updated or '' }}">
 
-            {% if not is_archived %}
-              <form class="action-form" method="post"
-                    action="{{ url_for('api_archive_bio_path', type_name=type_name) }}">
-                <input type="hidden" name="bio_path" value="{{ it.path_rel }}">
-                <input type="hidden" name="next" value="{{ request.full_path or url_for('type_browse', type_name=type_name, show=show) }}">
-                <button class="btn mini secondary" type="submit"
-                        onclick="return confirm('Archive this biography? You can unarchive later.')">🗄️ Archive</button>
-              </form>
-            {% else %}
-              <form class="action-form" method="post"
-                    action="{{ url_for('api_unarchive_bio_path', type_name=type_name) }}">
-                <input type="hidden" name="bio_path" value="{{ it.path_rel }}">
-                <input type="hidden" name="next" value="{{ request.full_path or url_for('type_browse', type_name=type_name, show=show) }}">
-                <button class="btn mini secondary" type="submit">↩️ Unarchive</button>
-              </form>
-            {% endif %}
-          </div>
-        </div>
-      {% endfor %}
+    <div class="card {% if is_archived %}archived{% endif %}">
+      {% if is_archived %}<span class="badge archived">Archived</span>{% endif %}
+
+      {# Make only the title a link to avoid nesting buttons inside <a> #}
+      <a class="title-link"
+         href="{{ url_for('biography_view_path', type_name=type_name, bio_path=it.path_rel) }}">
+        <h3 class="title">{{ it.title or it.key }}</h3>
+      </a>
+
+      <div class="desc">
+        {% if it.updated %}<span class="chip badge">updated: {{ it.updated }}</span>{% endif %}
+        {% if prefix %}<span class="chip path">in: {{ prefix }}</span>{% endif %}
+      </div>
+
+      <div class="actions-row">
+        <a class="btn mini secondary"
+           href="{{ url_for('biography_view_path', type_name=type_name, bio_path=it.path_rel) }}">🔎 View</a>
+
+        {% if not is_archived %}
+          <form class="action-form" method="post"
+                action="{{ url_for('api_archive_bio_path', type_name=type_name) }}">
+            <input type="hidden" name="bio_path" value="{{ it.path_rel }}">
+            <input type="hidden" name="next" value="{{ request.full_path or url_for('type_browse', type_name=type_name, show=show) }}">
+            <button class="btn mini secondary" type="submit"
+                    onclick="return confirm('Archive this biography? You can unarchive later.')">🗄️ Archive</button>
+          </form>
+        {% else %}
+          <form class="action-form" method="post"
+                action="{{ url_for('api_unarchive_bio_path', type_name=type_name) }}">
+            <input type="hidden" name="bio_path" value="{{ it.path_rel }}">
+            <input type="hidden" name="next" value="{{ request.full_path or url_for('type_browse', type_name=type_name, show=show) }}">
+            <button class="btn mini secondary" type="submit">↩️ Unarchive</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+{% endfor %}
     </div>
   {% endif %}
 
@@ -197,7 +384,10 @@ h3.title {
     </details>
   {% endfor %}
 {% endmacro %}
-    <h1>{{ type_name|replace('_',' ')|title }} - Biographies</h1>
+    <h1>📚 {{ type_name|replace('_',' ')|title }} - Biographies</h1>
+    <div class="muted">
+  Browse, search, and manage all biographies for this type. Each biography captures labels, events, and linked data over time.
+</div>
 
 <div class="toolbar">
   <div class="left">
@@ -227,6 +417,16 @@ h3.title {
   </div>
 </div>
 
+<!-- Consistent tip banner -->
+<div class="tip-banner">
+  <span class="tip-dot" aria-hidden="true"></span>
+  <div>
+    <strong>Tip:</strong> Click a biography card to review, edit, or update it.  
+    From the biography page you can open <em>🧠 Most Like</em> to discover the closest matches
+    <span class="muted-small">(lower MSE = more similar)</span>.
+  </div>
+</div>
+
  <div class="controls">
   <select id="sortSelect" onchange="sortAllGrids()">
     <option value="updated_desc">Sort: Recent first</option>
@@ -236,7 +436,7 @@ h3.title {
   </select>
 </div>
 
-    {# If the route provided a folder tree, render that. Otherwise keep the existing flat lists. #}
+{# If the route provided a folder tree, render that. Otherwise keep the split/flat lists. #}
 {% if tree is defined %}
   {{ render_folder(tree, "") }}
 {% else %}
@@ -248,31 +448,7 @@ h3.title {
       {% if active_bios and active_bios|length %}
         <div id="grid_active" class="grid">
           {% for b in active_bios %}
-            {% set _id = b.get('id') %}
-            {% set _name = b.get('name') or _id.replace('_',' ')|title %}
-            {% set _desc = b.get('description') %}
-            {% set _stamp = b.get('updated') or b.get('created') %}
-            <div class="card-wrap" data-name="{{ _name|lower }}" data-updated="{{ _stamp or '' }}">
-              <a class="card-link" href="{{ url_for('biography_view', type_name=type_name, bio_id=_id) }}">
-                <div class="card" role="button" aria-label="View {{ _name }}">
-                  <h3>{{ _name }}</h3>
-                  {% if _desc %}<div class="desc">{{ _desc }}</div>{% endif %}
-                  <div class="muted">
-                    {% if _stamp %}
-                      <span class="updated" data-iso="{{ _stamp }}">{{ _stamp }}</span>
-                    {% else %}
-                      No timestamp
-                    {% endif %}
-                  </div>
-                </div>
-              </a>
-              <div class="actions-row">
-                <a class="btn mini secondary" href="{{ url_for('biography_view', type_name=type_name, bio_id=_id) }}">🔎 View</a>
-                <form class="action-form" method="post" action="{{ url_for('api_archive_bio', type_name=type_name, bio_id=_id) }}">
-                  <button class="btn mini secondary" type="submit" onclick="return confirm('Archive this biography? You can unarchive later.')">🗄️ Archive</button>
-                </form>
-              </div>
-            </div>
+            {{ bio_card(b, type_name, is_archived=False) }}
           {% endfor %}
         </div>
       {% else %}
@@ -286,32 +462,7 @@ h3.title {
       {% if archived_bios and archived_bios|length %}
         <div id="grid_archived" class="grid">
           {% for b in archived_bios %}
-            {% set _id = b.get('id') %}
-            {% set _name = b.get('name') or _id.replace('_',' ')|title %}
-            {% set _desc = b.get('description') %}
-            {% set _stamp = b.get('updated') or b.get('archived_at') or b.get('created') %}
-            <div class="card-wrap" data-name="{{ _name|lower }}" data-updated="{{ _stamp or '' }}">
-              <a class="card-link" href="{{ url_for('biography_view', type_name=type_name, bio_id=_id) }}">
-                <div class="card" role="button" aria-label="View {{ _name }}">
-                  <span class="badge archived">Archived</span>
-                  <h3>{{ _name }}</h3>
-                  {% if _desc %}<div class="desc">{{ _desc }}</div>{% endif %}
-                  <div class="muted">
-                    {% if _stamp %}
-                      <span class="updated" data-iso="{{ _stamp }}">{{ _stamp }}</span>
-                    {% else %}
-                      No timestamp
-                    {% endif %}
-                  </div>
-                </div>
-              </a>
-              <div class="actions-row">
-                <a class="btn mini secondary" href="{{ url_for('biography_view', type_name=type_name, bio_id=_id) }}">🔎 View</a>
-                <form class="action-form" method="post" action="{{ url_for('api_unarchive_bio', type_name=type_name, bio_id=_id) }}">
-                  <button class="btn mini secondary" type="submit">↩️ Unarchive</button>
-                </form>
-              </div>
-            </div>
+            {{ bio_card(b, type_name, is_archived=True) }}
           {% endfor %}
         </div>
       {% else %}
@@ -323,39 +474,7 @@ h3.title {
     {% if bios and bios|length > 0 %}
       <div id="grid_fallback" class="grid">
         {% for b in bios %}
-          {% set _id = b.get('id') %}
-          {% set _name = b.get('name') or _id.replace('_',' ')|title %}
-          {% set _desc = b.get('description') %}
-          {% set _stamp = b.get('updated') or b.get('created') %}
-          {% set _arch = b.get('archived') %}
-          <div class="card-wrap" data-name="{{ _name|lower }}" data-updated="{{ _stamp or '' }}">
-            <a class="card-link" href="{{ url_for('biography_view', type_name=type_name, bio_id=_id) }}">
-              <div class="card" role="button" aria-label="View {{ _name }}">
-                {% if _arch %}<span class="badge archived">Archived</span>{% endif %}
-                <h3>{{ _name }}</h3>
-                {% if _desc %}<div class="desc">{{ _desc }}</div>{% endif %}
-                <div class="muted">
-                  {% if _stamp %}
-                    <span class="updated" data-iso="{{ _stamp }}">{{ _stamp }}</span>
-                  {% else %}
-                    No timestamp
-                  {% endif %}
-                </div>
-              </div>
-            </a>
-            <div class="actions-row">
-              <a class="btn mini secondary" href="{{ url_for('biography_view', type_name=type_name, bio_id=_id) }}">🔎 View</a>
-              {% if _arch %}
-                <form class="action-form" method="post" action="{{ url_for('api_unarchive_bio', type_name=type_name, bio_id=_id) }}">
-                  <button class="btn mini secondary" type="submit">↩️ Unarchive</button>
-                </form>
-              {% else %}
-                <form class="action-form" method="post" action="{{ url_for('api_archive_bio', type_name=type_name, bio_id=_id) }}">
-                  <button class="btn mini secondary" type="submit" onclick="return confirm('Archive this biography? You can unarchive later.')">🗄️ Archive</button>
-                </form>
-              {% endif %}
-            </div>
-          </div>
+          {{ bio_card(b, type_name) }}
         {% endfor %}
       </div>
     {% else %}
