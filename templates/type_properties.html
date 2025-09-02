@@ -69,9 +69,21 @@
   .desc{color:#4b5563;font-size:13px;line-height:1.45}
 
   /* actions row */
-  .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:auto}
-  .actions .btn{height:38px}
-  .actions .spacer{flex:1}
+/* actions row */
+.actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;   /* center them horizontally */
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: auto;          /* stick to bottom of card */
+  padding-top: 8px;          /* breathing room above */
+}
+.actions .btn {
+  height: 38px;
+  min-width: 110px;          /* consistent button widths */
+  text-align: center;
+}
 
   /* empty + flashes */
   .empty{color:var(--muted);font-size:14px;background:#fafbff;border:1px dashed var(--line);
@@ -188,7 +200,7 @@
 
             <div class="actions">
               <a class="btn" href="{{ url_for('edit_property', type_name=type_name, prop_key=p.key) }}">✏️ Edit</a>
-              <span class="spacer"></span>
+            
 
               {% if not is_archived %}
                 <form method="POST"
