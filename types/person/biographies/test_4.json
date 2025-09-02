@@ -1,0 +1,37 @@
+{
+    "id": "test_4",
+    "uid": "317096d6017e473abe77e2bfd1f19d6a",
+    "name": "Test",
+    "type": "person",
+    "created": "2025-09-02T02:04:46.894287+00:00",
+    "updated": "2025-09-02T02:13:39.483833+00:00",
+    "entries": [
+        {
+            "created": "2025-09-02T02:05:00.338644+00:00",
+            "updated": "2025-09-02T02:05:15.308886+00:00",
+            "time": {
+                "label_type": "entire_life",
+                "confidence": 100,
+                "subvalue": "entire_life"
+            },
+            "time_normalised": {
+                "kind": "life",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "unknown",
+                "age_years": null,
+                "notes": "Whole span selected; biography has no start/end"
+            },
+            "person": [
+                {
+                    "label_type": "celebea_face_hq",
+                    "confidence": 100,
+                    "id": "1"
+                }
+            ]
+        }
+    ],
+    "archived": true
+}

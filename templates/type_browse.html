@@ -256,6 +256,73 @@
 /* Ensure the wrapper form doesn't introduce offset */
 .action-form{ margin:0; padding:0; }
 
+/* === Biography card buttons — match Properties/Labels === */
+/* Keep size/centering from your current rules, but recolor to:
+   - View  -> solid brand (same as Edit)
+   - Archive -> white background with soft red outline (same as Archive)
+*/
+
+/* VIEW (anchor) -> solid brand button */
+.actions-row > a.btn.mini.secondary{
+  background: var(--brand) !important;
+  border-color: var(--brand) !important;
+  color: #fff !important;
+}
+.actions-row > a.btn.mini.secondary:hover{
+  background: #5a52ff !important; /* slightly darker brand on hover */
+}
+
+/* ARCHIVE (button in form) -> soft red outline */
+.actions-row form .btn.mini.secondary{
+  background: #fff !important;
+  border-color: #f3c7cd !important;   /* soft red outline */
+  color: #8b2c2c !important;          /* warm red text */
+}
+.actions-row form .btn.mini.secondary:hover{
+  background: #fff5f6 !important;
+  border-color: #eaa6af !important;
+}
+/* === Unified Archive Button Style === */
+.btn.archive,
+.actions-row form .btn.mini.secondary,   /* bios archive buttons */
+.card .actions .btn.archive,             /* property cards */
+.card .actions .btn.action.archive {     /* label cards */
+  background: #f5f7ff;        /* pale blue background */
+  color: #2b2f5e;             /* dark neutral text */
+  border: 1px solid #d9ddff;  /* light indigo/blue border */
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 40px;               /* consistent height */
+  min-width: 120px;           /* consistent width */
+  padding: 0 14px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+
+.btn.archive:hover,
+.actions-row form .btn.mini.secondary:hover,
+.card .actions .btn.archive:hover,
+.card .actions .btn.action.archive:hover {
+  background: #e0e7ff;        /* slightly darker blue on hover */
+  border-color: #c7d2fe;
+}
+
+/* FINAL OVERRIDE: make all Archive buttons light blue */
+.actions-row form button.btn.mini.secondary {
+  background: #f5f7ff !important;     /* pale blue */
+  border-color: #d9ddff !important;
+  color: #2b2f5e !important;
+}
+.actions-row form button.btn.mini.secondary:hover {
+  background: #e0e7ff !important;
+  border-color: #c7d2fe !important;
+}
+
 </style>
 </head>
 <body>

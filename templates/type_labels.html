@@ -132,6 +132,36 @@
 .btn.brand:hover{
   background: #5a52ff;
 }
+
+/* === Unified Archive Button Style === */
+.btn.archive,
+.actions-row form .btn.mini.secondary,   /* bios archive buttons */
+.card .actions .btn.archive,             /* property cards */
+.card .actions .btn.action.archive {     /* label cards */
+  background: #f5f7ff;        /* pale blue background */
+  color: #2b2f5e;             /* dark neutral text */
+  border: 1px solid #d9ddff;  /* light indigo/blue border */
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 40px;               /* consistent height */
+  min-width: 120px;           /* consistent width */
+  padding: 0 14px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+
+.btn.archive:hover,
+.actions-row form .btn.mini.secondary:hover,
+.card .actions .btn.archive:hover,
+.card .actions .btn.action.archive:hover {
+  background: #e0e7ff;        /* slightly darker blue on hover */
+  border-color: #c7d2fe;
+}
 </style>
 </head>
 <body>
