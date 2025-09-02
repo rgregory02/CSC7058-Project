@@ -5,24 +5,61 @@
   <title>Most Like — {{ base_name }} ({{ type_name|replace('_',' ')|title }})</title>
   <link rel="stylesheet" href="/static/styles.css">
   <style>
-    body { font-family: "Segoe UI", system-ui, sans-serif; background:#f5f7f8; padding:40px; }
+    :root{
+      --bg:#f6f7fb; --card:#fff; --ink:#111827; --muted:#657085; --line:#e7e9f2;
+      --brand:#6c63ff; --pill:#eef0f7;
+      --tip-bg:#f0f4ff; --tip-border:#cfd7ff; --tip-ink:#1f2a5a;
+    }
+    body { font-family: system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial; background:var(--bg); padding:40px; color:var(--ink); }
     .card { background:#fff; max-width:980px; margin:auto; padding:28px 34px;
-            border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,.1); }
-    h1 { text-align:center; font-size:26px; margin-bottom:6px; }
-    h2 { text-align:center; color:#4b5563; margin:0 0 16px; font-weight:500; }
-    .note { text-align:center; font-size:13px; color:#6b7280; margin-bottom:16px; line-height:1.45; }
-    .match { border-top:1px solid #e5e7eb; padding:18px 0; }
+            border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,.08); border:1px solid var(--line); }
+    h1 { text-align:center; font-size:28px; margin:0 0 4px; font-weight:800; }
+    h2 { text-align:center; color:#4b5563; margin:0 0 16px; font-weight:600; }
+    .note { text-align:center; font-size:13px; color:#6b7280; margin:0 auto 16px; line-height:1.5; max-width:740px; }
+    .match { border-top:1px solid var(--line); padding:18px 0; }
     .muted { color:#6b7280; }
-    .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:.8em; background:#eef2ff; color:#3730a3; margin-left:6px; }
-    .chip { display:inline-block; padding:2px 8px; border-radius:999px; font-size:.75em; background:#eef0f7; color:#374151; margin-left:6px; }
-    .section-title { margin:12px 0 6px; color:#374151; font-weight:700; }
-    .time-key { margin-top:8px; font-weight:700; color:#1f2937; }
-    ul { margin:4px 0 10px 18px; padding:0; }
-    li { margin:3px 0; }
+    .pill { display:inline-block; padding:3px 10px; border-radius:999px; font-size:.8em; background:#eef2ff; color:#3730a3; margin-left:6px; border:1px solid #dfe3ff; }
+    .chip { display:inline-block; padding:3px 8px; border-radius:999px; font-size:.75em; background:var(--pill); color:#374151; margin-left:6px; border:1px solid var(--line); }
+    .section-title { margin:14px 0 8px; color:#111827; font-weight:800; font-size:16px; }
+    .time-key { margin:10px 0 8px; font-weight:800; color:#1f2937; }
+    .row { display:flex; gap:10px; align-items:center; border:1px solid var(--line); background:#fff; border-radius:10px; padding:8px 10px; margin:6px 0; }
+    .badge { font-size:11px; padding:2px 8px; border-radius:999px; border:1px solid var(--line); background:#fafbff; color:#374151; }
+    .you { color:#0f766e; font-weight:700; }     /* teal */
+    .them { color:#7c3aed; font-weight:700; }    /* violet */
     .back { display:block; text-align:center; margin-top:26px; font-weight:700; text-decoration:none; }
-    .diff { font-style:italic; }
-    .you { color:#0f766e; }     /* teal */
-    .them { color:#7c3aed; }    /* violet */
+
+    /* Animated tip */
+    .tip {
+      position: relative;
+      padding:12px 14px;
+      border:1px solid var(--tip-border);
+      background:var(--tip-bg);
+      color:var(--tip-ink);
+      border-radius:12px;
+      overflow:hidden;
+      isolation:isolate;
+      margin:10px auto 0;
+      max-width:720px;
+    }
+    .tip strong { font-weight:800; }
+    .tip .badge {
+      display:inline-block; font-size:11px; font-weight:700;
+      background:#fff; border:1px solid var(--tip-border);
+      color:var(--tip-ink); padding:3px 8px; border-radius:999px; margin-right:8px;
+    }
+    .tip::before {
+      content:"";
+      position:absolute; inset:-4px;
+      border-radius:14px;
+      background: conic-gradient(from 0deg, #6c63ff, #4f46e5, #22c55e, #06b6d4, #6c63ff);
+      filter: blur(12px); opacity:0; z-index:-1;
+      animation: tipGlow 3.5s ease-in-out infinite;
+    }
+    @keyframes tipGlow { 0%,100%{opacity:0;transform:scale(1)} 50%{opacity:.25;transform:scale(1.02)} }
+
+    /* Tiny helpers for label/event rows */
+    .k { font-weight:700; }
+    .spacer { flex:1; }
   </style>
 </head>
 <body>
@@ -31,24 +68,23 @@
     <h2>{{ base_name }} • {{ type_name|replace('_',' ')|title }}</h2>
 
     <div class="note">
-      <strong>What you’re seeing:</strong> we compare this biography with others of the same type,
-      per overlapping <em>time bucket</em> (e.g. “teens”, a date, or a date range).<br>
-      For each bucket we build vectors from the saved confidences (0–100) for both
-      <strong>labels</strong> and <strong>events</strong>. Missing items are treated as 0.
-      We then compute a mean squared error (MSE) on those confidence vectors.
-      <br><strong>No time decay</strong>, and event confidence is used as-is (no link weighting).
-      Lower MSE ⇒ more similar. Chips show how many time buckets overlapped and how many pairwise
-      comparisons were made.
+      We compare this biography to others of the same type across overlapping <em>time buckets</em> (e.g. “teens”, a specific date, or a date range).
+      For each overlapping bucket, we build vectors from saved confidences (0–100) for both <strong>labels</strong> and <strong>events</strong> (missing = 0),
+      and compute the <strong>Mean Squared Error (MSE)</strong> between those vectors. No time-decay is applied.
+    </div>
+    <div class="tip" role="note" aria-label="Similarity tip">
+      <span class="badge">Tip</span>
+      <strong>Lower MSE means more similar.</strong> An MSE of 0 indicates identical confidence patterns for the overlapping time buckets.
     </div>
 
     {% if matches and matches|length > 0 %}
       {% for m in matches %}
         <div class="match">
-          <h3 style="margin:0 0 6px;">
+          <h3 style="margin:0 0 6px;font-size:18px;">
             {{ m.name }}
             <span class="pill">MSE {{ "%.4f"|format(m.mse) }}</span>
-            <span class="chip">time buckets: {{ m.time_bucket_count }}</span>
-            <span class="chip">comparisons: {{ m.comparison_count }}</span>
+            <span class="chip">Overlaps: {{ m.time_bucket_count }} time buckets</span>
+            <span class="chip">Comparisons: {{ m.comparison_count }}</span>
           </h3>
           {% if m.dob %}<div class="muted">DOB: {{ m.dob | display_dob_uk if m.dob is string else m.dob }}</div>{% endif %}
 
@@ -56,14 +92,15 @@
             <div class="section-title">🎯 Shared Labels by Time</div>
             {% for tkey, items in m.shared_labels_by_time.items() %}
               <div class="time-key">{{ tkey.replace("_"," ")|title }}</div>
-              <ul>
-                {% for it in items %}
-                  <li>
-                    {{ it.label_type.replace("_"," ")|title }} — {{ it.display }}
-                    <span class="muted"> (You {{ it.confidence_1 }}% · Them {{ it.confidence_2 }}%)</span>
-                  </li>
-                {% endfor %}
-              </ul>
+              {% for it in items %}
+                <div class="row">
+                  <span class="badge">Label</span>
+                  <span class="k">{{ it.label_type.replace("_"," ")|title }}</span>
+                  <span>— {{ it.display }}</span>
+                  <span class="spacer"></span>
+                  <span class="muted">You {{ it.confidence_1 }}% · Them {{ it.confidence_2 }}%</span>
+                </div>
+              {% endfor %}
             {% endfor %}
           {% endif %}
 
@@ -71,37 +108,39 @@
             <div class="section-title">📌 Shared Events by Time</div>
             {% for tkey, items in m.shared_events_by_time.items() %}
               <div class="time-key">{{ tkey.replace("_"," ")|title }}</div>
-              <ul>
-                {% for it in items %}
-                  <li>
-                    {{ it.display }}
-                    <span class="muted"> (You {{ it.confidence_1 }}% · Them {{ it.confidence_2 }}%)</span>
-                  </li>
-                {% endfor %}
-              </ul>
+              {% for it in items %}
+                <div class="row">
+                  <span class="badge">Event</span>
+                  <span>{{ it.display }}</span>
+                  <span class="spacer"></span>
+                  <span class="muted">You {{ it.confidence_1 }}% · Them {{ it.confidence_2 }}%</span>
+                </div>
+              {% endfor %}
             {% endfor %}
           {% endif %}
 
           {% if m.diffs_by_time %}
-            <div class="section-title">🔍 Differences by Time (present in one, missing in the other)</div>
+            <div class="section-title">🔍 Differences by Time</div>
             {% for tkey, items in m.diffs_by_time.items() %}
               <div class="time-key">{{ tkey.replace("_"," ")|title }}</div>
-              <ul>
-                {% for it in items %}
-                  <li class="diff">
-                    <span class="{{ 'you' if it.who == 'you' else 'them' }}">
-                      {{ it.who|title }}
-                    </span>
-                    only — {{ it.display }} ({{ it.kind }}, {{ it.confidence }}%)
-                  </li>
-                {% endfor %}
-              </ul>
+              {% for it in items %}
+                <div class="row">
+                  <span class="badge">Only</span>
+                  <span class="{{ 'you' if it.who == 'you' else 'them' }}">{{ it.who|title }}</span>
+                  <span>— {{ it.display }}</span>
+                  <span class="chip">{{ it.kind }}</span>
+                  <span class="spacer"></span>
+                  <span class="muted">{{ it.confidence }}%</span>
+                </div>
+              {% endfor %}
             {% endfor %}
           {% endif %}
         </div>
       {% endfor %}
     {% else %}
-      <p>No similar {{ type_name|replace('_',' ')|title }} biographies found with overlapping time periods.</p>
+      <p class="muted" style="text-align:center;margin-top:12px">
+        No similar {{ type_name|replace('_',' ')|title }} biographies were found with overlapping time periods.
+      </p>
     {% endif %}
 
     <a class="back" href="{{ url_for('type_browse', type_name=type_name) }}">← Back to {{ type_name|replace('_',' ')|title }} list</a>
