@@ -1,7 +1,7 @@
 
 {
   "name": "Hair color",
-  "description": "The color of the person's hair.",
+  "description": "The colour of the person's hair.",
   "input": "select",
   "source": {
     "kind": "folder",

@@ -5,46 +5,125 @@
   <title>Biography Studio – Dashboard</title>
   <link rel="stylesheet" href="/static/styles.css">
   <style>
-    body { background:#f6f7fb; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
-    .box { max-width: 1100px; margin: 40px auto; background:#fff; padding:28px; border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,.06); }
-    .toolbar { display:flex; flex-wrap:wrap; gap:10px; margin:16px 0 22px; }
-    .btn{display:inline-block;padding:10px 16px;border-radius:10px;background:#6c63ff;color:#fff;text-decoration:none;font-weight:600}
-    .btn.secondary{background:#eef0f7;color:#333}
-    .btn.ghost{background:transparent;color:#6c63ff;border:1px solid #6c63ff}
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
-    .card{background:#fff;border:1px solid #e7e9f2;border-radius:12px;padding:16px}
-    .card h3{margin:0 0 6px}
-    .card .muted{color:#657085;font-size:12px}
-    .quick{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 6px}
-    ul.slim{margin:6px 0 0 18px;text-align:left}
-    small{color:#657085}
-    .header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    :root{
+      --bg:#f6f7fb; --card:#fff; --ink:#111827; --muted:#657085; --line:#e7e9f2;
+      --brand:#6c63ff; --pill:#eef0f7; --accent:#6c63ff;
+      --tip-bg: #f0f4ff; --tip-border:#cfd7ff; --tip-ink:#1f2a5a;
+    }
+    body { background:var(--bg); font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; color:var(--ink); }
+    .box { max-width: 1100px; margin: 40px auto; background:#fff; padding:28px; border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,.06); border:1px solid var(--line); }
+    .header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
     .header h1 { margin:0 }
+    .toolbar { display:flex; flex-wrap:wrap; gap:10px; margin:12px 0 0; }
+    .btn{display:inline-block;padding:10px 16px;border-radius:10px;background:var(--brand);color:#fff;text-decoration:none;font-weight:600;border:1px solid var(--brand)}
+    .btn.secondary{background:var(--pill);color:#333;border-color:var(--line)}
+    .btn.ghost{background:transparent;color:var(--brand);border:1px solid var(--brand)}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;align-items:start}
+    .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px}
+    .card h3{margin:0 0 6px}
+    .muted{color:var(--muted);font-size:13px}
+    .quick{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 6px}
+
+    /* Info sections (no bullets) */
+    .info { border:1px solid var(--line); border-radius:12px; padding:16px; background:#fff; }
+    .info + .info { margin-top:12px; }
+    .info h2 { margin:0 0 8px; font-size:20px; }
+    .info p { margin:8px 0; line-height:1.45; }
+
+    .callout { background:#fafbff; border:1px dashed var(--line); border-radius:12px; padding:14px; }
+
+    .types-title { margin:16px 0 12px; font-size:22px; }
+
+    /* Animated tip */
+    .tip {
+      position: relative;
+      padding:14px 14px 14px 16px;
+      border:1px solid var(--tip-border);
+      background:var(--tip-bg);
+      color:var(--tip-ink);
+      border-radius:12px;
+      overflow:hidden;
+      isolation:isolate;
+    }
+    .tip strong { font-weight:800; }
+    .tip::before {
+      content:"";
+      position:absolute; inset:-2px;
+      border-radius:14px;
+      background: conic-gradient(from 0deg, #6c63ff, #4f46e5, #22c55e, #06b6d4, #6c63ff);
+      filter: blur(12px); opacity:0;
+      z-index:-1;
+      animation: tipGlow 3.5s ease-in-out infinite;
+    }
+    @keyframes tipGlow {
+      0%,100% { opacity:0.0; transform: scale(1); }
+      50%     { opacity:0.25; transform: scale(1.02); }
+    }
+    .tip .badge {
+      display:inline-block;
+      font-size:11px; font-weight:700;
+      background:#fff; border:1px solid var(--tip-border);
+      color:var(--tip-ink);
+      padding:3px 8px; border-radius:999px; margin-right:8px;
+    }
   </style>
 </head>
 <body>
   <div class="box">
     <div class="header">
-      <h1>📚 Biography Studio</h1>
-      <div class="toolbar">
-        <!-- General, type-agnostic creation flow -->
-        <a class="btn" href="{{ url_for('general_iframe_wizard', step='start') }}">
-  🧩 Start Biography Wizard
-</a>
-
-        <!-- Optional: quick link to people browse page (your old index view) -->
-      </div>
-      <div class="toolbar">
-        <!-- Optional: create a new Type right from here -->
-        <a class="btn secondary" href="{{ url_for('add_type_prompt') }}">➕ Add New Type</a>
-
-        <!-- NEW: archived types hub -->
-        <a class="btn secondary" href="{{ url_for('archived_types_list') }}">📦 Archived Types</a>
+      <h1>📚 Biography Builder Studio</h1>
+      <div>
+        <div class="toolbar">
+          <!-- General, type-agnostic creation flow -->
+          <a class="btn" href="{{ url_for('general_iframe_wizard', step='start') }}">🧩 Start Biography Wizard</a>
+        </div>
+        <div class="toolbar">
+          <!-- Create / manage types -->
+          <a class="btn secondary" href="{{ url_for('add_type_prompt') }}">➕ Add New Type</a>
+          <a class="btn secondary" href="{{ url_for('archived_types_list') }}">📦 Archived Types</a>
+        </div>
       </div>
     </div>
 
-    <h2 style="margin:10px 0 14px">Types</h2>
+    <!-- ===== About / Features / Most-Like teaser (no bullets) ===== -->
+    <div class="info" style="margin-top:16px">
+      <h2>📖 About the Biography Builder</h2>
+      <p>
+        The Biography Builder is a <strong>type-agnostic</strong> system for capturing, organising, and linking
+        structured life events. It works equally well for <em>people</em>, <em>organisations</em>, <em>buildings</em>,
+        or other entities - enabling rich, time-aware biographies that can be compared across domains.
+      </p>
+      <div class="callout muted">
+        Example uses include <strong>healthcare analytics</strong> (enriching predictive models with social/life context),
+        <strong>screenwriting</strong> (building coherent character arcs), and <strong>business consulting</strong>
+        (tracking organisational change over time).
+      </div>
+    </div>
 
+    <div class="info">
+      <h2>✨ Key Features</h2>
+      <p><strong>Type-agnostic design:</strong> build biographies for people, buildings, organisations - all via the same elegant flow.</p>
+      <p><strong>AI-assisted labels:</strong> generate new label options directly from prompts and save them instantly for reuse.</p>
+      <p><strong>Structured time points:</strong> capture entire lives, milestones, and linked biographies with explicit dates.</p>
+      <p><strong>Confidence scoring:</strong> record uncertainty with sliders so downstream analysis remains honest and interpretable.</p>
+      <p><strong>Archive + edit:</strong> full lifecycle management of types, labels, and biographies.</p>
+    </div>
+
+    <div class="info">
+      <h2>🧩 “Most Like” - Find Similar Biographies</h2>
+      <p>
+        Compare biographies by shared labels and confidence to surface entities that are <em>most similar</em> over time.
+        This unlocks cross-domain insights - from clinical cohorts to character parallels or organisational journeys.
+      </p>
+      <div class="tip" role="note" aria-label="Tip">
+        <span class="badge">Tip</span>
+        <strong>Build a few biographies first,</strong> then try comparisons from a type’s browse page.
+        Similarities get more meaningful as your label set grows.
+      </div>
+    </div>
+
+    <!-- ===== Types grid ===== -->
+    <h2 class="types-title">Types</h2>
     <div class="grid">
       {% for t in types %}
         <div class="card">
@@ -55,20 +134,17 @@
             <!-- Browse all bios for this type -->
             <a class="btn secondary" href="{{ url_for('type_browse', type_name=t) }}">📂 Browse Biographies</a>
 
-            <!-- Create a new biography for this type -->
-<!-- Create a new biography for this type -->
-<a class="btn"
-   href="{{ url_for('general_iframe_wizard', step='start', type=t, return_url=url_for('type_browse', type_name=t)) }}">
-  ➕ New {{ t|replace('_',' ')|title }} Biography
-</a>
+            <!-- Create a new biography for this type (preselect & return) -->
+            <a class="btn"
+               href="{{ url_for('general_iframe_wizard', step='start', type=t, return_url=url_for('type_browse', type_name=t)) }}">
+              ➕ New {{ t|replace('_',' ')|title }} Biography
+            </a>
 
-
+            <!-- Manage type-level config -->
             <a class="btn secondary" href="{{ url_for('type_properties', type_name=t) }}">⚙️ Manage Properties</a>
+            <a class="btn secondary" href="{{ url_for('type_labels', type_name=t) }}">🏷️ Manage Labels</a>
 
-<a class="btn secondary" href="{{ url_for('type_labels', type_name=t) }}">🏷️ Manage Labels</a>
-
-
-            <!-- NEW: archive this type -->
+            <!-- Archive this type -->
             <a class="btn ghost"
                href="{{ url_for('archive_type_confirm', type_name=t) }}"
                onclick="return confirm('Archive this entire type (labels & biographies) to /archive/types ? You can restore later.');">
@@ -76,21 +152,7 @@
             </a>
           </div>
 
-          {% if preview[t] %}
-            <div><small>Recent:</small></div>
-            <ul class="slim">
-              {# preview[t] may be objects with .id/.name or tuples (id, name) #}
-              {% for b in preview[t] %}
-                {% set bid = (b.id if b is mapping or (b is defined and b.id is defined) else (b[0] if b is sequence else b)) %}
-                {% set bname = (b.name if b is mapping or (b is defined and b.name is defined) else (b[1] if b is sequence and b|length>1 else bid)) %}
-                <li>
-                  <a href="{{ url_for('general_iframe_wizard', type=t, bio_id=bid, step='labels') }}">{{ bname }}</a>
-                </li>
-              {% endfor %}
-            </ul>
-          {% else %}
-            <small>No biographies yet.</small>
-          {% endif %}
+          {# “Recent biographies” list intentionally removed for a cleaner, more purposeful dashboard #}
         </div>
       {% endfor %}
     </div>
