@@ -1,0 +1,6 @@
+{
+  "key": "eye_colour",
+  "label": "Eye Colour",
+  "description": "The colour of the person's eyes.",
+  "allow_multiple": false
+}

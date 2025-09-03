@@ -1,15 +1,15 @@
-
 {
-  "name": "Hair color",
+  "key": "hair_colour",
+  "label": "Hair colour",
   "description": "The colour of the person's hair.",
-  "input": "select",
-  "source": {
-    "kind": "folder",
-    "path": "hair_colour"
-  },
+  "allow_multiple": false,
   "ui": {
     "allow_confidence": true,
     "default_confidence": 100,
     "display_template": "{{option}} hair"
+  },
+  "source": {
+    "kind": "folder",
+    "path": "hair_colour"
   }
 }

@@ -1,0 +1,29 @@
+{
+    "id": "test_10",
+    "uid": "c3a7c87ff6e945a49590edbd4e05af9c",
+    "name": "Test",
+    "type": "person",
+    "created": "2025-09-03T16:19:01.353515+00:00",
+    "updated": "2025-09-03T16:19:05.984092+00:00",
+    "entries": [
+        {
+            "created": "2025-09-03T16:19:05.984092+00:00",
+            "updated": "2025-09-03T16:19:05.984092+00:00",
+            "time": {
+                "label_type": "entire_life",
+                "confidence": 100,
+                "subvalue": "entire_life"
+            },
+            "time_normalised": {
+                "kind": "life",
+                "start_iso": null,
+                "end_iso": null,
+                "start_ts": null,
+                "end_ts": null,
+                "precision": "unknown",
+                "age_years": null,
+                "notes": "Whole span selected; biography has no start/end"
+            }
+        }
+    ]
+}

@@ -1,0 +1,6 @@
+{
+  "key": "relationship",
+  "label": "Relationship",
+  "description": "Defines a person's relationship to another person biography.",
+  "allow_multiple": true
+}

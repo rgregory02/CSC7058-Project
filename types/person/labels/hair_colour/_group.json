@@ -1,0 +1,6 @@
+{
+  "key": "hair_colour",
+  "label": "Hair Colour",
+  "description": "The colour of the person's hair.",
+  "allow_multiple": false
+}

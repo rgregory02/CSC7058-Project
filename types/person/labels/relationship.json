@@ -1,7 +1,8 @@
 {
-  "name": "Relationship",
-  "description": "A person's relationship",
-  "order": 999,
+  "key": "relationship",
+  "label": "Relationship",
+  "description": "Defines a person's relationship to another person biography.",
+  "allow_multiple": true,
 
   "source": {
     "kind": "self_labels",
@@ -13,8 +14,8 @@
   "refer_to": {
     "source": "biographies",
     "type": "person",
-    "path": ".",           
-    "mode": "all"          
+    "path": ".",
+    "mode": "all"
   },
 
   "ui": {

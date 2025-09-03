@@ -1,9 +1,15 @@
 {
-  "label": "Eye Colour",
-  "description": "",
-  "order": 999,
-  "refer_to": {
-    "source": "biographies",
-    "type": "person"
+  "key": "eye_colour",
+  "label": "Eye colour",
+  "description": "The colour of the person's eyes.",
+  "allow_multiple": false,
+  "ui": {
+    "allow_confidence": true,
+    "default_confidence": 100,
+    "display_template": "{{option}} eyes"
+  },
+  "source": {
+    "kind": "folder",
+    "path": "eye_colour"
   }
 }

@@ -2075,9 +2075,30 @@ def api_time_admin_create_option():
 def type_labels_api(type_name):
     base = os.path.join("types", type_name, "labels")
     if not os.path.isdir(base):
-        return jsonify({"error": "not_found"}), 404
+        return jsonify({"ok": False, "error": "not_found"}), 404
+
     groups = collect_label_groups(base, type_name)
-    return jsonify({"type": type_name, "groups": groups})
+
+    # Build a convenience "labels" list for clients/tests.
+    labels = []
+    for g in groups:
+        labels.append({
+            "key": g.get("key"),
+            "label": g.get("label", g.get("key")),
+            "description": g.get("description", ""),
+            "allow_multiple": g.get("allow_multiple", False),
+            "required": g.get("required", False),
+            "options": g.get("options", []),
+            # pass-through if present (useful for UI)
+            **({"refer_to": g["refer_to"]} if "refer_to" in g else {})
+        })
+
+    return jsonify({
+        "ok": True,
+        "type": type_name,
+        "groups": groups,
+        "labels": labels
+    })
 
 @app.post("/api/labels/admin/create_option")
 def api_labels_admin_create_option():
@@ -5820,9 +5841,6 @@ def printTime(timeLabel):
         return timeLabel["category"]
 
 
-from flask import request, redirect, flash
-import os, time
-
 @app.route('/person_biography_add', methods=['GET', 'POST'])
 def person_biography_add():
     """
@@ -5890,13 +5908,13 @@ def person_biography_add():
         const container = document.getElementById("entry-container");
         const html = `
         <div class="entry-block">
-          <h4>Entry \${counter + 1}</h4>
-          Type: <input name='entry_\${counter}_type' required>
-          Biography: <input name='entry_\${counter}_biography' required>
-          Entry #: <input name='entry_\${counter}_entry' type='number' required>
-          Date: <input name='entry_\${counter}_date'>
-          Label: <input name='entry_\${counter}_label'>
-          Notes: <input name='entry_\${counter}_notes'>
+          <h4>Entry ${counter + 1}</h4>
+          Type: <input name='entry_${counter}_type' required>
+          Biography: <input name='entry_${counter}_biography' required>
+          Entry #: <input name='entry_${counter}_entry' type='number' required>
+          Date: <input name='entry_${counter}_date'>
+          Label: <input name='entry_${counter}_label'>
+          Notes: <input name='entry_${counter}_notes'>
           <hr>
         </div>`;
         container.insertAdjacentHTML('beforeend', html);
