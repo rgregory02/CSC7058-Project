@@ -1,14 +1,28 @@
 {
-    "id": "test",
-    "uid": "41a717d70ada43fdabd96ae176be6b48",
-    "name": "Test",
+    "id": "florence_nightingale_2",
+    "uid": "3ebf8f68da114f9c915daf9a32afef4d",
+    "name": "Florence Nightingale",
     "type": "person",
-    "created": "2025-09-01T22:58:48.172967+00:00",
-    "updated": "2025-09-03T05:03:54.873190+00:00",
+    "created": "2025-09-03T05:42:37.585599+00:00",
+    "updated": "2025-09-03T09:20:29.377411+00:00",
     "entries": [
         {
-            "created": "2025-09-01T22:58:53.291609+00:00",
-            "updated": "2025-09-01T22:59:37.317208+00:00",
+            "created": "2025-09-03T06:10:22.367601+00:00",
+            "updated": "2025-09-03T06:10:22.367601+00:00",
+            "time": {
+                "confidence": 68,
+                "date_value": "",
+                "end_date": "",
+                "label": "georgian",
+                "label_type": "era",
+                "start_date": "",
+                "subvalue": "georgian"
+            },
+            "person": []
+        },
+        {
+            "created": "2025-09-03T06:13:04.004579+00:00",
+            "updated": "2025-09-03T06:15:48.316191+00:00",
             "time": {
                 "label_type": "entire_life",
                 "confidence": 100,
@@ -27,12 +41,12 @@
             "person": [
                 {
                     "label_type": "celebea_face_hq",
-                    "confidence": 27,
+                    "confidence": 63,
                     "id": "1"
                 },
                 {
                     "label_type": "dob",
-                    "id": "2025-09-04",
+                    "id": "1820-05-12",
                     "confidence": 100,
                     "source": "input"
                 },
@@ -48,27 +62,19 @@
                     "biography": "blue_primary_school",
                     "biography_confidence": 100
                 }
+            ],
+            "events": [
+                {
+                    "group_key": "milestone",
+                    "option_id": "Graduation",
+                    "option_display": "Graduation",
+                    "link_type": "organisations",
+                    "linked_bio": "qub",
+                    "confidence": 100,
+                    "created": "2025-09-03T06:15:48.316158+00:00"
+                }
             ]
-        },
-        {
-            "created": "2025-09-01T23:16:08.668082+00:00",
-            "updated": "2025-09-01T23:16:08.668082+00:00",
-            "time": {
-                "label_type": "entire_life",
-                "confidence": 100,
-                "subvalue": "entire_life"
-            },
-            "time_normalised": {
-                "kind": "life",
-                "start_iso": null,
-                "end_iso": null,
-                "start_ts": null,
-                "end_ts": null,
-                "precision": "unknown",
-                "age_years": null,
-                "notes": "Whole span selected; biography has no start/end"
-            }
         }
     ],
-    "archived": true
+    "archived": false
 }

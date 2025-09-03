@@ -43,13 +43,6 @@
       if (f) f.src = src;
     }
 
-    function setDOBPreset() {
-      // Load Time step in EMBED mode so inner links/forms break out (base target="_top")
-      const src = "{{ url_for('general_step_time', type_name=type_name, bio_id=bio_id) }}?preset=dob&embed=1";
-      setIframe(src);
-      highlightTab("time");
-    }
-
     function addEvents() { gotoStep('events'); }
 
     function highlightTab(step){
@@ -102,8 +95,6 @@
         <span class="spacer"></span>
 
         <div class="quick">
-          <a class="btn" href="javascript:void(0)" onclick="setDOBPreset()">🎂 Set DOB</a>
-          <a class="btn" href="javascript:void(0)" onclick="addEvents()">➕ Add Events</a>
           <a class="btn secondary" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
         </div>
       </div>
