@@ -1,4 +1,6 @@
 {
+    "id":"onet_occupation/teacher",
+    "display_name":"Teacher",
     "description":"The occupation of being a teacher",
     "properties":{
     }

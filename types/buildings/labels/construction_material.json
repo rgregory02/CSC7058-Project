@@ -1,0 +1,11 @@
+{
+    "key": "construction_material",
+    "label": "Construction Material",
+    "description": "The primary material used in the construction of the building.",
+  "source": {
+    "kind": "self_labels",
+    "type": "buildings",
+    "path": "construction_material",
+    "allow_children": true
+  }
+}

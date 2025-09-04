@@ -55,23 +55,21 @@
             <option value="{{ t }}">{{ t }}</option>
           {% endfor %}
         </select>
-        <div class="hint">If selected, we’ll copy <code>labels/</code> (and <code>time/labels</code> if present) as a starting point.</div>
+        <div class="hint">If selected, we’ll copy <code>labels/</code> as a starting point.</div>
       </div>
 
       <div class="row">
         <label class="label">Scaffold</label>
         <div class="inline">
           <label class="inline"><input type="checkbox" name="mk_labels" checked> <span>labels/</span></label>
-          <label class="inline"><input type="checkbox" name="mk_time_labels" checked> <span>time/labels/</span></label>
           <label class="inline"><input type="checkbox" name="mk_biographies" checked> <span>biographies/</span></label>
         </div>
         <div class="hint">We’ll also create a minimal <code>type_info.json</code>.</div>
       </div>
-
-      <div class="actions">
-        <button type="submit" class="btn primary">✅ Create Type</button>
-        <a href="{{ url_for('dashboard') }}" class="btn secondary">⏭️ Skip</a>
-      </div>
+<div class="actions">
+  <button type="submit" class="btn primary">✅ Create Type</button>
+  <button type="button" onclick="window.location.href='{{ url_for('dashboard') }}'" class="btn secondary">⏭️ Return to Dashboard</button>
+</div>
     </form>
   </div>
 

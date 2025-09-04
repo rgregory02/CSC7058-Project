@@ -71,6 +71,33 @@
       method="POST"
       target="_self"
       action="{{ form_action }}{% if request.args.get('embed') %}?embed={{ request.args.get('embed') }}{% endif %}">
+  
+  <!-- GPT assist -->
+<div class="label-group-box">
+  <h3>🤖 Need help choosing labels?</h3>
+  <p class="muted">Describe this {{ current_type.replace('_',' ') }} and we’ll suggest labels.
+    You can tweak or deselect before saving.
+  </p>
+
+  <textarea id="labelPromptInput" rows="3"
+            style="width:100%; padding:10px; border:1px solid #ccc; border-radius:8px;"
+            placeholder="e.g. I am a nurse who loves working with children"></textarea>
+
+  <div style="margin-top:10px; display:flex; gap:8px; align-items:center;">
+    <button id="gptSuggestBtn"
+        type="button"
+        class="primary-button"
+        onclick='suggestLabels("{{ current_type }}", {{ label_groups_list|map(attribute="key")|list|tojson }})'>
+      🔍 Suggest Labels
+    </button>
+    <span id="gptHint" class="muted" style="display:none;">Generating…</span>
+  </div>
+
+  <div id="gptSuggestions" class="label-options" style="margin-top:12px;"></div>
+  <input type="hidden" name="gpt_selected_labels_json" id="gpt_selected_labels_json" value="[]">
+</div>
+  
+  
   <input type="hidden" name="next_step" value="events">
     {% for group in label_groups_list %}
       {% set safe_key     = group.key.replace('/', '__') %}
@@ -314,8 +341,8 @@
         Writes to <code>types/{{ current_type }}/labels/...</code> and appears immediately after a short reload.
       </p>
 
-      <details style="margin:8px 0" open>
-        <summary><strong>➕ New Property (group)</strong></summary>
+     <details id="add_group_details" style="margin:8px 0">
+  <summary><strong>➕ New Property (group)</strong></summary>
         <div style="margin-top:10px; display:grid; gap:8px;">
           <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr;">
             <div>
@@ -445,32 +472,6 @@
     <div id="wiz_ai_results" style="margin-top:12px"></div>
   </div>
 </div>
-
-    <!-- GPT assist -->
-    <div class="label-group-box">
-      <h3>🤖 Need help choosing labels?</h3>
-      <p class="muted">
-        Describe this {{ current_type.replace('_',' ') }} and we’ll suggest labels.
-        You can tweak or deselect before saving.
-      </p>
-
-      <textarea id="labelPromptInput" rows="3"
-                style="width:100%; padding:10px; border:1px solid #ccc; border-radius:8px;"
-                placeholder="e.g. I am a nurse who loves working with children"></textarea>
-
-      <div style="margin-top:10px; display:flex; gap:8px; align-items:center;">
-        <button id="gptSuggestBtn"
-            type="button"
-            class="primary-button"
-            onclick='suggestLabels("{{ current_type }}", {{ label_groups_list|map(attribute="key")|list|tojson }})'>
-          🔍 Suggest Labels
-        </button>
-        <span id="gptHint" class="muted" style="display:none;">Generating…</span>
-      </div>
-
-      <div id="gptSuggestions" class="label-options" style="margin-top:12px;"></div>
-      <input type="hidden" name="gpt_selected_labels_json" id="gpt_selected_labels_json" value="[]">
-    </div>
 
     <div class="bottom-card">
       <div style="margin-bottom:12px;">
@@ -1025,56 +1026,69 @@ function selectChild(groupKey, labelId){
   }
 }
 
-  function renderGptSuggestions(items) {
-    const wrap = document.getElementById('gptSuggestions');
-    if (!wrap) return;
+function renderGptSuggestions(items) {
+  const wrap = document.getElementById('gptSuggestions');
+  if (!wrap) return;
 
-    wrap.innerHTML = '';
-    const chosen = new Map();
+  const prettifyId = s => (s||'').replace(/[_\-]+/g,' ')
+                                 .replace(/\b\w/g,m=>m.toUpperCase()).trim();
+  const lookup = window.LABEL_LOOKUP || window.OPTION_LOOKUP || {};
 
-    function syncHidden() {
-      const arr = Array.from(chosen.values());
-      document.getElementById('gpt_selected_labels_json').value = JSON.stringify(arr);
-      updateSaveButtonState?.();
-    }
+  wrap.innerHTML = '';
+  const chosen = new Map();
 
-    (items || []).forEach(s => {
-      const sug = {
-        id: s.id,
-        label_type: s.label_type || s.group_key || s.type || '',
-        confidence: Number.isFinite(s.confidence) ? s.confidence : 100,
-        display: s.display || s.id,
-        description: s.description || ''
-      };
-
-      const card = document.createElement('div');
-      card.className = 'sugg-card';
-      card.setAttribute('role', 'button');
-      card.innerHTML = `
-        <div><strong>${sug.display}</strong></div>
-        ${sug.description ? `<div class="label-description">${sug.description}</div>` : ''}
-      `;
-
-      card.onclick = async () => {
-        const key = `${sug.label_type||''}::${sug.id}`;
-        const wasSelected = chosen.has(key);
-        if (wasSelected) {
-          chosen.delete(key);
-          card.classList.remove('selected');
-        } else {
-          chosen.set(key, sug);
-          card.classList.add('selected');
-          await applySuggestionToGroups(sug);
-        }
-        syncHidden();
-      };
-
-      wrap.appendChild(card);
-    });
-
-    document.getElementById('gpt_selected_labels_json').value = '[]';
+  function syncHidden() {
+    const arr = Array.from(chosen.values());
+    document.getElementById('gpt_selected_labels_json').value = JSON.stringify(arr);
     updateSaveButtonState?.();
   }
+
+  (items || []).forEach(s => {
+    const base = lookup[s.id] || {};
+    const sug = {
+      id: s.id,
+      label_type: s.label_type || s.group_key || s.type || '',
+      confidence: Number.isFinite(s.confidence) ? s.confidence : 100,
+      display: (s.display && String(s.display).trim()) || base.display || prettifyId(s.id),
+      description: s.description || base.description || ''
+    };
+
+    const card = document.createElement('div');
+    card.className = 'sugg-card';
+    card.setAttribute('role', 'button');
+
+    const title = document.createElement('div');
+    const strong = document.createElement('strong');
+    strong.textContent = sug.display;
+    title.appendChild(strong);
+    card.appendChild(title);
+
+    if (sug.description) {
+      const desc = document.createElement('div');
+      desc.className = 'label-description';
+      desc.textContent = sug.description;
+      card.appendChild(desc);
+    }
+
+    card.onclick = async () => {
+      const key = `${sug.label_type||''}::${sug.id}`;
+      if (chosen.has(key)) {
+        chosen.delete(key);
+        card.classList.remove('selected');
+      } else {
+        chosen.set(key, sug);
+        card.classList.add('selected');
+        await applySuggestionToGroups(sug);
+      }
+      syncHidden();
+    };
+
+    wrap.appendChild(card);
+  });
+
+  document.getElementById('gpt_selected_labels_json').value = '[]';
+  updateSaveButtonState?.();
+}
 
   async function suggestLabels(currentType, groupPrefixes = []) {
     const btn  = qs("#gptSuggestBtn");
@@ -1461,6 +1475,25 @@ document.addEventListener('input', (e) => {
     updateSaveButtonState();
   }
 });
+
+// Build a map of every option already rendered in the wizard
+function buildOptionLookupFromDOM() {
+  const map = {};
+  document.querySelectorAll('.label-card[data-group][data-value]').forEach(card => {
+    const id   = card.getAttribute('data-value');
+    const name = (card.querySelector('strong')?.textContent || '').trim();
+    const desc = (card.querySelector('.label-description')?.textContent || '').trim();
+    if (!id) return;
+    map[id] = {
+      display: name || id.replace(/[_-]+/g,' ').replace(/\b\w/g,m=>m.toUpperCase()),
+      description: desc || ''
+    };
+  });
+  return map;
+}
+
+// Build once on load (and rebuild after big DOM changes if needed)
+window.OPTION_LOOKUP = buildOptionLookupFromDOM();
 
 </script>
 

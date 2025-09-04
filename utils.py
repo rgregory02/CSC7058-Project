@@ -950,18 +950,17 @@ def build_label_catalog_for_type(current_type: str, max_per_group: int = 200):
     catalog = []
 
     for g in groups:
-        key = g.get("key", "")
+        key = g.get("key", "")  # this is your label_type / group key
         for o in (g.get("options") or [])[:max_per_group]:
-            if not isinstance(o, dict):
-                continue
             iid = o.get("id")
             if not iid:
                 continue
             catalog.append({
                 "id": iid,
-                "display": o.get("display", iid),
-                "group_key": key,              # e.g. "work_place"
-                "type": current_type           # keep for completeness
+                "display": o.get("display") or iid.replace("_", " ").title(),
+                "label_type": key,          # ✅ add
+                "group_key": key,           # ✅ keep for convenience
+                "type_name": current_type,  # ✅ rename so _gpt_pick_labels sees it
             })
     return catalog
 
@@ -1238,45 +1237,6 @@ def _resolve_property_file(type_name: str, key: str) -> str:
     # default: assume it should live in labels
     return candidates[0]
 
-# def collect_label_groups(label_base_path, current_type):
-#     label_groups_list = []
-
-#     for root, _, files in os.walk(label_base_path):
-#         rel_path = os.path.relpath(root, label_base_path)
-#         if rel_path == ".":
-#             continue  # Skip root
-
-#         values = []
-#         for file in files:
-#             if not file.endswith(".json"):
-#                 continue
-#             base = file[:-5]
-#             json_path = os.path.join(root, file)
-#             img_path = os.path.join(root, f"{base}.jpg")
-
-#             try:
-#                 data = load_json_as_dict(json_path)
-#                 label = {
-#                     "id": base,
-#                     "display": data.get("properties", {}).get("name", base),
-#                     "label_type": rel_path  # e.g. work_building/hospital
-#                 }
-#                 if os.path.exists(img_path):
-#                     label["image"] = f"/types/{current_type}/labels/{rel_path}/{base}.jpg"
-#                 if "description" in data:
-#                     label["description"] = data["description"]
-#                 values.append(label)
-#             except Exception as e:
-#                 print(f"[ERROR] Reading nested label {file}: {e}")
-
-#         # ✅ Always add the group — even if values is empty
-#         label_groups_list.append({
-#             "key": rel_path,
-#             "label": os.path.basename(root).replace("_", " ").title(),
-#             "options": values
-#         })
-
-#     return label_groups_list
 
 def collect_label_groups(label_base_path: str, current_type: str):
     """
@@ -1929,131 +1889,6 @@ def _import_labels_from_sqlite(type_name: str, group_key: str, display_label: st
     except Exception as e:
         print("[SQLITE IMPORT ERROR]", e)
     return created
-
-
-
-# def expand_child_groups(base_groups, current_type, label_base_path, existing_labels):
-#     """
-#     Recursively expand groups when a selected option has a matching child subfolder.
-
-#     Example:
-#       - Group key "work_building" with selected id "hospital"
-#       - If folder exists: types/<type>/labels/work_building/hospital/
-#         -> add a new group with key "work_building/hospital"
-#       - If the user has already selected e.g. "royal_victoria" in that child group
-#         AND a deeper folder exists (work_building/hospital/royal_victoria/),
-#         this function will keep expanding.
-
-#     Arguments:
-#       base_groups:      list from collect_label_groups(...)
-#       current_type:     the type name (e.g. "person")
-#       label_base_path:  path like "types/<type>/labels"
-#       existing_labels:  dict of previously selected labels for the current entry,
-#                         shaped like { "work_building": {"id":"hospital", ...},
-#                                       "work_building/hospital": {"id":"royal_victoria", ...} }
-
-#     Returns:
-#       A new list including all original groups plus any recursively discovered child groups.
-#     """
-#     import os
-#     import json
-
-#     IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp"]
-
-#     def _safe_json(path):
-#         try:
-#             with open(path, "r", encoding="utf-8") as f:
-#                 return json.load(f)
-#         except Exception as e:
-#             print(f"[WARN] expand_child_groups: failed to parse {path}: {e}")
-#             return {}
-
-#     def _image_for(base_dir, base_name):
-#         for ext in IMAGE_EXTS:
-#             p = os.path.join(base_dir, base_name + ext)
-#             if os.path.exists(p):
-#                 # build a web path like /types/<type>/labels/…/file.ext
-#                 rel = os.path.relpath(p, ".").replace("\\", "/")
-#                 return "/" + rel
-#         return None
-
-#     def _load_options_from_folder(folder_abs_path):
-#         """Load *.json in a folder as options (name/description/image if present)."""
-#         opts = []
-#         if not os.path.isdir(folder_abs_path):
-#             return opts
-#         for fn in sorted(os.listdir(folder_abs_path)):
-#             if not fn.endswith(".json"):
-#                 continue
-#             base = os.path.splitext(fn)[0]
-#             data = _safe_json(os.path.join(folder_abs_path, fn))
-#             name = (
-#                 data.get("properties", {}).get("name")
-#                 or data.get("name")
-#                 or base.replace("_", " ").title()
-#             )
-#             desc = data.get("description", data.get("properties", {}).get("description", ""))
-#             img = _image_for(folder_abs_path, base)
-
-#             opt = {"id": base, "display": name}
-#             if desc:
-#                 opt["description"] = desc
-#             if img:
-#                 opt["image_url"] = img
-#             opts.append(opt)
-#         return opts
-
-#     # We’ll loop until no more child groups can be added (supports multi-level).
-#     expanded = list(base_groups)
-#     seen_keys = {g["key"] for g in expanded}
-
-#     changed = True
-#     while changed:
-#         changed = False
-
-#         # Iterate over a snapshot because we may append during the loop
-#         for group in list(expanded):
-#             group_key = group["key"]  # e.g. "work_building" or "work_building/hospital"
-#             sel = existing_labels.get(group_key) or {}
-#             selected_id = sel.get("id") or sel.get("label")
-#             if not selected_id:
-#                 continue
-
-#             # Resolve filesystem path to this group's folder
-#             # group_key may be nested -> split
-#             group_folder = os.path.join(label_base_path, *group_key.split("/"))
-#             if not os.path.isdir(group_folder):
-#                 continue
-
-#             # Child folder must be named exactly as selected_id
-#             child_folder = os.path.join(group_folder, selected_id)
-#             if not os.path.isdir(child_folder):
-#                 continue
-
-#             child_key = f"{group_key}/{selected_id}"
-#             if child_key in seen_keys:
-#                 # Already added
-#                 continue
-
-#             # Load this child folder as a new group
-#             child_options = _load_options_from_folder(child_folder)
-#             if not child_options:
-#                 continue
-
-#             new_group = {
-#                 "key": child_key,
-#                 "label": f"{group.get('label','').strip() or group_key.replace('_',' ').title()} → {selected_id.replace('_',' ').title()}",
-#                 "description": f"Options for {selected_id.replace('_',' ').title()}",
-#                 "options": child_options,
-#             }
-#             expanded.append(new_group)
-#             seen_keys.add(child_key)
-#             changed = True
-
-#     # Keep ordering stable-ish: parent keys first, then deeper ones
-#     expanded.sort(key=lambda g: (g["key"].count("/"), g["key"]))
-#     return expanded
-
 
 
 

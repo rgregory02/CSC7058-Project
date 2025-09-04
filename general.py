@@ -81,7 +81,6 @@ from utils import (
 
 from time_utils import normalise_time_for_bio_entry
 
-# general.py
 
 from llm_utils import (
     call_llm_json,
@@ -97,6 +96,9 @@ app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'the_random_string')  #
 
 app.jinja_env.filters['uk_datetime'] = uk_datetime
 app.jinja_env.filters['display_dob_uk'] = display_dob_uk
+
+
+
 
 @app.context_processor
 def inject_utilities():
@@ -184,7 +186,7 @@ def _dig(obj: Any, path: str) -> Any:
             return None
     return cur
 
-def _normalize_id(val: str) -> str:
+def _normalise_id(val: str) -> str:
     if not isinstance(val, str):
         return ""
     m = re.search(r"/entity/(Q[0-9]+)$", val)
@@ -320,13 +322,35 @@ def list_biographies(type_name, base="./types", include_archived=False):
         reverse=True
     )
 
+def has_label_subfolders(type_name: str) -> bool:
+    labels_root = os.path.join("types", type_name, "labels")
+    return (
+        os.path.isdir(labels_root)
+        and any(os.path.isdir(os.path.join(labels_root, d)) for d in os.listdir(labels_root))
+    )
+
 
 
 @app.route("/")
 def dashboard():
     types = list_types()
+    missing = [t for t in types if not has_label_subfolders(t)]
+
+    if missing and not session.get("saw_label_nudge") and request.args.get("no_redirect") != "1":
+        session["saw_label_nudge"] = True
+        t = missing[0]
+        flash(f"Let’s add your first label group for “{t}”.", "info")
+        return redirect(url_for(
+            "create_subfolder",
+            type_name=t,
+            return_url=url_for("dashboard", no_redirect=1)
+        ))
+
     preview = {t: list_biographies(t)[:6] for t in types}
-    return render_template("dashboard.html", types=types, preview=preview)
+    return render_template("dashboard.html",
+                           types=types,
+                           preview=preview,
+                           missing_labels={t: (t in missing) for t in types})
 
 @app.route("/people")
 def index_page():
@@ -382,41 +406,54 @@ def add_type_prompt():
             return redirect(url_for("add_type_prompt"))
 
         slug = _slugify(new_type_name)
-        type_root = os.path.join("types", slug)
-        labels_dir = os.path.join(type_root, "labels")
-        bios_dir   = os.path.join(type_root, "biographies")
+
+        # folders
+        type_root       = os.path.join("types", slug)
+        labels_dir      = os.path.join(type_root, "labels")
+        bios_dir        = os.path.join(type_root, "biographies")
         time_labels_dir = os.path.join(type_root, "time", "labels")
 
-        try:
-            os.makedirs(type_root, exist_ok=True)
-            if mk_labels:
-                os.makedirs(labels_dir, exist_ok=True)
-            if mk_time:
-                os.makedirs(time_labels_dir, exist_ok=True)
-            if mk_bios:
-                os.makedirs(bios_dir, exist_ok=True)
+        # files
+        type_info_path  = os.path.join(type_root, "type_info.json")     # inside folder
+        top_level_path  = os.path.join("types", f"{slug}.json")         # sibling to folder  ✅
 
-            # If basing off an existing type, copy label folders
+        try:
+            # --- create folders ---
+            os.makedirs(type_root, exist_ok=True)
+            if mk_labels: os.makedirs(labels_dir, exist_ok=True)
+            if mk_time:   os.makedirs(time_labels_dir, exist_ok=True)
+            if mk_bios:   os.makedirs(bios_dir, exist_ok=True)
+
+            # --- optionally copy scaffolding from a base type ---
             if base_type:
                 base_root = os.path.join("types", base_type)
-                # copy labels/
                 if mk_labels and os.path.isdir(os.path.join(base_root, "labels")):
                     _copytree_safe(os.path.join(base_root, "labels"), labels_dir)
-                # copy time/labels/
                 if mk_time and os.path.isdir(os.path.join(base_root, "time", "labels")):
                     _copytree_safe(os.path.join(base_root, "time", "labels"), time_labels_dir)
 
-            # Write a minimal type_info.json
-            info_path = os.path.join(type_root, "type_info.json")
-            if not os.path.exists(info_path):
-                info = {
+            # --- write minimal folder-scoped info (for internal use) ---
+            if not os.path.exists(type_info_path):
+                save_dict_as_json(type_info_path, {
                     "type": slug,
                     "name": new_type_name,
                     "created": now_iso_utc(),
                     "updated": now_iso_utc(),
                     "schema_version": 1
+                })
+
+            # --- write the top-level descriptor JSON (used by dashboards/menus) ✅ ---
+            # keep it small and human-editable; align with your other root files
+            if not os.path.exists(top_level_path):
+                descriptor = {
+                    "key": slug,
+                    "label": new_type_name,
+                    "description": "",     # you can let the UI fill this later
+                    "order": 999,
+                    "created": now_iso_utc(),
+                    "updated": now_iso_utc()
                 }
-                save_dict_as_json(info_path, info)
+                save_dict_as_json(top_level_path, descriptor)
 
             flash(f"Type '{new_type_name}' created.", "success")
             return redirect(url_for("dashboard"))
@@ -2389,7 +2426,6 @@ def general_iframe_wizard():
                 "entries": []
             }
 
-            # ✅ write file correctly (no trailing comma)
             save_dict_as_json(os.path.join(bio_dir, f"{slug}.json"), data)
 
             bio_id = slug
@@ -4468,7 +4504,7 @@ def most_like_type(type_name, bio_id):
     score over confidence vectors, grouped by time period.
 
     - Vectors use confidence (0..100) per item (labels + events) per time bucket.
-    - Keys are normalized to maximize intersections.
+    - Keys are normalised to maximize intersections.
     - "Differences by time" are also recorded to explain non-overlap.
     - No time decay. Missing items are 0.
     """
@@ -4490,7 +4526,7 @@ def most_like_type(type_name, bio_id):
 
     def _time_key(entry: dict) -> str:
         """
-        Stable, normalized time bucket key.
+        Stable, normalised time bucket key.
         Priority: subvalue (e.g. 'teens'), else date_value (YYYY[-MM[-DD]]),
         else "start..end", else 'unknown'.
         """
@@ -4506,12 +4542,12 @@ def most_like_type(type_name, bio_id):
         return "unknown"
 
     def _label_vkey(label_type: str, label_id: str) -> str:
-        """Normalized vector key for a label."""
+        """Normalised vector key for a label."""
         return f"L::{_norm(label_type)}::{_norm(label_id)}"
 
     def _event_vkey(ev: dict) -> str:
         """
-        Normalized vector key for an event.
+        Normalised vector key for an event.
         Uses: group_key / option_id / child_option_id / link_type / linked_bio
         (drop empties at the end).
         """
@@ -4813,7 +4849,7 @@ import os, json, re
 from flask import request, jsonify
 
 def _coerce_ingest(d: dict) -> dict:
-    """Validate/normalize an ingest block coming from the AI."""
+    """Validate/normalise an ingest block coming from the AI."""
     d = d or {}
     kind   = (d.get("kind") or "api").strip().lower()
     url    = (d.get("url") or "").strip()

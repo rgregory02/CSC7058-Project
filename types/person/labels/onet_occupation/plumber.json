@@ -1,4 +1,6 @@
 {
+    "id":"onet_occupation/plumber",
+    "display_name":"Plumber",
     "description":"The occupation of being a plumber",
     "properties":{
     }

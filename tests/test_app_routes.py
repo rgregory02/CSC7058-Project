@@ -17,7 +17,7 @@ def test_homepage(client):
     rv = client.get("/")
     assert rv.status_code == 200
     assert b"Biography Builder" in rv.data  
-    
+
 def test_type_person_page(client):
     rv = client.get("/type/person")
     assert rv.status_code == 200
@@ -41,6 +41,5 @@ def test_most_like_endpoint(client):
     bio_id = "joseph_lister"  # one of your seed bios
     rv = client.get(f"/most_like/person/{bio_id}")
     assert rv.status_code == 200
-    # page should contain similarity language
     txt = rv.data.lower()
     assert b"most" in txt or b"similar" in txt

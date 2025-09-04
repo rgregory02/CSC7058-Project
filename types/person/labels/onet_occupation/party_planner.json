@@ -1,10 +1,7 @@
 {
-  "description": "",
-  "image": "",
-  "created": "2025-07-20T11:29:54.933229+00:00",
-  "properties": {
-    "value": "party_planner",
-    "confidence": 100,
-    "source": ""
-  }
+    "id":"onet_occupation/party_planner",
+    "display_name":"Party Planner",
+    "description":"The occupation of being a party planner",
+    "properties":{
+    }
 }

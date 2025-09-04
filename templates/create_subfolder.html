@@ -4,25 +4,122 @@
   <meta charset="UTF-8">
   <title>Create Label Subfolder</title>
   <link rel="stylesheet" href="/static/styles.css">
-  <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:#f6f7fb;padding:40px}
-    .box{background:#fff;max-width:720px;margin:auto;padding:28px;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.06)}
-    h1{margin:0 0 4px}
-    .muted{color:#657085;margin-bottom:16px}
-    label{font-weight:600;margin-top:10px;display:block}
-    input[type=text], textarea, input[type=search], input[type=number], select{width:100%;padding:10px;border:1px solid #dfe3ee;border-radius:10px}
-    textarea{min-height:80px}
-    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    .btn{display:inline-block;padding:10px 16px;border-radius:10px;background:#6c63ff;color:#fff;text-decoration:none;font-weight:600;border:none;cursor:pointer}
-    .btn.secondary{background:#eef0f7;color:#333}
-    .btn.ghost{background:transparent;color:#6c63ff;border:1px solid #cfd3ff}
-    .section{padding:14px;border:1px solid #e7e9f2;border-radius:12px;background:#fafbff;margin-top:14px}
-    .small{font-size:12px;color:#6b7280}
-    .flash{margin:8px 0;padding:10px;border-radius:8px}
-    .flash.error{background:#ffecec;border:1px solid #ff8a8a}
-    .flash.success{background:#eaffea;border:1px solid #92d992}
-    details > summary{cursor:pointer;margin:6px 0;font-weight:600}
-  </style>
+<style>
+  :root{
+    /* Layout + colour system */
+    --bg:#f6f7fb; --card:#fff; --ink:#111827; --muted:#657085; --line:#e7e9f2;
+    --brand:#6c63ff; --pill:#eef0f7;
+
+    /* Button sizing (tweak here) */
+    --btn-h:52px;       /* unified button height */
+    --btn-px:22px;      /* horizontal padding */
+    --btn-r:12px;       /* radius */
+    --btn-fs:16px;      /* font size */
+  }
+
+  /* Page chrome */
+  body{
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+    color:var(--ink);
+    background:var(--bg);
+    padding:40px;
+  }
+
+  .box{
+    background:var(--card);
+    max-width:720px;
+    margin:auto;
+    padding:28px;
+    border-radius:14px;
+    box-shadow:0 8px 24px rgba(0,0,0,.06);
+    border:1px solid var(--line);
+  }
+
+  h1{ margin:0 0 4px; }
+  .muted{ color:var(--muted); margin-bottom:16px; }
+
+
+  label{ font-weight:600; margin-top:10px; display:block; }
+  input[type=text], textarea, input[type=search], input[type=number], select{
+    width:100%; padding:10px; border:1px solid #dfe3ee; border-radius:10px;
+    font:inherit; color:inherit; background:#fff; box-sizing:border-box;
+  }
+  textarea{ min-height:80px; }
+
+  .row{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width: 640px){ .row{ grid-template-columns:1fr; } }
+
+.btn{
+  display:inline-flex;
+  align-items:center;    /* vertical center text */
+  justify-content:center;
+  gap:8px;
+
+  height:52px;           /* fixed height */
+  padding:0 22px;        /* only horizontal padding */
+  border-radius:12px;
+  box-sizing:border-box;
+
+  font:600 16px/1 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+  text-decoration:none;
+  vertical-align:middle; /* ✅ align inline anchor with button */
+
+  border:1px solid transparent;
+  cursor:pointer;
+  -webkit-appearance:none;
+  appearance:none;
+}
+  .btn.primary,
+  .btn:not(.secondary):not(.ghost){
+    background:var(--brand);
+    color:#fff;
+    border-color:var(--brand);
+  }
+
+  /* Secondary (grey) */
+  .btn.secondary{
+    background:var(--pill);
+    color:#111827;
+    border-color:var(--line);
+  }
+  .btn.ghost{
+    background:transparent;
+    color:var(--brand);
+    border:1px solid #cfd3ff;
+  }
+
+  /* Hover / focus (accessible) */
+  .btn:hover{ filter:brightness(.98); }
+  .btn.primary:hover{ filter:brightness(.95); }
+  .btn:focus-visible{ outline:2px solid #cfd7ff; outline-offset:2px; }
+
+  .btn:disabled,
+  .btn[aria-disabled="true"]{
+    opacity:.55; cursor:not-allowed; filter:none;
+  }
+
+
+.actions{
+  display:flex;
+  gap:12px;
+  align-items:center;   /* ✅ ensures both sit level */
+}
+
+  .section{ padding:14px; border:1px solid var(--line); border-radius:12px; background:#fafbff; margin-top:14px; }
+  .small{ font-size:12px; color:#6b7280; }
+
+  /* Flash messages */
+  .flash{ margin:8px 0; padding:10px; border-radius:8px; }
+  .flash.error{ background:#ffecec; border:1px solid #ff8a8a; }
+  .flash.success{ background:#eaffea; border:1px solid #92d992; }
+
+
+  details > summary{ cursor:pointer; margin:6px 0; font-weight:600; }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation:none!important; transition:none!important; }
+  }
+</style>
 </head>
 <body>
   <div class="box">
@@ -213,9 +310,11 @@
         <input type="number" id="db_max_items" name="db_max_items" value="500" min="1" max="10000">
       </div>
 
-      <div style="display:flex;gap:8px;margin-top:14px">
-        <a class="btn secondary" href="{{ return_url }}">Cancel</a>
-        <button class="btn" type="submit">Create Subfolder</button>
+<div style="display:flex;gap:12px;margin-top:14px;align-items:center">
+  <button class="btn primary" type="submit">Create Subfolder</button>
+  <a class="btn secondary" href="{{ return_url }}">Cancel</a>
+</div>
+     
       </div>
     </form>
   </div>

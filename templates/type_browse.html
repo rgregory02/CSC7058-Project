@@ -256,13 +256,6 @@
 /* Ensure the wrapper form doesn't introduce offset */
 .action-form{ margin:0; padding:0; }
 
-/* === Biography card buttons — match Properties/Labels === */
-/* Keep size/centering from your current rules, but recolor to:
-   - View  -> solid brand (same as Edit)
-   - Archive -> white background with soft red outline (same as Archive)
-*/
-
-/* VIEW (anchor) -> solid brand button */
 .actions-row > a.btn.mini.secondary{
   background: var(--brand) !important;
   border-color: var(--brand) !important;
@@ -440,7 +433,7 @@
   {# 2) Render child folders recursively #}
   {% for fname, child in node['folders']|dictsort %}
     {% set folder_label = fname.replace('_',' ')|title %}
-    <details class="card" open>
+    <details class="card">
       <summary class="title">
         <span>📁 {{ folder_label }}</span>
         <span class="chip badge">{{ child['items']|length }} item{{ '' if child['items']|length == 1 else 's' }}</span>
@@ -468,7 +461,7 @@
     </select>
   </div>
   <div class="right">
-    <a class="btn ghost" href="{{ url_for('dashboard') }}">⬅️ Back to Dashboard</a>
+    <a class="btn ghost" href="{{ url_for('dashboard', no_redirect=1) }}">⬅️ Back to Dashboard</a>
 
     <a class="btn"
        href="{{ url_for('general_iframe_wizard',

@@ -1,10 +1,14 @@
 {
-  "description": "",
-  "image": "",
-  "created": "2025-08-01T00:16:09.826816+00:00",
+  "id": "belfast_city_hospital",
+  "label_type": "work_building/hospital",
+  "display": "Belfast City  Hospital",
+  "description": "A major hospital in Belfast.",
+  "image_url": "", 
+  "created": "2025-07-21T12:27:38.466019+00:00",
   "properties": {
-    "value": "belfast_city_hospital",
+    "value": "hospital",
     "confidence": 100,
-    "source": ""
+    "source": "",
+    "suggests_biographies_from": "buildings/work_building/hospital"
   }
 }
