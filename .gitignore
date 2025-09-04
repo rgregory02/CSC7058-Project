@@ -5,6 +5,10 @@
 __pycache__/
 *.pyc
 
+# pytest cache
+.pytest_cache/
+*.pytest_cache
+
 # VS Code settings
 .vscode/
 venv39/
@@ -19,4 +23,5 @@ venv39/
 # Node or package folders (if ever used)
 node_modules/
 
+# Old backup file
 main_before_life_route_update.py
