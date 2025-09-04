@@ -1,10 +1,11 @@
 {
-    "name": "Celebea Face Hq",
-    "description": "A face image from the Celebface_HQ dataset",
-    "source": {
-        "kind": "type_labels",
-        "type": "",
-        "path": "",
-        "allow_children": false
-    }
+  "name": "Celebea Face Hq",
+  "description": "A face image from the Celebface_HQ dataset",
+  "source": {
+    "kind": "type_labels",
+    "type": "",
+    "path": "",
+    "allow_children": false
+  },
+  "refer_to": false
 }

@@ -1,11 +1,11 @@
 {
-  "description": "",
-  "image": "",
-  "created": "2025-08-01T00:21:52.593380+00:00",
+  "id": "red_primary_school",
+  "name": "Red Primary School",
+  "description": "A primary school with a red theme",
   "properties": {
-    "value": "red_school",
+    "suggests_biographies_from": "buildings",
+    "value": "red_primary_school",
     "confidence": 100,
-    "source": "",
-    "suggests_biographies_from": "educational_buildings"
+    "source": ""
   }
 }

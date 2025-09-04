@@ -1,10 +1,11 @@
 {
-  "description": "",
-  "image": "",
-  "created": "2025-07-20T21:43:08.154460+00:00",
+  "id": "university",
+  "name": "University",
+  "description": "An institution of higher education and research.",
   "properties": {
-    "value": "uni",
+    "suggests_biographies_from": "buildings",
+    "value": "university",
     "confidence": 100,
-    "source": ""
+    "source": ""      
   }
 }
